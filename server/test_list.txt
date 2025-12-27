@@ -1,0 +1,5 @@
+1. Visual Test
+2. 3 Fan
+3. 5 Fan
+4. 6 Fan
+5. Humidity
