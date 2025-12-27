@@ -5,7 +5,7 @@ const fs = require('fs');
 // const { connected } = require('process');
 
 
-const TOTAL_DEVICES = 156;
+const TOTAL_DEVICES = 1;
 const devices = [];
 let csvData = [];
 let currentSecond = 0;

@@ -80,6 +80,9 @@ function DashboardView() {
 
           if (message.type === 'NEW_READING') {
             const newReading = message.data;
+
+            setSelectedMac(prev => prev || newReading.mac);
+            setSelectedDevice(prev => prev || newReading.locationId || newReading.mac);
             setReadings(prev => {
               const filtered = prev.filter(r => r.mac !== newReading.mac);
               return [...filtered, newReading].slice(-400);
@@ -120,15 +123,15 @@ function DashboardView() {
   // UseEffect for fetching Data
   useEffect(() => {
     console.log('🚨Starting data fetch interval (5s)🚨');
-    const interval = setInterval(fetchData, 2000);
+    // const interval = setInterval(fetchData, 2000);
 
-    fetchData();
+    // fetchData();
 
     // console.log('🚨Fetching Data🚨')
     // return () => clearInterval(interval);
     return () => {
       console.log('🛑Clearing data fetch interval');
-      clearInterval(interval);
+      // clearInterval(interval);
     };
 
   }, []);
@@ -154,27 +157,27 @@ function DashboardView() {
     }
   }, [zoom, rotation]);
 
-  const fetchData = async () => {
-    try {
-      const [devicesRes, deviceMetaRes] = await Promise.all([
-        fetch(`${process.env.REACT_APP_API_URL}/api/all-devices`),
-        fetch(`${process.env.REACT_APP_API_URL}/api/devices-info`),
-      ]);
+  // const fetchData = async () => {
+  //   try {
+  //     const [devicesRes, deviceMetaRes] = await Promise.all([
+  //       fetch(`${process.env.REACT_APP_API_URL}/api/all-devices`),
+  //       fetch(`${process.env.REACT_APP_API_URL}/api/devices-info`),
+  //     ]);
 
-      // Fallback to [] if any response fails
-      let devicesData = [],
-        metadata = [];
+  //     // Fallback to [] if any response fails
+  //     let devicesData = [],
+  //       metadata = [];
 
-      if (devicesRes.ok) devicesData = await devicesRes.json();
-      if (deviceMetaRes.ok) metadata = await deviceMetaRes.json();
+  //     if (devicesRes.ok) devicesData = await devicesRes.json();
+  //     if (deviceMetaRes.ok) metadata = await deviceMetaRes.json();
 
-      setDevices(Array.isArray(devicesData) ? devicesData : []);
-      setDeviceMeta(Array.isArray(metadata) ? metadata : []);
-      // console.log("deviceMetadata", metadata);
-    } catch (err) {
-      console.error("❌Error fetching data:", err);
-    }
-  };
+  //     setDevices(Array.isArray(devicesData) ? devicesData : []);
+  //     setDeviceMeta(Array.isArray(metadata) ? metadata : []);
+  //     // console.log("deviceMetadata", metadata);
+  //   } catch (err) {
+  //     console.error("❌Error fetching data:", err);
+  //   }
+  // };
 
   const handleMapCreated = (mapInstance) => {
     if (!mapRef.current) {
@@ -378,11 +381,25 @@ function DashboardView() {
     }
   };
 
-  function iMoni_test (){
-    alert("Test Function");
+  async function iMoni_test() {
     const mac_selected = selectedMac;
 
-    
+    const test_path = "/tests";
+    alert("Test Function", test_path);
+
+    const test_result = await fetch(`${process.env.REACT_APP_API_URL}/api/test`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mac: mac_selected, path_ui: test_path })
+    })
+
+    // const test_resp = await test_result.json();
+
+    console.log("Test Path: ", test_path);
+    // console.log("Test Response: ", test_resp);
+    // const {msg , eo}
+
+
   }
 
   // Fetch snapshots on component mount
@@ -626,14 +643,14 @@ function DashboardView() {
                       const statusVal = latestReading[`fan${i + 1}Status`]; // 0=off, 1=healthy, 2=faulty
                       // console.log('statusVal', statusVal);
 
-                      console.log("statusC");
+                      // console.log("statusC");
                       let statusClass = "off";
                       if (statusVal === 1) {
                         statusClass = "running"; // green
                       } else if (statusVal === 2) {
                         statusClass = "faulty"; // red
                       }
-                      console.log(statusClass);
+                      // console.log(statusClass);
 
                       return (
                         <div key={i} className="fan-light">
@@ -1000,11 +1017,12 @@ function DashboardView() {
                 return (
                   <div
                     key={mac}
-                    className={`device-tile ${colorClass} ${selectedMac === mac ? "selected" : ""
-                      }`}
-                    onClick={() => { setSelectedMac(mac); setSelectedDevice(device.locationId) }}
+                    // className={`device-tile ${colorClass} ${selectedMac === mac ? "selected" : ""
+                    //   }`}
+                    className={`device-tile selected`}
+                  // onClick={() => { setSelectedMac(mac); setSelectedDevice(device.locationId) }}
                   >
-                    {device.locationId || mac}
+                    {selectedDevice}
                   </div>
                 );
               });

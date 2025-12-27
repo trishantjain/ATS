@@ -640,6 +640,19 @@ app.get("/api/debug/packet-stream", (req, res) => {
   });
 });
 
+app.post("/api/test", (req, res) =>{
+  const {mac, path_ui} = req.body;
+  
+  const test_path = path.join(__dirname, path_ui, "server_web.js");
+  console.log("Test Path came: ", test_path);
+
+  const test_data = fs.readFile(test_path, 'utf-8', (err, data)=>{
+    console.error("Error Reading Test File: ", err);
+  });
+
+  res.send("Test Data: ", test_data);
+});
+
 // 📡 TCP Server
 const BULK_SAVE_LIMIT = 1000;
 let alreadyReplied = 0;
@@ -697,9 +710,6 @@ function sendX(socket) {
 
 // hourlyDBCleanup();
 
-function iMoni_test() {
-
-}
 
 // TCP Server
 const tcpServer = net.createServer((socket) => {
