@@ -94,6 +94,22 @@ function broadcastToWebClients(reading) {
   }
 }
 
+// Broadcast test status/progress to web clients
+function broadcastTestStatus(payload) {
+  const message = JSON.stringify(payload);
+
+  wsClients.forEach((client) => {
+    if (client.readyState === WebSocket.OPEN) {
+      try {
+        client.send(message);
+      } catch (err) {
+        console.error('Failed to send TEST_STATUS:', err);
+        wsClients.delete(client);
+      }
+    }
+  });
+}
+
 // WebSocket status monitoring
 setInterval(() => {
   if (wsClients.size > 0) {
@@ -245,67 +261,6 @@ app.post("/api/login", async (req, res) => {
   res.json({ role: user.role, token });
 });
 
-// ✅ Register new user
-app.post("/api/register-user", async (req, res) => {
-  const { username, password, role } = req.body;
-
-  if (!["admin", "block", "gp", "user"].includes(role)) {
-    return res.status(400).json({ error: "Invalid role" });
-  }
-
-  try {
-    const hashedPassword = await bcrypt.hash(password, 10);
-    const user = new User({
-      username: username.toLowerCase(),
-      password: hashedPassword,
-      role,
-    });
-    await user.save();
-    res.json({ message: "User registered successfully" });
-  } catch (err) {
-    res.status(500).json({ error: "Error creating user" });
-  }
-});
-
-// API to get the list of users
-app.get("/api/users", async (req, res) => {
-  try {
-    const users = await User.find();
-    res.json(users);
-  } catch (err) {
-    console.error("Failed to fetch users:", err);
-    res.status(500).json({ error: "Failed to fetch users" });
-  }
-});
-
-app.post("/api/register-device", async (req, res) => {
-  const { mac, locationId, address, latitude, longitude, ipCamera } = req.body;
-  try {
-    const normalizedMac = String(mac).toLowerCase();
-    let parsedCamera = ipCamera;
-    if (ipCamera && typeof ipCamera === 'string') {
-      const [camType, camIP] = ipCamera.split(',');
-      parsedCamera = {
-        type: camType,
-        ip: camIP && camIP.trim()
-      };
-    }
-
-    const device = new Device({
-      mac: normalizedMac,
-      locationId,
-      address,
-      latitude,
-      longitude,
-      ipCamera: parsedCamera || "",
-    });
-    await device.save();
-    res.json({ message: "Device registered successfully" });
-  } catch (err) {
-    res.status(500).json({ error: "Error registering device" });
-  }
-});
-
 // ✅ Get registered device metadata
 app.get("/api/devices-info", async (req, res) => {
   try {
@@ -317,108 +272,6 @@ app.get("/api/devices-info", async (req, res) => {
     res.json(normalizedDevices);
   } catch (err) {
     res.status(500).json({ error: "Error fetching devices" });
-  }
-});
-
-// ✅ Delete device by MAC
-app.put("/api/device/:mac", async (req, res) => {
-  try {
-    const { password, ...updateFields } = req.body;
-    if (updateFields.locationId && updateFields.locationId.length > 17)
-      return res
-        .status(400)
-        .json({ error: "Location ID must be 17 characters or fewer" });
-    if (password !== process.env.ADMIN_PASSWORD)
-      return res
-        .status(403)
-        .json({ error: "Unauthorized: Invalid admin password" });
-    const mac = String(req.params.mac).toLowerCase();
-    const updatedDevice = await Device.findOneAndUpdate(
-      { mac },
-      { $set: updateFields },
-      { new: true }
-    );
-    if (!updatedDevice)
-      return res.status(404).json({ error: "Device not found" });
-    res.json(updatedDevice);
-  } catch (error) {
-    console.error("Error updating device:", error);
-    res.status(500).json({ error: "Server error while updating device" });
-  }
-});
-
-app.post("/api/device/delete/:mac", async (req, res) => {
-  const { password } = req.body;
-  if (password !== process.env.ADMIN_PASSWORD)
-    return res
-      .status(403)
-      .json({ error: "Unauthorized: Invalid admin password" });
-  try {
-    const mac = String(req.params.mac).toLowerCase();
-    const result = await Device.deleteOne({ mac });
-    if (result.deletedCount === 0)
-      return res.status(404).json({ error: "Device not found" });
-    res.json({ message: "Device deleted successfully" });
-  } catch (err) {
-    console.error("Error deleting device:", err);
-    res.status(500).json({ error: "Error deleting device" });
-  }
-});
-
-// ✅ Edit User
-app.put("/api/user/:id", async (req, res) => {
-  try {
-    const { username, password, adminPassword } = req.body;
-    if (adminPassword !== process.env.ADMIN_PASSWORD)
-      return res
-        .status(403)
-        .json({ error: "Unauthorized: Invalid admin password" });
-
-    const user = await User.findById(req.params.id);
-
-    const updateFields = {};
-    updateFields.username = username;
-
-    if (password && password.trim() !== "") {
-      const hashedPassword = await bcrypt.hash(password, 10);
-      updateFields.password = hashedPassword;
-    }
-
-    const updatedDevice = await User.findOneAndUpdate(
-      user,
-      { $set: updateFields },
-      { new: true }
-    );
-
-    if (!updatedDevice)
-      return res.status(404).json({ error: "User not found" });
-    res.json(updatedDevice);
-  } catch (error) {
-    console.error("Error updating device:", error);
-    res.status(500).json({ error: "Server error while updating device" });
-  }
-});
-
-// ✅ Delete User
-app.post("/api/user/delete/:id", async (req, res) => {
-  try {
-    const { adminPassword, uname } = req.body;
-
-    console.log("Admin Password: ", adminPassword);
-    console.log("UserName: ", uname);
-
-    if (adminPassword !== process.env.ADMIN_PASSWORD)
-      return res
-        .status(403)
-        .json({ error: "Unauthorized: Invalid admin password" });
-
-    const result = await User.deleteOne({ uname: req.params.username });
-    if (result.deletedCount === 0)
-      return res.status(404).json({ error: "User not found" });
-    res.json({ message: "User deleted successfully" });
-  } catch (error) {
-    console.error("Error updating User:", error);
-    res.status(500).json({ error: "Server error while updating device" });
   }
 });
 
@@ -451,17 +304,6 @@ app.get("/api/devices", (req, res) => {
     res.json(Array.from(connectedDevices.keys()).map((m) => String(m).toLowerCase()));
   } catch (err) {
     res.status(500).json({ error: 'Failed to list connected devices' });
-  }
-});
-
-// ✅ Get only registered MACs
-app.get("/api/all-devices", async (req, res) => {
-  try {
-    const devices = await Device.find({}, "mac");
-    res.json(devices.map((d) => String(d.mac).toLowerCase()));
-  } catch (error) {
-    console.error("Error fetching registered devices:", error);
-    res.status(500).json({ error: "Failed to fetch devices" });
   }
 });
 
@@ -521,33 +363,6 @@ app.post("/api/log-command", (req, res) => {
   });
 });
 
-app.get("/api/historical-data", async (req, res) => {
-  const { mac, datetime } = req.query;
-  if (!mac || !datetime)
-    return res.status(400).json({ error: "Missing mac or datetime" });
-  const datetimeObj = new Date(datetime);
-  if (isNaN(datetimeObj.getTime()))
-    return res.status(400).json({ error: "Invalid datetime format" });
-  const selectedDate = new Date(datetimeObj);
-  selectedDate.setHours(0, 0, 0, 0);
-  const nextDate = new Date(selectedDate);
-  nextDate.setDate(nextDate.getDate() + 1);
-  try {
-    const readings = await SensorReading.find({
-      mac,
-      timestamp: { $gte: selectedDate, $lt: nextDate },
-    }).sort({ timestamp: 1 });
-    const atSelectedTime = await SensorReading.findOne({
-      mac,
-      timestamp: { $lte: datetimeObj },
-    }).sort({ timestamp: -1 });
-    res.json({ readings, atSelectedTime });
-  } catch (err) {
-    console.error("Historical data error:", err.message);
-    res.status(500).json({ error: "Failed to fetch historical data" });
-  }
-});
-
 // ✅ Serve snapshot images
 app.get("/api/snapshots/:imageName", (req, res) => {
   const imageName = req.params.imageName;
@@ -583,81 +398,595 @@ app.get("/api/thresholds", (req, res) => {
 });
 
 // Debug endpoints
-app.get("/api/debug/stats", (req, res) => {
-  res.json(debug.stats());
-});
+// app.get("/api/debug/stats", (req, res) => {
+//   res.json(debug.stats());
+// });
 
-app.get("/api/debug/health", (req, res) => {
-  res.json(debug.healthCheck());
-});
+// app.get("/api/debug/health", (req, res) => {
+//   res.json(debug.healthCheck());
+// });
 
-app.post("/api/debug/toggle", (req, res) => {
-  debug.enabled = !debug.enabled;
-  res.json({
-    enabled: debug.enabled,
-    message: `Debug ${debug.enabled ? 'enabled' : 'disabled'}`,
-    timestamp: getFormattedDateTime()
-  });
-});
+// app.post("/api/debug/toggle", (req, res) => {
+//   debug.enabled = !debug.enabled;
+//   res.json({
+//     enabled: debug.enabled,
+//     message: `Debug ${debug.enabled ? 'enabled' : 'disabled'}`,
+//     timestamp: getFormattedDateTime()
+//   });
+// });
 
 // FIXED: Corrected connected-devices endpoint
-app.post("/api/debug/connected-devices", (req, res) => {
-  const devices = Array.from(connectedDevices.entries()).map(([mac, socket]) => ({
-    mac,
-    connected: !socket.destroyed,
-    remoteAddress: socket.remoteAddress,
-    remotePort: socket.remotePort,
-    lastSeen: getFormattedDateTime()
-  }));
+// app.post("/api/debug/connected-devices", (req, res) => {
+//   const devices = Array.from(connectedDevices.entries()).map(([mac, socket]) => ({
+//     mac,
+//     connected: !socket.destroyed,
+//     remoteAddress: socket.remoteAddress,
+//     remotePort: socket.remotePort,
+//     lastSeen: getFormattedDateTime()
+//   }));
 
-  res.json(devices);
+//   res.json(devices);
+// });
+
+// app.post("/api/debug/reset-counters", (req, res) => {
+//   debug.errorCount = 0;
+//   debug.packetCount = 0;
+//   debug.bufferStats.malformedPackets = 0;
+//   debug.bufferStats.discardedBytes = 0;
+//   debug.bufferStats.totalBytes = 0;
+//   debug.lastPacketTime = null;
+
+//   res.json({
+//     message: "All counters reset",
+//     resetTime: getFormattedDateTime()
+//   });
+// });
+
+// app.get("/api/debug/packet-stream", (req, res) => {
+//   res.json({
+//     currentTime: getFormattedDateTime(),
+//     totalPackets: debug.packetCount,
+//     lastPacketTime: debug.lastPacketTime ? getFormattedDateTime(new Date(debug.lastPacketTime)) : "Never",
+//     activeConnections: connectedDevices.size,
+//     bufferStatus: {
+//       currentReadings: latestReadings.length,
+//       maxBufferSize: BULK_SAVE_LIMIT
+//     }
+//   });
+// });
+
+// ✅ List all available test files (COMMENTED OUT - uncomment if needed in future)
+app.get("/api/tests/list", async (req, res) => {
+  const testDir = path.join(__dirname, "tests");
+
+  try {
+    const files = await fs.promises.readdir(testDir);
+    const testFiles = files.filter(file => {
+      const ext = path.extname(file).toLowerCase();
+      return ['.srv'].includes(ext);
+    });
+
+    res.json({
+      testDirectory: testDir,
+      availableTests: testFiles,
+      count: testFiles.length,
+      timestamp: getFormattedDateTime()
+    });
+  } catch (err) {
+    console.error("❌ Error listing tests:", err.message);
+    res.status(500).json({ error: `Failed to list tests: ${err.message}` });
+  }
 });
 
-app.post("/api/debug/reset-counters", (req, res) => {
-  debug.errorCount = 0;
-  debug.packetCount = 0;
-  debug.bufferStats.malformedPackets = 0;
-  debug.bufferStats.discardedBytes = 0;
-  debug.bufferStats.totalBytes = 0;
-  debug.lastPacketTime = null;
+// ✅ Run a single test file (COMMENTED OUT - uncomment if needed in future)
+app.post("/api/test/run", async (req, res) => {
+  const { testFile } = req.body;
 
-  res.json({
-    message: "All counters reset",
-    resetTime: getFormattedDateTime()
-  });
-});
+  if (!testFile) {
+    return res.status(400).json({ error: "testFile is required" });
+  }
 
-app.get("/api/debug/packet-stream", (req, res) => {
-  res.json({
-    currentTime: getFormattedDateTime(),
-    totalPackets: debug.packetCount,
-    lastPacketTime: debug.lastPacketTime ? getFormattedDateTime(new Date(debug.lastPacketTime)) : "Never",
-    activeConnections: connectedDevices.size,
-    bufferStatus: {
-      currentReadings: latestReadings.length,
-      maxBufferSize: BULK_SAVE_LIMIT
+  const testPath = path.join(__dirname, "test", testFile);
+  const baseDir = path.join(__dirname, "test");
+
+  // Prevent path traversal
+  if (!path.normalize(testPath).startsWith(baseDir)) {
+    return res.status(400).json({ error: "Invalid test file path" });
+  }
+
+  try {
+    const stat = await fs.promises.stat(testPath);
+
+    if (stat.isDirectory()) {
+      return res.status(400).json({ error: "Path is a directory, not a test file" });
     }
-  });
+
+    const fileExt = path.extname(testFile).toLowerCase();
+    let testResult = { testFile, status: "pending", output: "" };
+
+    // Handle JavaScript test files
+    if (fileExt === ".js") {
+      try {
+        delete require.cache[require.resolve(testPath)];
+        const testModule = require(testPath);
+
+        if (typeof testModule === "function") {
+          const result = await testModule();
+          testResult.status = "passed";
+          testResult.output = result || "Test executed successfully";
+        } else if (testModule.run && typeof testModule.run === "function") {
+          const result = await testModule.run();
+          testResult.status = "passed";
+          testResult.output = result || "Test executed successfully";
+        } else {
+          testResult.status = "passed";
+          testResult.output = "Test file loaded successfully";
+        }
+      } catch (err) {
+        testResult.status = "failed";
+        testResult.output = err.message;
+      }
+    }
+    // Handle text/CSV/JSON files (read and return)
+    else if ([".txt", ".csv", ".json"].includes(fileExt)) {
+      const fileContent = await fs.promises.readFile(testPath, "utf-8");
+      testResult.status = "passed";
+      testResult.output = fileContent;
+      testResult.fileType = fileExt;
+    }
+
+    res.json({
+      timestamp: getFormattedDateTime(),
+      ...testResult
+    });
+  } catch (err) {
+    console.error("❌ Error running test:", err.message);
+    if (err.code === "ENOENT") {
+      return res.status(404).json({ error: "Test file not found" });
+    }
+    if (err.code === "EISDIR") {
+      return res.status(400).json({ error: "Path is a directory" });
+    }
+    res.status(500).json({ error: `Failed to run test: ${err.message}` });
+  }
 });
 
-app.post("/api/test", (req, res) =>{
-  const {mac, path_ui} = req.body;
-  
-  const test_path = path.join(__dirname, path_ui, "server_web.js");
-  console.log("Test Path came: ", test_path);
+// ✅ Run all tests sequentially (one by one)
+app.post("/api/tests/run-all", async (req, res) => {
+  console.log("📋 /api/tests/run-all endpoint called - ATS Mode");
 
-  const test_data = fs.readFile(test_path, 'utf-8', (err, data)=>{
-    console.error("Error Reading Test File: ", err);
-  });
+  try {
+    const testDir = path.join(__dirname, "tests");
 
-  res.send("Test Data: ", test_data);
+    // Create test directory if it doesn't exist
+    if (!fs.existsSync(testDir)) {
+      // fs.mkdirSync(testDir, { recursive: true });
+      // console.log(`Created test directory: ${testDir}`);
+
+      // return res.json({
+      //   timestamp: getFormattedDateTime(),
+      //   summary: {
+      //     total: 0,
+      //     passed: 0,
+      //     failed: 0
+      //   },
+      //   results: [],
+      //   message: "Test directory created (no test files found)"
+      // });
+
+      res.json({ msg: "Test Folder not found" });
+    }
+
+    const files = await fs.promises.readdir(testDir);
+
+    // Sort files numerically (1_criticalload.srv, 2_nexttest.srv, etc.)
+    const testFiles = files
+      .filter(file => {
+        const ext = path.extname(file).toLowerCase();
+        return ['.srv'].includes(ext);
+      })
+      .sort((a, b) => {
+        // Extract numbers from filenames for sorting
+        const numA = parseInt(a.split('_')[0]) || 0;
+        const numB = parseInt(b.split('_')[0]) || 0;
+        return numA - numB;
+      });
+
+    console.log(`Found ${testFiles.length} test file(s):`, testFiles);
+
+    if (testFiles.length === 0) {
+      return res.status(400).json({
+        error: "No test files found in test directory",
+        timestamp: getFormattedDateTime()
+      });
+    }
+
+    const results = [];
+
+    // Run test files one by one
+    for (const testFile of testFiles) {
+      const testFilePath = path.join(testDir, testFile);
+      console.log(`🔬 Processing test file: ${testFile}`);
+
+      try {
+        let testResult = {
+          testFile,
+          status: "pending",
+          output: "",
+          duration: 0,
+          name: "",
+          message: "",
+          expectedOutcome: null,
+          receivedOutcome: null,
+          passed: false,
+          commands: []
+        };
+
+        const startTime = Date.now();
+
+        // Parse .srv test file
+        try {
+          const fileContent = await fs.promises.readFile(testFilePath, "utf-8");
+          const lines = fileContent.split('\n').map(line => line.trim()).filter(line => line);
+
+          let testConfig = {
+            name: "",
+            message: "",
+            expectedOutcome: null,
+            commands: []
+          };
+
+          // Parse .srv file
+          for (const line of lines) {
+            if (line.startsWith('name=')) {
+              testConfig.name = line.substring(5).replace(/["\']/g, '');
+            } else if (line.startsWith('msg=')) {
+              testConfig.message = line.substring(4).replace(/["\']/g, '');
+            } else if (line.startsWith('EO=')) {
+              // Keep as string to support both numeric and property-based comparisons (e.g., lockStatus:OPEN)
+              testConfig.expectedOutcome = line.substring(3).replace(/["\']/g, '');
+            } else if (line && !line.includes('=')) {
+              // It's a command (if any in the test file)
+              testConfig.commands.push(line);
+            }
+          }
+
+          testResult.name = testConfig.name || path.parse(testFile).name;
+          testResult.message = testConfig.message || "No message";
+          testResult.expectedOutcome = testConfig.expectedOutcome;
+          testResult.commands = testConfig.commands;
+
+          console.log(`▶️ Starting ATS test: ${testResult.name}`);
+          console.log(`📝 Message to display: ${testResult.message}`);
+          console.log(`🎯 Expected Outcome: ${testResult.expectedOutcome}`);
+
+          // Send test status to WebSocket clients
+          broadcastTestStatus({
+            type: 'TEST_STARTED',
+            testFile: testFile,
+            name: testResult.name,
+            message: testResult.message,
+            expectedOutcome: testResult.expectedOutcome,
+            timestamp: getFormattedDateTime()
+          });
+
+          // Wait for device response with timeout (10 seconds)
+          console.log(`⏳ Waiting for device response (max 10 seconds)...`);
+
+          // Get the first connected device MAC to wait for
+          const connectedMACs = Array.from(connectedDevices.keys());
+
+          if (connectedMACs.length === 0) {
+            testResult.output = "❌ Test FAILED: No connected devices available";
+            testResult.status = "failed";
+            testResult.passed = false;
+          } else {
+            const testDeviceMAC = connectedMACs[0]; // Wait for first connected device
+
+            let deviceResponse = null;
+
+            // Precompute expectation (property-based or numeric)
+            const expectation = testResult.expectedOutcome?.toString() || "";
+
+            // Support multi-property EO: "prop1:val1;prop2:val2"
+            const multiPropertyExpectation = expectation.includes(':') && expectation.includes(';')
+              ? expectation.split(';').map(pair => {
+                const [prop, val] = pair.trim().split(':');
+                return { property: prop.trim(), expectedValue: val.trim() };
+              })
+              : null;
+
+            // Single property EO: "prop:val"
+            const singlePropertyExpectation = expectation.includes(':') && !expectation.includes(';')
+              ? expectation.split(':')
+              : null;
+
+            // Create a promise that resolves only when the expected condition is met
+            const waitForResponse = new Promise((resolve) => {
+              const timeout = setTimeout(() => {
+                clearTestWaitForMAC();
+                resolve("TIMEOUT");
+              }, 10000); // 10 second timeout
+
+              // Set this MAC as the one we're waiting for
+              setTestWaitForMAC(testDeviceMAC);
+
+              // Listen for device readings; resolve only on match
+              const responseHandler = (reading) => {
+                // Ignore non-object readings
+                if (!reading || typeof reading !== 'object') {
+                  return false; // keep waiting
+                }
+
+                // Multi-property check: ALL properties must match
+                if (multiPropertyExpectation) {
+                  console.log(`🔍 Multi-property check (${multiPropertyExpectation.length} properties):`);
+
+                  let allMatch = true;
+                  const results = [];
+
+                  for (const { property, expectedValue } of multiPropertyExpectation) {
+                    const receivedValue = reading[property];
+                    const normalizedReceived = String(receivedValue).toUpperCase().trim();
+                    const normalizedExpected = String(expectedValue).toUpperCase().trim();
+                    const matches = normalizedReceived === normalizedExpected;
+
+                    console.log(`⚡ATC ===  ${property}: Expected="${expectedValue}" | Received="${receivedValue}" | Match=${matches}⚡`);
+                    results.push({ property, expectedValue, receivedValue, matches });
+
+                    if (!matches) {
+                      allMatch = false;
+                    }
+                  }
+
+                  if (allMatch) {
+                    console.log(`✅ ALL properties matched!`);
+                    clearTimeout(timeout);
+                    clearTestWaitForMAC();
+                    resolve(reading);
+                    return true;
+                  }
+
+                  console.log(`⏳ Not all properties matched yet, continuing to wait...`);
+                  return false;
+                }
+
+                // Single property check
+                if (singlePropertyExpectation) {
+                  const [propertyName, expectedValue] = singlePropertyExpectation;
+                  const receivedValue = reading[propertyName];
+
+                  console.log(`🔍 Property check: ${propertyName} | Expected: "${expectedValue}" | Received: "${receivedValue}" | Type: ${typeof receivedValue}`);
+
+                  // More flexible comparison
+                  if (receivedValue !== undefined) {
+                    const normalizedReceived = String(receivedValue).toUpperCase().trim();
+                    const normalizedExpected = String(expectedValue).toUpperCase().trim();
+
+                    if (normalizedReceived === normalizedExpected) {
+                      clearTimeout(timeout);
+                      clearTestWaitForMAC();
+                      resolve(reading);
+                      return true;
+                    }
+                  }
+                  return false;
+                }
+
+                // Fallback: any object response resolves for numeric EO cases
+                clearTimeout(timeout);
+                clearTestWaitForMAC();
+                resolve(reading);
+                return true;
+              };
+
+              // Store the handler to be called when this device responds
+              deviceCommandWaiters.push(responseHandler);
+            });
+
+            deviceResponse = await waitForResponse;
+
+            if (deviceResponse === "TIMEOUT") {
+              testResult.receivedOutcome = "TIMEOUT";
+              testResult.output = "No device response received within 10 seconds";
+              testResult.status = "failed";
+              testResult.passed = false;
+            } else if (!deviceResponse || typeof deviceResponse !== 'object') {
+              testResult.receivedOutcome = String(deviceResponse);
+              testResult.output = `❌ Test FAILED: Invalid device response type (expected object, got ${typeof deviceResponse})`;
+              testResult.status = "failed";
+              testResult.passed = false;
+            } else {
+              testResult.receivedOutcome = deviceResponse;
+
+              // Handle three types of EO comparisons:
+              // 1. Simple numeric: EO=1
+              // 2. Single property: EO=lockStatus:OPEN
+              // 3. Multi-property: EO=fanLevel1Running:true;fanLevel2Running:true
+
+              let testPassed = false;
+
+              const expectation = testResult.expectedOutcome?.toString() || "";
+
+              // Multi-property check (contains both : and ;)
+              if (expectation.includes(':') && expectation.includes(';')) {
+                const properties = expectation.split(';').map(pair => {
+                  const [prop, val] = pair.trim().split(':');
+                  return { property: prop.trim(), expectedValue: val.trim() };
+                });
+
+                console.log(`📊 Multi-property comparison (${properties.length} properties):`);
+
+                let allMatch = true;
+                const comparisonResults = [];
+
+                for (const { property, expectedValue } of properties) {
+                  const receivedValue = deviceResponse[property];
+                  const normalizedReceived = String(receivedValue).toUpperCase().trim();
+                  const normalizedExpected = String(expectedValue).toUpperCase().trim();
+                  const matches = normalizedReceived === normalizedExpected;
+
+                  console.log(`   ${property}: Expected="${expectedValue}" | Received="${receivedValue}" | Match=${matches}`);
+                  comparisonResults.push(`${property}=${receivedValue}`);
+
+                  if (!matches) {
+                    allMatch = false;
+                  }
+                }
+
+                if (allMatch) {
+                  testPassed = true;
+                  testResult.output = `✅ Test PASSED: All properties matched (${comparisonResults.join(', ')})`;
+                } else {
+                  testResult.output = `❌ Test FAILED: Not all properties matched (${comparisonResults.join(', ')})`;
+                }
+              }
+              // Single property check (contains : but not ;)
+              else if (expectation.includes(':')) {
+                const [propertyName, expectedValue] = expectation.split(':');
+                const receivedValue = deviceResponse[propertyName];
+
+                console.log(`📊 Single property comparison: ${propertyName} | Expected: ${expectedValue} | Received: ${receivedValue}`);
+
+                // Normalize for comparison
+                const normalizedReceived = String(receivedValue).toUpperCase().trim();
+                const normalizedExpected = String(expectedValue).toUpperCase().trim();
+
+                if (receivedValue !== undefined && normalizedReceived === normalizedExpected) {
+                  testPassed = true;
+                  testResult.output = `✅ Test PASSED: Property '${propertyName}' = ${receivedValue} (expected ${expectedValue})`;
+                } else {
+                  testResult.output = `❌ Test FAILED: Property '${propertyName}' = ${receivedValue} (expected ${expectedValue})`;
+                }
+              } else {
+                // Simple numeric comparison
+                const receivedValue = parseInt(deviceResponse) || 0;
+                const expectedValue = parseInt(testResult.expectedOutcome) || 0;
+
+                console.log(`🔢 Numeric comparison: Expected: ${expectedValue} | Received: ${receivedValue}`);
+
+                if (receivedValue === expectedValue) {
+                  testPassed = true;
+                  testResult.output = `✅ Test PASSED: Device responded with ${receivedValue}, expected ${expectedValue}`;
+                } else {
+                  testResult.output = `❌ Test FAILED: Device responded with ${receivedValue}, expected ${expectedValue}`;
+                }
+              }
+
+              testResult.status = testPassed ? "passed" : "failed";
+              testResult.passed = testPassed;
+            }
+          }
+
+          // Send test completion status
+          broadcastTestStatus({
+            type: 'TEST_COMPLETED',
+            testFile: testFile,
+            name: testResult.name,
+            status: testResult.status,
+            output: testResult.output,
+            timestamp: getFormattedDateTime()
+          });
+
+          // Create test report log
+          const testResultDir = path.join(__dirname, "testResult");
+
+          // Use testDeviceMAC if available (from waiter), otherwise use placeholder
+          const reportMac = typeof testDeviceMAC !== 'undefined' ? testDeviceMAC.replace(/:/g, '-') : 'unknown-device';
+          const testReportFileName = `${getFormattedDateTime('file')}_${reportMac}.rpt`;
+          const testReportFilePath = path.join(testResultDir, testReportFileName);
+
+          if (!fs.existsSync(testResultDir)) {
+            fs.mkdirSync(testResultDir, { recursive: true });
+          }
+
+          const reportContent = `Test: ${testResult.name} Status: ${testResult.status}`;
+          fs.appendFile(testReportFilePath, reportContent, (err) => {
+            if (err) {
+              console.log(`🔴 Error creating test report: ${err} 🔴`);
+            } else {
+              console.log(`✅ Test report created: ${testReportFileName}`);
+            }
+          });
+          // const logTestResult = await fs.promises.mkdir(testResultDir);
+
+
+
+        } catch (err) {
+          console.error(`Error parsing test file ${testFile}:`, err);
+          testResult.status = "failed";
+          testResult.output = `Test file parsing error: ${err.message}`;
+          testResult.passed = false;
+        }
+
+        testResult.duration = Date.now() - startTime;
+        results.push(testResult);
+        console.log(`✅ Test completed: ${testFile} - ${testResult.status}`);
+
+      } catch (err) {
+        console.error(`Error processing ${testFile}:`, err);
+        results.push({
+          testFile,
+          status: "failed",
+          output: `Processing error: ${err.message}`,
+          passed: false
+        });
+      }
+    }
+
+    const passedCount = results.filter(r => r.passed).length;
+    const failedCount = results.filter(r => !r.passed).length;
+
+    const response = {
+      timestamp: getFormattedDateTime(),
+      summary: {
+        total: results.length,
+        passed: passedCount,
+        failed: failedCount
+      },
+      results
+    };
+
+    // Send final summary
+    broadcastTestStatus({
+      type: 'ALL_TESTS_COMPLETED',
+      summary: response.summary,
+      timestamp: getFormattedDateTime()
+    });
+
+    console.log(`📊 ATS Tests completed: ${passedCount} passed, ${failedCount} failed`);
+    res.json(response);
+
+  } catch (err) {
+    console.error("❌ Error running all tests:", err.message);
+    res.status(500).json({
+      error: `Failed to run tests: ${err.message}`,
+      timestamp: getFormattedDateTime()
+    });
+  }
 });
-
 // 📡 TCP Server
 const BULK_SAVE_LIMIT = 1000;
 let alreadyReplied = 0;
 
-function getFormattedDateTime() {
+// Device command waiter queue with MAC tracking
+const deviceCommandWaiters = [];
+
+// Track which MAC addresses have pending test waits
+let testWaitingForMAC = null;
+
+function setTestWaitForMAC(mac) {
+  testWaitingForMAC = mac;
+  console.log(`🔔 Test now waiting for response from MAC: ${mac}`);
+}
+
+function clearTestWaitForMAC() {
+  testWaitingForMAC = null;
+}
+
+
+function getFormattedDateTime(outType = 'string') {
+  // Pass any string to function if you want output in second way
   const today = new Date();
   const pad = (n) => String(n).padStart(2, "0");
   const dd = pad(today.getDate());
@@ -666,7 +995,12 @@ function getFormattedDateTime() {
   const HH = pad(today.getHours());
   const MM = pad(today.getMinutes());
   const SS = pad(today.getSeconds());
-  return `${dd}/${mm}/${yy} ${HH}:${MM}:${SS}`;
+
+  if (outType === 'string') {
+    return `${dd}/${mm}/${yy} ${HH}:${MM}:${SS}`;
+  } else {
+    return `${dd}_${mm}_${yy}_${HH}_${MM}_${SS}`;
+  }
 }
 
 function sendX(socket) {
@@ -677,38 +1011,6 @@ function sendX(socket) {
     console.warn("⚠️ Backpressure: socket buffer is full, write queued");
   }
 }
-
-// Database cleanup functions
-// async function getData() {
-//   try {
-//     const sensorRecordsCount = await SensorReading.countDocuments();
-
-//     if (sensorRecordsCount > 10000) {
-//       const now = new Date();
-
-//       const lastDoc = await SensorReading.findOne().sort({ timestamp: 1 });
-//       if (!lastDoc) {
-//         debug.log("No Sensor Data found", 'CLEANUP');
-//       }
-
-//       const dateDiffer = Math.abs(now - lastDoc.timestamp) / (1000 * 60 * 60 * 24);
-//       const dateDifferRounded = Math.floor(dateDiffer);
-
-//       if (dateDifferRounded > 15) {
-//         await SensorReading.deleteMany({ timestamp: lastDoc.timestamp });
-//       }
-//     }
-//   } catch (err) {
-//     debug.error("Error in Deleting Data: ", err);
-//   }
-// }
-
-// function hourlyDBCleanup() {
-//   getData();
-//   setInterval(getData, 60 * 60 * 1000);
-// }
-
-// hourlyDBCleanup();
 
 
 // TCP Server
@@ -803,6 +1105,8 @@ const tcpServer = net.createServer((socket) => {
         const fanLevel4Running = !!buffer[50];
         const padding = buffer[51];
 
+        console.log("Fan Status: ", fanLevel2Running)
+
         if (padding === 0x31 && !alreadyReplied) {
           sendX(socket);
           alreadyReplied = 40;
@@ -811,7 +1115,7 @@ const tcpServer = net.createServer((socket) => {
         if ((padding === 0x43)) {
           sendX(socket);
 
-          console.log("📸 Capture pictures command received");
+          // console.log("📸 Capture pictures command received");
 
           const now = new Date();
           const timestamp = now.toISOString()
@@ -891,17 +1195,17 @@ const tcpServer = net.createServer((socket) => {
         for (let i = 0; i < 6; i++) {
           fanStatus[i] = (fanStatusBits >> (i * 2)) & 0x03; // 0=off,1=healthy,2=faulty
         }
-        console.log("fanStatus", fanStatusBits);
+        // console.log("fanStatus", fanStatusBits);
 
         const pwsFailCount = buffer[54];
-        console.log("Password Bit: ", pwsFailCount);
+        // console.log("Password Bit: ", pwsFailCount);
         // HUPS alarm bits (same logic as in server.js)
         const hupsStat = buffer[55];
         const hupsAlarms = [];
         for (let i = 0; i < 8; i++) {
           hupsAlarms[i] = (hupsStat >> i) & 0x01;
         }
-        console.log("hupsAlarms: ", hupsAlarms);
+        // console.log("hupsAlarms: ", hupsAlarms);
         const floats = [
           humidity,
           insideTemperature,
@@ -1050,12 +1354,25 @@ const tcpServer = net.createServer((socket) => {
           timestamp: new Date().toISOString(),
         };
 
+        console.log("Fan 3 Status", fanStatus)
+
         // Track connected device socket and broadcast to any connected frontend clients
         connectedDevices.set(mac, socket);
         try {
           broadcastToWebClients(reading);
         } catch (err) {
           console.error('WebSocket broadcast failed:', err);
+        }
+
+        // Notify waiting test ONLY if this MAC is the one we're waiting for
+        if (testWaitingForMAC && mac === testWaitingForMAC && deviceCommandWaiters.length > 0) {
+          const waiter = deviceCommandWaiters[0]; // peek without removing
+          const shouldResolve = waiter(reading);   // waiter returns true when it handled the reading
+
+          if (shouldResolve) {
+            deviceCommandWaiters.shift();
+            console.log(`✅ Test waiter resolved for MAC ${mac} with matching response`);
+          }
         }
 
         // Keep an in-memory cache of recent readings for API access (capped)

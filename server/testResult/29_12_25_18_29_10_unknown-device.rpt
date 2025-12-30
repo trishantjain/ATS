@@ -1,0 +1,5 @@
+Test: Password Test
+Status: passed
+Output: ✅ Test PASSED: Property 'lockStatus' = OPEN (expected OPEN)
+Duration: 0ms
+

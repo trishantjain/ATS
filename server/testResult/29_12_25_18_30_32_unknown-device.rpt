@@ -1,0 +1,5 @@
+Test: 3 Fans
+Status: passed
+Output: ✅ Test PASSED: All properties matched (fanLevel1Running=true, fanLevel2Running=true)
+Duration: 0ms
+

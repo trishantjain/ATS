@@ -2,24 +2,24 @@ import React, { useEffect, useState, useRef } from "react";
 import "../App.css";
 import { CircularProgressbar, buildStyles } from "react-circular-progressbar";
 import "react-circular-progressbar/dist/styles.css";
-import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
+// import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
-import L from "leaflet";
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-} from "recharts";
+// import L from "leaflet";
+// import {
+//   LineChart,
+//   Line,
+//   XAxis,
+//   YAxis,
+//   CartesianGrid,
+//   Tooltip,
+//   Legend,
+//   ResponsiveContainer,
+// } from "recharts";
 import swal from "sweetalert2";
 // import thresholds from "../../../server/thresholds";
 // import GaugeComponent from 'react-gauge-component';
 
-const defaultLocation = [28.6139, 77.209];
+// const defaultLocation = [28.6139, 77.209];
 
 function DashboardView() {
   const [readings, setReadings] = useState([]);
@@ -35,11 +35,19 @@ function DashboardView() {
   // const [videosCaptured, setVideosCaptured] = useState([]);
   const [selectedImage, setSelectedImage] = useState(null);
   const [selectedDevice, setSelectedDevice] = useState("");
+  const [testStatus, setTestStatus] = useState("");
+  const [currentTest, setCurrentTest] = useState(null);
+  const [awaitingCommand, setAwaitingCommand] = useState(false);
+  const [testProgress, setTestProgress] = useState([]);
+  const [currentTestStep, setCurrentTestStep] = useState(0);
+  const [testCommandInput, setTestCommandInput] = useState("");
+  const [notification, setNotification] = useState(null);
+
 
   //Map and marker refs
   const mapRef = useRef(null);
   const wsRef = useRef(null);
-  const markerRefs = useRef({});
+  // const markerRefs = useRef({});
 
   const latestReadingsByMac = {};
   readings.forEach((r) => {
@@ -51,10 +59,6 @@ function DashboardView() {
 
   const selectedDeviceMeta = deviceMeta.find((d) => d.mac === selectedMac);
   const latestReading = readings.find((r) => r.mac === selectedMac);
-
-  // console.log(process.env.REACT_APP_API_URL)
-  // console.log("latestR", latestReading.mainStatus)
-  // console.log('All properties:', Object.keys(latestReading));
 
   // WEBSOCKET CONNECTION
   useEffect(() => {
@@ -179,13 +183,6 @@ function DashboardView() {
   //   }
   // };
 
-  const handleMapCreated = (mapInstance) => {
-    if (!mapRef.current) {
-      mapRef.current = mapInstance;
-      console.log("Map ref set:", mapRef.current); // <--- You should see this log ONCE
-    }
-  };
-
   // added by vats
   // A synchronous function to format the date and time.
   function getFormattedDateTime() {
@@ -260,7 +257,6 @@ function DashboardView() {
         "",
         command
       );
-
     }
     sendCommand(command);
 
@@ -328,40 +324,15 @@ function DashboardView() {
     else setStatus("Wrong password for opening lock!");
   };
 
-  const toggleFullscreen = () => {
-    const iframe = document.querySelector(".camera-iframe");
-    if (iframe.requestFullscreen) iframe.requestFullscreen();
-    else if (iframe.webkitRequestFullscreen) iframe.webkitRequestFullscreen();
-    else if (iframe.msRequestFullscreen) iframe.msRequestFullscreen();
-  };
+  // const toggleFullscreen = () => {
+  //   const iframe = document.querySelector(".camera-iframe");
+  //   if (iframe.requestFullscreen) iframe.requestFullscreen();
+  //   else if (iframe.webkitRequestFullscreen) iframe.webkitRequestFullscreen();
+  //   else if (iframe.msRequestFullscreen) iframe.msRequestFullscreen();
+  // };
 
-  const zoomIn = () => setZoom((prev) => Math.min(prev + 0.1, 2));
-  const zoomOut = () => setZoom((prev) => Math.max(prev - 0.1, 1));
-  const rotateFeed = () => setRotation((prev) => (prev + 90) % 360);
-
-  const isAlarmActive = (reading) =>
-    reading.fireAlarm || reading.waterLeakage || reading.waterLogging || reading.lockStatus === "OPEN" || reading.doorStatus === "OPEN" || [1, 2, 3].includes(reading.password);
-
-  const historicalData = readings
-    .filter((r) => r.mac === selectedMac && r.timestamp)
-    .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp)) // oldest to latest
-    .slice(-15)
-    .map((r) => ({
-      time: new Date(r.timestamp).toLocaleTimeString([], {
-        month: "2-digit",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-        hour12: false,
-      }),
-      insideTemperature: Number(r.insideTemperature.toFixed(2)),
-      outsideTemperature: Number(r.outsideTemperature.toFixed(2)),
-      humidity: Number(r.humidity.toFixed(2)),
-      inputVoltage: Number(r.inputVoltage.toFixed(2)),
-      outputVoltage: Number(r.outputVoltage.toFixed(2)),
-      batteryBackup: Number(r.batteryBackup.toFixed(2)),
-    }));
+  // const isAlarmActive = (reading) =>
+  //   reading.fireAlarm || reading.waterLeakage || reading.waterLogging || reading.lockStatus === "OPEN" || reading.doorStatus === "OPEN" || [1, 2, 3].includes(reading.password);
 
 
   const fetchSnapshots = async (selectedMac) => {
@@ -381,26 +352,198 @@ function DashboardView() {
     }
   };
 
+  // Modified iMoni_test function with better error handling
   async function iMoni_test() {
-    const mac_selected = selectedMac;
+    setTestStatus("Starting tests...");
+    setAwaitingCommand(true);
+    setTestProgress([]);
 
-    const test_path = "/tests";
-    alert("Test Function", test_path);
+    try {
+      const resp = await fetch(`${process.env.REACT_APP_API_URL}/api/tests/run-all`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        // body: ({mac})
+      });
 
-    const test_result = await fetch(`${process.env.REACT_APP_API_URL}/api/test`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mac: mac_selected, path_ui: test_path })
-    })
+      if (!resp.ok) {
+        throw new Error(`HTTP error! status: ${resp.status}`);
+      }
 
-    // const test_resp = await test_result.json();
+      const data = await resp.json();
+      console.log("Test response:", data);
 
-    console.log("Test Path: ", test_path);
-    // console.log("Test Response: ", test_resp);
-    // const {msg , eo}
+      // data.results is the array of tests parsed/run on the server
+      if (Array.isArray(data.results) && data.results.length) {
+        const first = data.results[0];
+        setCurrentTest(first.name || first.testFile);
+        setTestStatus(first.message || "Running...");
 
+        // Update test progress
+        setTestProgress(data.results.map(result => ({
+          test: result.testFile || result.name,
+          status: result.status,
+          output: result.output || "No output",
+          duration: result.duration || 0
+        })));
+      }
 
+      setAwaitingCommand(false);
+      setTestStatus(data.summary ? `Completed: ${data.summary.passed} passed, ${data.summary.failed} failed` : "All tests done");
+      setCurrentTest(null);
+    } catch (err) {
+      console.error("Test error:", err);
+      setAwaitingCommand(false);
+      setTestStatus(`Test run failed: ${err.message}`);
+    }
   }
+
+
+  // New test function with step-by-step execution
+  // async function runTestsStepByStep() {
+  //   setTestStatus("Initializing tests...");
+  //   setTestProgress([]);
+
+  //   try {
+  //     // First, get the list of tests
+  //     const listResponse = await fetch(`${process.env.REACT_APP_API_URL}/api/tests/list`);
+  //     const testList = await listResponse.json();
+
+  //     for (const testFile of testList.availableTests) {
+  //       setCurrentTest(testFile);
+  //       setTestStatus(`Running: ${testFile}`);
+
+  //       // Run the test
+  //       const runResponse = await fetch(`${process.env.REACT_APP_API_URL}/api/test/run`, {
+  //         method: "POST",
+  //         headers: { "Content-Type": "application/json" },
+  //         body: JSON.stringify({ testFile }),
+  //       });
+
+  //       const result = await runResponse.json();
+
+  //       // Add to progress
+  //       setTestProgress(prev => [...prev, {
+  //         test: testFile,
+  //         status: result.status,
+  //         output: result.output
+  //       }]);
+
+  //       // If test has commands, send them
+  //       if (result.commands && result.commands.length > 0) {
+  //         for (const command of result.commands) {
+  //           await sendDeviceCommand(command);
+  //           await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1s between commands
+  //         }
+  //       }
+  //     }
+
+  //     setTestStatus("All tests completed");
+  //   } catch (err) {
+  //     console.error("Test execution error:", err);
+  //     setTestStatus(`Error: ${err.message}`);
+  //   }
+  // }
+
+  useEffect(() => {
+    const connectWebSocket = () => {
+      console.log('🔄 Attempting WebSocket connection...');
+
+      const wsUrl = process.env.NODE_ENV === 'production'
+        ? `wss://${window.location.host}`
+        : (process.env.REACT_APP_WS_URL || 'ws://localhost:8080');
+
+      const ws = new WebSocket(wsUrl);
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        console.log('✅ WebSocket connected successfully');
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const message = JSON.parse(event.data);
+          console.log('📨 WebSocket message type:', message.type);
+
+          if (message.type === 'NEW_READING') {
+            const newReading = message.data;
+            setSelectedMac(prev => prev || newReading.mac);
+            setSelectedDevice(prev => prev || newReading.locationId || newReading.mac);
+            setReadings(prev => {
+              const filtered = prev.filter(r => r.mac !== newReading.mac);
+              return [...filtered, newReading].slice(-400);
+            });
+          }
+
+          // Handle test status messages
+          if (message.type === 'TEST_STARTED') {
+            setCurrentTest(message.name || message.testFile);
+            setTestStatus(`🏁 ${message.message}`);
+
+            // Show notification banner instead of modal popup
+            if (message.message && message.message !== "No message") {
+              setNotification({
+                title: `Test: ${message.name}`,
+                message: message.message,
+                type: 'info'
+              });
+
+              // Auto-close after 10 seconds
+              setTimeout(() => {
+                setNotification(null);
+              }, 10000);
+            }
+          }
+
+          if (message.type === 'TEST_COMPLETED') {
+            setTestStatus(`${message.status === 'passed' ? '✅' : '❌'} ${message.name}: ${message.output}`);
+          }
+
+          if (message.type === 'ALL_TESTS_COMPLETED') {
+            setTestStatus(`📊 All tests completed: ${message.summary.passed} passed, ${message.summary.failed} failed`);
+            setAwaitingCommand(false);
+            setCurrentTest(null);
+          }
+
+        } catch (err) {
+          console.error('❌ WebSocket message parse error:', err);
+        }
+      };
+
+      ws.onerror = (error) => {
+        console.error('❌ WebSocket connection error:', error);
+      };
+
+      ws.onclose = (event) => {
+        console.log(`🔌 WebSocket disconnected (code: ${event.code}, reason: ${event.reason})`);
+        setTimeout(() => {
+          console.log('🔄 Attempting to reconnect WebSocket...');
+          connectWebSocket();
+        }, 3000);
+      };
+    };
+
+    connectWebSocket();
+
+    return () => {
+      if (wsRef.current) {
+        console.log('🛑 Closing WebSocket connection');
+        wsRef.current.close(1000, 'Component unmounting');
+      }
+    };
+  }, []);
+
+  // const simulateDeviceResponse = async (responseValue) => {
+  //   try {
+  //     const result = await sendDeviceCommand(`TEST_RESPONSE_${responseValue}`);
+  //     setTestStatus(`Simulated device response: ${responseValue}`);
+  //     return result;
+  //   } catch (err) {
+  //     console.error('Failed to simulate device response:', err);
+  //     return { error: err.message };
+  //   }
+  // };
 
   // Fetch snapshots on component mount
   useEffect(() => {
@@ -468,9 +611,7 @@ function DashboardView() {
       key: "mosfStatus",
       Name: "MOSFET",
     },
-
-
-  ]
+  ];
 
   return (
     <>
@@ -485,27 +626,6 @@ function DashboardView() {
           <div
             style={{
               position: "absolute",
-              left: 300,
-              display: "flex",
-              alignItems: "center",
-              gap: 10,
-              zIndex: 99
-            }}
-          >
-            <img
-              src="/bharatnet_logo.png"
-              alt="BharatNet"
-              style={{ height: "40px", width: "100px", left: "100px" }}
-            />
-            <img
-              src="/BSNL_logo.png"
-              alt="BSNL"
-              style={{ height: "40px", width: "100px", left: "100px" }}
-            />
-          </div>
-          <div
-            style={{
-              position: "absolute",
               right: 60,
               display: "flex",
               alignItems: "center",
@@ -515,24 +635,120 @@ function DashboardView() {
 
           >
             <img
-              src="/ITI.png"
-              alt="ITI"
-              style={{ height: "40px", width: "100px" }}
-            />
-            <img
               src="/technotrendz.png"
               alt="Technotrendz Logo"
-              style={{ height: "40px", width: "100px" }}
+              style={{ height: "100px", width: "200px" }}
             />
           </div>
         </div>
+      </div>
+
+      <div className="test-controls-panel">
+        <h2>🧪 ATS Test Controls</h2>
+        <div className="test-buttons">
+          <button
+            className="btn-test"
+            onClick={iMoni_test}
+            disabled={awaitingCommand}
+          >
+            {awaitingCommand ? "Running ATS..." : "Run ATS Tests"}
+          </button>
+          {/* <button
+            className="btn-test-secondary"
+            onClick={runTestsStepByStep}
+          >
+            Run Step-by-Step
+          </button> */}
+        </div>
+
+        {/* Notification Banner */}
+        {notification && (
+          <div style={{
+            backgroundColor: '#1a3a3a',
+            border: '2px solid #00cccc',
+            borderRadius: '8px',
+            padding: '16px',
+            marginBottom: '16px',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'flex-start',
+            color: '#fff',
+            boxShadow: '0 4px 12px rgba(0, 204, 204, 0.3)'
+          }}>
+            <div style={{ flex: 1 }}>
+              <h4 style={{ margin: '0 0 8px 0', color: '#00cccc' }}>
+                {notification.title}
+              </h4>
+              <p style={{ margin: 0, fontSize: '14px', lineHeight: '1.5' }}>
+                {notification.message}
+              </p>
+            </div>
+            <button
+              onClick={() => setNotification(null)}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: '#00cccc',
+                fontSize: '20px',
+                cursor: 'pointer',
+                marginLeft: '12px',
+                padding: '0 8px'
+              }}
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
+        {/* <div className="test-status-display">
+          <h4>Test Status: {testStatus}</h4>
+          {currentTest && <p>Current Test: {currentTest}</p>}
+
+          <div className="simulation-buttons">
+            <h5>Simulate Device Response (for testing):</h5>
+            <button onClick={() => simulateDeviceResponse(1)}>Response: 1</button>
+            <button onClick={() => simulateDeviceResponse(2)}>Response: 2</button>
+            <button onClick={() => simulateDeviceResponse(3)}>Response: 3</button>
+            <button onClick={() => simulateDeviceResponse(0)}>Response: 0</button>
+          </div>
+
+          <div className="manual-command">
+            <input
+              type="text"
+              placeholder="Enter device command/response"
+              value={testCommandInput}
+              onChange={(e) => setTestCommandInput(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && sendManualTestCommand()}
+            />
+            <button onClick={sendManualTestCommand}>Send to Device</button>
+          </div>
+        </div> */}
+
+        {testProgress.length > 0 && (
+          <div className="test-results">
+            <h4>ATS Results ({testProgress.length} tests)</h4>
+            {testStatus}
+            <div className="test-results-list">
+              {testProgress.map((result, index) => (
+                <div key={index} className={`test-result ${result.status}`}>
+                  <strong>{result.name || result.test}</strong>: {result.status.toUpperCase()}
+                  {result.message && <div className="test-message">📝 {result.message}</div>}
+                  <div className="test-details">
+                    <div>Expected: {result.expectedOutcome !== null ? result.expectedOutcome : 'N/A'}</div>
+                    <div>Received: {result.receivedOutcome || 'No response'}</div>
+                  </div>
+                  {result.output && <div className="test-output">{result.output}</div>}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="dashboard">
         <div className="panel">
           <h2 className="selected-heading">
             📟 Selected Rack: {selectedMac && <span> {selectedDevice}</span>}
-            <button className="btn-test" onClick={iMoni_test}>Start test</button>
           </h2>
           {latestReading && (
             <div>
@@ -636,146 +852,142 @@ function DashboardView() {
               )}
 
               {activeTab === "status" && (
-                <div className="fan-status">
-                  <div className="fan-status-line">
-                    <h4>Fan Running Status</h4>
-                    {[...Array(6)].map((_, i) => {
-                      const statusVal = latestReading[`fan${i + 1}Status`]; // 0=off, 1=healthy, 2=faulty
-                      // console.log('statusVal', statusVal);
-
-                      // console.log("statusC");
-                      let statusClass = "off";
-                      if (statusVal === 1) {
-                        statusClass = "running"; // green
-                      } else if (statusVal === 2) {
-                        statusClass = "faulty"; // red
-                      }
-                      // console.log(statusClass);
-
-                      return (
-                        <div key={i} className="fan-light">
-                          <div className={`fan-light-circle ${statusClass}`} />
-                          <div className="fan-label">F{i + 1}</div>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  <div className="alarm-line">
-                    <h4>Alarms</h4>
-                    {alarmKeys.map((alarm, i) => (
-                      <div key={i} className="alarm-indicator">
-                        <div
-                          className={`alarm-led ${latestReading[alarm.key] ? "active" : ""
-                            }`}
-                        />
-                        <div className="alarm-label">{alarm.Name}</div>
-                      </div>
-                    ))}
-                    {statusKeys.map((status, i) => {
-                      if (status.key !== "pwsFailCount") {
+                <div className="alarm-group">
+                  <div className="fan-status">
+                    <div className="fan-status-line">
+                      <h4>Fan Running Status</h4>
+                      {[...Array(6)].map((_, i) => {
+                        const statusVal = latestReading[`fan${i + 1}Status`]; // 0=off, 1=healthy, 2=faulty
+                        // console.log('statusVal', statusVal);
+                        // console.log("statusC");
+                        let statusClass = "off";
+                        if (statusVal === 1) {
+                          statusClass = "running"; // green
+                        } else if (statusVal === 2) {
+                          statusClass = "faulty"; // red
+                        }
+                        // console.log(statusClass);
                         return (
-                          <div key={i} className="alarm-indicator">
-                            <div
-                              className={`alarm-led ${latestReading[status.key] === "OPEN"
-                                ? "active"
-                                : ""
-                                }`}
-                            />
-                            <div className="alarm-label">{status.Name}</div>
+                          <div key={i} className="fan-light">
+                            <div className={`fan-light-circle ${statusClass}`} />
+                            <div className="fan-label">F{i + 1}</div>
                           </div>
                         );
-                      } else {
-                        return (
-                          <>
+                      })}
+                    </div>
+                    <div className="alarm-line">
+                      <h4>Alarms</h4>
+                      {alarmKeys.map((alarm, i) => (
+                        <div key={i} className="alarm-indicator">
+                          <div
+                            className={`alarm-led ${latestReading[alarm.key] ? "active" : ""
+                              }`}
+                          />
+                          <div className="alarm-label">{alarm.Name}</div>
+                        </div>
+                      ))}
+                      {statusKeys.map((status, i) => {
+                        if (status.key !== "pwsFailCount") {
+                          return (
                             <div key={i} className="alarm-indicator">
-                              {/* <div className={`alarm-led ${latestReading[status.key] === 1 ? 'active' : ''}`} /> */}
-
                               <div
-                                className={`alarm-led 
-                            ${latestReading[status.key] === 1
-                                    ? "pass-danger"
-                                    : latestReading[status.key] === 2
-                                      ? "pass-warn"
-                                      : latestReading[status.key] === 3
-                                        ? "pass-active"
-                                        : ""
+                                className={`alarm-led ${latestReading[status.key] === "OPEN"
+                                  ? "active"
+                                  : ""
                                   }`}
                               />
                               <div className="alarm-label">{status.Name}</div>
-                              <div className="alarm-attempt">{3 - latestReading[status.key]} Attempt Left</div>
                             </div>
-                          </>
-                        );
-                      }
-                    })}
-                  </div>
-
-                  <div className="alarm-line">
-                    <h4>HUPS</h4>
-                    {hupsKeys.map((hups, i) => (
-                      <div key={i} className="alarm-indicator">
-                        <div
-                          className={`alarm-led ${latestReading[hups.key] ? "active" : ""
-                            }`}
-                        />
-                        <div className="alarm-label">
-                          {hups.Name}
-                        </div>
-                      </div>
-                    ))}
-                    {/* {["O.Load", "MPT", "MOSFET"].map((key, i) => (
-                      <div key={i} className="alarm-indicator">
-                        <div
-                          className={`alarm-led ${latestReading[key] === "OPEN" ? "active" : ""
-                            }`}
-                        />
-                        <div className="alarm-label">
-                          {key.replace("Status", "")}
-                        </div>
-                      </div>
-                    ))} */}
-                  </div>
-
-                  <h4>🛠 Commands</h4>
-                  <div className="fan-power-buttons aligned">
-                    {[1, 2, 3, 4, 5].map((level) => (
-                      <div key={level} className="fan-light">
-                        <button
-                          className={`power-btn ${activeFanBtns.includes(level) ||
-                            (latestReading &&
-                              latestReading[`fanLevel${level}Running`] === true)
-                            ? "active"
-                            : ""
-                            }`}
-                          onClick={() => handleFanClick(level)}
-                        />
-                        <div className="fan-label">
-                          {level >= 1 && level <= 4 ? `FG ${level}` : "NON-CRITICAL LOAD"}
-                        </div>
-                      </div>
-                    ))}
-                    <div className="fan-light">
-                      <button className="lock-btn" onClick={handleOpenLock}>
-                        🔓
-                      </button>
-                      <div className="fan-label">Lock</div>
+                          );
+                        } else {
+                          return (
+                            <>
+                              <div key={i} className="alarm-indicator">
+                                {/* <div className={`alarm-led ${latestReading[status.key] === 1 ? 'active' : ''}`} /> */}
+                                <div
+                                  className={`alarm-led
+                              ${latestReading[status.key] === 1
+                                      ? "pass-danger"
+                                      : latestReading[status.key] === 2
+                                        ? "pass-warn"
+                                        : latestReading[status.key] === 3
+                                          ? "pass-active"
+                                          : ""
+                                    }`}
+                                />
+                                <div className="alarm-label">{status.Name}</div>
+                                <div className="alarm-attempt">{3 - latestReading[status.key]} Attempt Left</div>
+                              </div>
+                            </>
+                          );
+                        }
+                      })}
                     </div>
-                    <div className="fan-light">
-                      <button className="lock-btn" onClick={handleResetLock}>
-                        🔐
-                      </button>
-                      <div className="fan-label">Reset</div>
+                    <div className="alarm-line">
+                      <h4>HUPS</h4>
+                      {hupsKeys.map((hups, i) => (
+                        <div key={i} className="alarm-indicator">
+                          <div
+                            className={`alarm-led ${latestReading[hups.key] ? "active" : ""
+                              }`}
+                          />
+                          <div className="alarm-label">
+                            {hups.Name}
+                          </div>
+                        </div>
+                      ))}
+                      {/* {["O.Load", "MPT", "MOSFET"].map((key, i) => (
+                        <div key={i} className="alarm-indicator">
+                          <div
+                            className={`alarm-led ${latestReading[key] === "OPEN" ? "active" : ""
+                              }`}
+                          />
+                          <div className="alarm-label">
+                            {key.replace("Status", "")}
+                          </div>
+                        </div>
+                      ))} */}
                     </div>
-                    <div className="fan-light">
-                      <button className="lock-btn" onClick={openPassword}>
-                        🔐
-                      </button>
-                      <div className="fan-label">Open PWD</div>
+                    <h4>🛠 Commands</h4>
+                    <div className="fan-power-buttons aligned">
+                      {[1, 2, 3, 4, 5].map((level) => (
+                        <div key={level} className="fan-light">
+                          <button
+                            className={`power-btn ${activeFanBtns.includes(level) ||
+                              (latestReading &&
+                                latestReading[`fanLevel${level}Running`] === true)
+                              ? "active"
+                              : ""
+                              }`}
+                            onClick={() => handleFanClick(level)}
+                          />
+                          <div className="fan-label">
+                            {level >= 1 && level <= 4 ? `FG ${level}` : "NON-CRITICAL LOAD"}
+                          </div>
+                        </div>
+                      ))}
+                      <div className="fan-light">
+                        <button className="lock-btn" onClick={handleOpenLock}>
+                          🔓
+                        </button>
+                        <div className="fan-label">Lock</div>
+                      </div>
+                      <div className="fan-light">
+                        <button className="lock-btn" onClick={handleResetLock}>
+                          🔐
+                        </button>
+                        <div className="fan-label">Reset</div>
+                      </div>
+                      <div className="fan-light">
+                        <button className="lock-btn" onClick={openPassword}>
+                          🔐
+                        </button>
+                        <div className="fan-label">Open PWD</div>
+                      </div>
                     </div>
+                    <span>SysId: {selectedMac.slice(9, 17)}</span>
+                    {status && <p>{status}</p>}
                   </div>
-                  <span>SysId: {selectedMac.slice(9, 17)}</span>
-                  {status && <p>{status}</p>}
                 </div>
               )}
 
@@ -896,7 +1108,7 @@ function DashboardView() {
         </div>
 
         {/* Panel 2: Chart */}
-        <div className="panel">
+        {/* <div className="panel">
           <h2>📈 Historical Data</h2>
           {selectedMac && historicalData.length > 0 ? (
             <ResponsiveContainer width="100%" height={250}>
@@ -964,10 +1176,10 @@ function DashboardView() {
           ) : (
             <p>Select a device to see its historical chart</p>
           )}
-        </div>
+        </div> */}
 
         {/* Panel 3: Device Tiles */}
-        <div className="panel device-list">
+        {/* <div className="panel device-list">
           <h2>🟢 Devices</h2>
           <div className="grid">
             {(() => {
@@ -1028,10 +1240,10 @@ function DashboardView() {
               });
             })()}
           </div>
-        </div>
+        </div> */}
 
         {/* Panel 4: Map */}
-        <div className="panel device-map">
+        {/* <div className="panel device-map">
           <h2>🗺️ Device Map</h2>
 
           {(() => {
@@ -1137,7 +1349,7 @@ function DashboardView() {
                 : "your browser"}{" "}
             @ {window.innerWidth}x{window.innerHeight}
           </div>
-        </div>
+        </div> */}
       </div>
     </>
   );
@@ -1160,5 +1372,7 @@ function Gauge({ label, value, max, color, alarm = false }) {
     </div>
   );
 }
+
+
 
 export default DashboardView;

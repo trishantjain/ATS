@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import Login from './pages/Login';
+// import Login from './pages/Login';
 import DashboardView from './pages/DashboardView';
-import AdminDashboard from './pages/AdminDashboard';
-import PrivateRoute from './components/PrivateRoute';
+// import AdminDashboard from './pages/AdminDashboard';
+// import PrivateRoute from './components/PrivateRoute';
 import OfflinePrompt from './components/OfflinePrompt';
 // import DashboardTest from './pages/DashboardTest';
 
@@ -28,17 +28,17 @@ function App() {
 
   return (
     <Router>
-      {/* <OfflinePrompt show={offlinePrompt} /> */}
+      <OfflinePrompt show={offlinePrompt} />
       <Routes>
-        <Route path="/" element={<Login />} />
+        {/* <Route path="/" element={<Login />} /> */}
 
         {/* ✅ Authenticated User Dashboard */}
         <Route
-          path="/dashboard"
+          path="/"
           element={
-            <PrivateRoute allowedRoles={['user', 'block', 'gp']}>
+            // <PrivateRoute allowedRoles={['user', 'block', 'gp']}>
               <DashboardView />
-            </PrivateRoute>
+            // </PrivateRoute>
           }
         />
         {/* <Route
@@ -49,14 +49,14 @@ function App() {
         /> */}
 
         {/* ✅ Admin Dashboard */}
-        <Route
+        {/* <Route
           path="/admin"
           element={
             <PrivateRoute allowedRoles={['admin']}>
               <AdminDashboard />
             </PrivateRoute>
           }
-        />
+        /> */}
 
         {/* Fallback route */}
         <Route path="*" element={<Navigate to="/" />} />

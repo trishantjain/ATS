@@ -10,8 +10,8 @@ body {
 /* Grid layout for dashboard */
 .dashboard {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  grid-template-rows: 50% 50%;
+  grid-template-columns: 1fr;
+  grid-template-rows: 100%;
   gap: 12px;
   height: 100vh;
   padding: 10px;
@@ -34,6 +34,7 @@ body {
   box-shadow: 0 0 10px rgba(0, 0, 0, 0.6);
   display: flex;
   flex-direction: column;
+  /* width: 100%; */
 }
 
 .panel h2.selected-heading {
@@ -63,6 +64,7 @@ body {
 /* Tabs */
 .tabs {
   display: flex;
+  /* flex-: ; */
   margin: 10px 0;
   gap: 8px;
 }
@@ -124,13 +126,23 @@ body {
   }
 }
 
+/* .alarm-group{
+  display: inline-block;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+} */
+
 /* Fan + Alarm Section */
 .fan-status-line,
 .alarm-line {
   display: flex;
   align-items: center;
-  gap: 20px;
-  flex-wrap: wrap;
+  /* justify-content: center; */
+  gap: 30px;
+  /* flex-wrap: wrap; */
   margin: -10px 0;
 }
 
@@ -175,7 +187,7 @@ body {
   line-height: 1.2; /* Improve readability of wrapped text */
 }
 
-.alarm-attempt{
+.alarm-attempt {
   color: white;
   font-size: 0.75rem;
 }
@@ -289,8 +301,9 @@ body {
   color: #00ff00;
 }
 
-.power-btn.active::before{
-  filter: brightness(0) saturate(100%) invert(48%) sepia(98%) saturate(1733%) hue-rotate(82deg);
+.power-btn.active::before {
+  filter: brightness(0) saturate(100%) invert(48%) sepia(98%) saturate(1733%)
+    hue-rotate(82deg);
 }
 
 .lock-btn {
@@ -770,20 +783,184 @@ body {
   cursor: pointer;
 }
 
-.btn-test{
+.btn-test {
   background-color: rgb(235, 79, 79);
   color: white;
   border: 5px solid black;
   border-radius: 10px;
   font-size: 15px;
   margin: 10px;
-  padding: 5  px;
+  padding: 5 px;
 }
 
-.btn-test:hover{
+.btn-test:hover {
   background-color: white;
   color: red;
   cursor: pointer;
+}
+
+/* TEST PANEL */
+
+/* Test Controls Panel */
+.test-controls-panel {
+  background: #1a1a1a;
+  padding: 15px;
+  margin: 15px;
+  border-radius: 8px;
+  border: 1px solid #333;
+}
+
+.test-buttons {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 15px;
+}
+
+.btn-test {
+  background: #007bff;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.btn-test:hover {
+  background: #0056b3;
+}
+
+.btn-test:disabled {
+  background: #555;
+  cursor: not-allowed;
+}
+
+.btn-test-secondary {
+  background: #28a745;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.btn-test-secondary:hover {
+  background: #1e7e34;
+}
+
+.test-status-display {
+  background: #2a2a2a;
+  padding: 10px;
+  border-radius: 4px;
+  margin-bottom: 15px;
+}
+
+.manual-command {
+  display: flex;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.manual-command input {
+  flex: 1;
+  padding: 8px;
+  background: #333;
+  border: 1px solid #444;
+  color: white;
+  border-radius: 4px;
+}
+
+.manual-command button {
+  background: #6c757d;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.manual-command button:hover {
+  background: #545b62;
+}
+
+.test-results {
+  max-height: 200px;
+  overflow-y: auto;
+  background: #222;
+  padding: 10px;
+  border-radius: 4px;
+}
+
+.test-result {
+  padding: 8px;
+  margin-bottom: 5px;
+  border-left: 4px solid #6c757d;
+  background: #2a2a2a;
+}
+
+.test-result.passed {
+  border-left-color: #28a745;
+}
+
+.test-result.failed {
+  border-left-color: #dc3545;
+}
+
+.test-result.pending {
+  border-left-color: #ffc107;
+}
+
+.test-output {
+  font-size: 0.8rem;
+  color: #aaa;
+  margin-top: 5px;
+  font-family: monospace;
+}
+
+/* Simulation buttons */
+.simulation-buttons {
+  margin: 10px 0;
+  padding: 10px;
+  background: #2a2a2a;
+  border-radius: 4px;
+}
+
+.simulation-buttons h5 {
+  margin-bottom: 8px;
+  color: #ccc;
+}
+
+.simulation-buttons button {
+  background: #495057;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  margin: 3px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.simulation-buttons button:hover {
+  background: #6c757d;
+}
+
+/* Test details */
+.test-details {
+  display: flex;
+  gap: 15px;
+  font-size: 0.85rem;
+  color: #aaa;
+  margin: 5px 0;
+}
+
+.test-message {
+  font-style: italic;
+  color: #ffc107;
+  margin: 5px 0;
+  padding: 5px;
+  background: rgba(255, 193, 7, 0.1);
+  border-radius: 3px;
 }
 
 /* .logo-panel{
