@@ -20,7 +20,7 @@ onPass="Fan Group 1 turned on successfully"
 onFail="Fan Group 1 not turned on"
 
 [step:2]
-msg="Close the Door"
+msg="Turn off FG1"
 waitFor="fanLevel1Running"
 waitTime=20
 expectedValue="false"
