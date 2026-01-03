@@ -556,6 +556,7 @@ app.post("/api/tests/run-all", async (req, res) => {
   console.log("📋 /api/tests/run-all endpoint called - ATS Mode");
 
   try {
+    const { mac } = req.body;
     const testDir = path.join(__dirname, "tests");
 
     // Create test directory if it doesn't exist
@@ -600,6 +601,22 @@ app.post("/api/tests/run-all", async (req, res) => {
         timestamp: getFormattedDateTime()
       });
     }
+
+    // Prepare a single report file for this run
+    const testResultDir = path.join(__dirname, "testResult");
+    if (!fs.existsSync(testResultDir)) {
+      fs.mkdirSync(testResultDir, { recursive: true });
+    }
+
+    const reportMac = mac ? String(mac).replace(/:/g, '-') : 'unknown-device';
+    const testReportFileName = `${getFormattedDateTime('file')}_${reportMac}.rpt`;
+    const testReportFilePath = path.join(testResultDir, testReportFileName);
+
+    await fs.promises.writeFile(
+      testReportFilePath,
+      `ATS Test Run - ${getFormattedDateTime()}\nDevice: ${reportMac}\nTotal Tests: ${testFiles.length}\n\n`,
+      { flag: 'w' }
+    );
 
     const results = [];
 
@@ -701,12 +718,20 @@ app.post("/api/tests/run-all", async (req, res) => {
               ? expectation.split(':')
               : null;
 
+            // Track handler for cleanup
+            let currentHandler = null;
+
             // Create a promise that resolves only when the expected condition is met
             const waitForResponse = new Promise((resolve) => {
               const timeout = setTimeout(() => {
                 clearTestWaitForMAC();
+                // Cleanup handler on timeout
+                if (currentHandler) {
+                  const idx = deviceCommandWaiters.indexOf(currentHandler);
+                  if (idx > -1) deviceCommandWaiters.splice(idx, 1);
+                }
                 resolve("TIMEOUT");
-              }, 10000); // 10 second timeout
+              }, 20000); // 20 second timeout
 
               // Set this MAC as the one we're waiting for
               setTestWaitForMAC(testDeviceMAC);
@@ -743,6 +768,9 @@ app.post("/api/tests/run-all", async (req, res) => {
                     console.log(`✅ ALL properties matched!`);
                     clearTimeout(timeout);
                     clearTestWaitForMAC();
+                    // Cleanup handler on success
+                    const idx = deviceCommandWaiters.indexOf(responseHandler);
+                    if (idx > -1) deviceCommandWaiters.splice(idx, 1);
                     resolve(reading);
                     return true;
                   }
@@ -766,6 +794,9 @@ app.post("/api/tests/run-all", async (req, res) => {
                     if (normalizedReceived === normalizedExpected) {
                       clearTimeout(timeout);
                       clearTestWaitForMAC();
+                      // Cleanup handler on success
+                      const idx = deviceCommandWaiters.indexOf(responseHandler);
+                      if (idx > -1) deviceCommandWaiters.splice(idx, 1);
                       resolve(reading);
                       return true;
                     }
@@ -776,10 +807,15 @@ app.post("/api/tests/run-all", async (req, res) => {
                 // Fallback: any object response resolves for numeric EO cases
                 clearTimeout(timeout);
                 clearTestWaitForMAC();
+                // Cleanup handler on fallback
+                const idx = deviceCommandWaiters.indexOf(responseHandler);
+                if (idx > -1) deviceCommandWaiters.splice(idx, 1);
                 resolve(reading);
                 return true;
               };
 
+              // Store reference for timeout cleanup
+              currentHandler = responseHandler;
               // Store the handler to be called when this device responds
               deviceCommandWaiters.push(responseHandler);
             });
@@ -859,22 +895,22 @@ app.post("/api/tests/run-all", async (req, res) => {
                   testResult.output = `❌ Test FAILED: Property '${propertyName}' = ${receivedValue} (expected ${expectedValue})`;
                 }
               } else {
-                // Simple numeric comparison
-                const receivedValue = parseInt(deviceResponse) || 0;
-                const expectedValue = parseInt(testResult.expectedOutcome) || 0;
-
-                console.log(`🔢 Numeric comparison: Expected: ${expectedValue} | Received: ${receivedValue}`);
-
-                if (receivedValue === expectedValue) {
-                  testPassed = true;
-                  testResult.output = `✅ Test PASSED: Device responded with ${receivedValue}, expected ${expectedValue}`;
-                } else {
-                  testResult.output = `❌ Test FAILED: Device responded with ${receivedValue}, expected ${expectedValue}`;
-                }
+                // No property specified in EO - invalid format
+                console.warn(`⚠️ EO format not recognized: "${expectation}" - expected format: "property:value" or "prop1:val1;prop2:val2"`);
+                testResult.output = `❌ Test FAILED: Invalid EO format "${expectation}" - use property:value syntax`;
+                testPassed = false;
               }
 
               testResult.status = testPassed ? "passed" : "failed";
               testResult.passed = testPassed;
+            }
+
+            const reportContent = `Test: ${testResult.name} | Status: ${testResult.status}`;
+            try {
+              await fs.promises.appendFile(testReportFilePath, `${reportContent}\n`);
+              console.log(`✅ Test report appended to: ${testReportFileName}`);
+            } catch (err) {
+              console.log(`🔴 Error writing test report: ${err} 🔴`);
             }
           }
 
@@ -888,26 +924,7 @@ app.post("/api/tests/run-all", async (req, res) => {
             timestamp: getFormattedDateTime()
           });
 
-          // Create test report log
-          const testResultDir = path.join(__dirname, "testResult");
 
-          // Use testDeviceMAC if available (from waiter), otherwise use placeholder
-          const reportMac = typeof testDeviceMAC !== 'undefined' ? testDeviceMAC.replace(/:/g, '-') : 'unknown-device';
-          const testReportFileName = `${getFormattedDateTime('file')}_${reportMac}.rpt`;
-          const testReportFilePath = path.join(testResultDir, testReportFileName);
-
-          if (!fs.existsSync(testResultDir)) {
-            fs.mkdirSync(testResultDir, { recursive: true });
-          }
-
-          const reportContent = `Test: ${testResult.name} Status: ${testResult.status}`;
-          fs.appendFile(testReportFilePath, reportContent, (err) => {
-            if (err) {
-              console.log(`🔴 Error creating test report: ${err} 🔴`);
-            } else {
-              console.log(`✅ Test report created: ${testReportFileName}`);
-            }
-          });
           // const logTestResult = await fs.promises.mkdir(testResultDir);
 
 

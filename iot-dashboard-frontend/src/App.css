@@ -62,14 +62,14 @@ body {
 }
 
 /* Tabs */
-.tabs {
+/* .tabs {
   display: flex;
-  /* flex-: ; */
   margin: 10px 0;
   gap: 8px;
-}
+} */
 
-.tabs button {
+.tabs-button {
+  width: 100%;
   flex: 1;
   padding: 6px;
   border: none;
@@ -78,6 +78,8 @@ body {
   color: white;
   cursor: pointer;
   font-weight: bold;
+  justify-content: center;
+  margin: 10px 0;
 }
 
 .tabs button.active {
@@ -808,6 +810,9 @@ body {
   margin: 15px;
   border-radius: 8px;
   border: 1px solid #333;
+  position: sticky;
+  top: 0;
+  z-index: 100;
 }
 
 .test-buttons {

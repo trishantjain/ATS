@@ -266,26 +266,32 @@ function startDevice(mac, index) {
           const insideTemp = triggerAlarm ? 55 + Math.random() * 5 : 35 + Math.random() * 3;
           const outsideTemp = triggerAlarm ? 65 + Math.random() * 5 : 40 + Math.random() * 3;
           const lockStatus = Math.random() < 0.5 ? 1 : 0;
-          const doorStatus = Math.random() < 0.5 ? 1 : 0;
+          const doorStatus = 1;
+          // const doorStatus = Math.random() < 0.5 ? 1 : 0;
           const waterLogging = triggerAlarm && Math.random() < 0.2 ? 1 : 0;
-          const waterLeakage = !triggerAlarm && Math.random() < 0.2 ? 1 : 0;
+          // const waterLeakage = !triggerAlarm && Math.random() < 0.2 ? 1 : 0;
+          const waterLeakage = 1;
           const outputVoltage = triggerAlarm ? 2.5 + Math.random() * 10 : 3.3 + Math.random() * 10;
           const hupsDVC = triggerAlarm ? 2.5 + Math.random() * 10 : 3.3 + Math.random() * 10;
           const inputVoltage = triggerAlarm ? 2.5 + Math.random() * 10 : 3.3 + Math.random() * 10;
           const hupsBat = triggerAlarm ? 2.5 + Math.random() * 10 : 3.3 + Math.random() * 10;
           const batteryBackup = triggerAlarm ? 12 + Math.random() * 2 : 20 + Math.random() * 3;
           const alarmActive = waterLogging || waterLeakage;
-          const fireAlarm = 0;
+          const fireAlarm = 1;
 
-          const fan1 = Math.random() < 0.9 ? 1 : 0;
-          const fan2 = Math.random() < 0.9 ? 1 : 0;
-          const fan3 = Math.random() < 0.9 ? 1 : 0;
-          const fan4 = Math.random() < 0.9 ? 1 : 0;
+          // Fan Group Control
+          const fan1 = 1;
+          const fan2 = 1;
+          const fan3 = 0;
+          const fan4 = 0;
 
+          // 6 Fans Status
+          const fanManualBits = [1,1,0,0,0,0]
           const fanStatuses = [];
           for (let i = 0; i < 6; i++) {
             const rand = Math.random();
-            fanStatuses[i] = rand < 0.4 ? 0 : rand < 0.9 ? 1 : 2;
+            fanStatuses[i] = fanManualBits[i];
+            // fanStatuses[i] = rand < 0.4 ? 0 : rand < 0.9 ? 1 : 2;
           }
 
           let fanStatusBits = 0;

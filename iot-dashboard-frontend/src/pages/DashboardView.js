@@ -60,70 +60,6 @@ function DashboardView() {
   const selectedDeviceMeta = deviceMeta.find((d) => d.mac === selectedMac);
   const latestReading = readings.find((r) => r.mac === selectedMac);
 
-  // WEBSOCKET CONNECTION
-  useEffect(() => {
-    const connectWebSocket = () => {
-      console.log('🔄 Attempting WebSocket connection...');
-
-      // Use wss:// if in production, ws:// for development
-      const wsUrl = process.env.NODE_ENV === 'production'
-        ? `wss://${window.location.host}`
-        : (process.env.REACT_APP_WS_URL || 'ws://localhost:8080');
-
-      const ws = new WebSocket(wsUrl);
-      wsRef.current = ws;
-
-      ws.onopen = () => {
-        console.log('✅ WebSocket connected successfully');
-      };
-
-      ws.onmessage = (event) => {
-        try {
-          const message = JSON.parse(event.data);
-          console.log('📨 WebSocket message:', message.type);
-
-          if (message.type === 'NEW_READING') {
-            const newReading = message.data;
-
-            setSelectedMac(prev => prev || newReading.mac);
-            setSelectedDevice(prev => prev || newReading.locationId || newReading.mac);
-            setReadings(prev => {
-              const filtered = prev.filter(r => r.mac !== newReading.mac);
-              return [...filtered, newReading].slice(-400);
-            });
-          }
-        } catch (err) {
-          console.error('❌ WebSocket message parse error:', err);
-        }
-      };
-
-      ws.onerror = (error) => {
-        console.error('❌ WebSocket connection error:', error);
-      };
-
-      ws.onclose = (event) => {
-        console.log(`🔌 WebSocket disconnected (code: ${event.code}, reason: ${event.reason})`);
-
-        // Auto-reconnect after 3 seconds
-        setTimeout(() => {
-          console.log('🔄 Attempting to reconnect WebSocket...');
-          connectWebSocket();
-        }, 3000);
-      };
-    };
-
-    // Initial connection
-    connectWebSocket();
-
-    // Cleanup
-    return () => {
-      if (wsRef.current) {
-        console.log('🛑 Closing WebSocket connection');
-        wsRef.current.close(1000, 'Component unmounting');
-      }
-    };
-  }, []);
-
   // UseEffect for fetching Data
   useEffect(() => {
     console.log('🚨Starting data fetch interval (5s)🚨');
@@ -364,7 +300,7 @@ function DashboardView() {
         headers: {
           "Content-Type": "application/json"
         },
-        // body: ({mac})
+        body: JSON.stringify({ mac: selectedMac })
       });
 
       if (!resp.ok) {
@@ -479,13 +415,14 @@ function DashboardView() {
           // Handle test status messages
           if (message.type === 'TEST_STARTED') {
             setCurrentTest(message.name || message.testFile);
-            setTestStatus(`🏁 ${message.message}`);
+            setTestStatus(`🏁 ${message.pre || message.message || 'Test started'}`);
 
-            // Show notification banner instead of modal popup
-            if (message.message && message.message !== "No message") {
+            // Show notification banner - check for pre (multi-step) or message (single-step)
+            if (message.pre || (message.message && message.message !== "No message")) {
               setNotification({
                 title: `Test: ${message.name}`,
-                message: message.message,
+                pre: message.pre || '',
+                message: message.message || '',
                 type: 'info'
               });
 
@@ -498,6 +435,30 @@ function DashboardView() {
 
           if (message.type === 'TEST_COMPLETED') {
             setTestStatus(`${message.status === 'passed' ? '✅' : '❌'} ${message.name}: ${message.output}`);
+          }
+
+          // Handle multi-step test messages
+          if (message.type === 'STEP_STARTED') {
+            setCurrentTestStep(message.stepNumber);
+            // Server sends 'msg' field for step message
+            const stepMsg = message.msg && message.msg !== "No message" ? message.msg : `Step ${message.stepNumber}/${message.totalSteps}`;
+            setTestStatus(`🔄 ${message.testName} - ${stepMsg}`);
+
+            // Show notification for step message
+            if (message.msg && message.msg !== "No message") {
+              setNotification({
+                title: `${message.testName} - Step ${message.stepNumber}`,
+                message: message.msg,
+                type: 'info'
+              });
+              setTimeout(() => setNotification(null), 10000);
+            }
+          }
+
+          if (message.type === 'STEP_COMPLETED') {
+            // Server sends 'passed' field, not 'result'
+            const stepResult = message.passed ? '✅' : '❌';
+            setTestStatus(`${stepResult} ${message.testName} - Step ${message.stepNumber}/${message.totalSteps} ${message.passed ? 'PASSED' : 'FAILED'}`);
           }
 
           if (message.type === 'ALL_TESTS_COMPLETED') {
@@ -679,6 +640,9 @@ function DashboardView() {
               <h4 style={{ margin: '0 0 8px 0', color: '#00cccc' }}>
                 {notification.title}
               </h4>
+              <h4 style={{ margin: '0 0 8px 0', color: '#00cccc' }}>
+                {notification.pre}
+              </h4>
               <p style={{ margin: 0, fontSize: '14px', lineHeight: '1.5' }}>
                 {notification.message}
               </p>
@@ -753,27 +717,30 @@ function DashboardView() {
           {latestReading && (
             <div>
               <div className="tabs">
-                <button
+                {/* <button
                   className={activeTab === "gauges" ? "active" : ""}
                   onClick={() => setActiveTab("gauges")}
                 >
                   Gauges
                 </button>
                 <button
-                  className={activeTab === "status" ? "active" : ""}
-                  onClick={() => setActiveTab("status")}
-                >
-                  Status
-                </button>
-                <button
                   className={activeTab === "snapshots" ? "active" : ""}
                   onClick={() => fetchSnapshots(selectedMac)}
                 >
                   Snapshots
-                </button>
+                </button> */}
               </div>
 
-              {activeTab === "gauges" && (
+              {/* GAUGES */}
+              <button
+                className="tabs-button"
+                onClick={() => setActiveTab("gauges")}
+              >
+                Gauges
+              </button>
+
+
+              {"gauges" && (
                 <div className="gauges grid-3x3">
                   <Gauge
                     label="Inside Temp"
@@ -851,7 +818,16 @@ function DashboardView() {
                 </div>
               )}
 
-              {activeTab === "status" && (
+              {/* STATUS */}
+              <button
+                className="tabs-button"
+                onClick={() => setActiveTab("status")}
+              >
+                Status
+              </button>
+              <span>SysId: {selectedMac.slice(9, 17)}</span>
+
+              {"status" && (
                 <div className="alarm-group">
                   <div className="fan-status">
                     <div className="fan-status-line">
@@ -985,13 +961,18 @@ function DashboardView() {
                         <div className="fan-label">Open PWD</div>
                       </div>
                     </div>
-                    <span>SysId: {selectedMac.slice(9, 17)}</span>
                     {status && <p>{status}</p>}
                   </div>
                 </div>
               )}
 
-
+              {/* SNAPSHOTS */}
+              <button
+                className="tabs-button"
+                onClick={() => setActiveTab("gauges")}
+              >
+                Snapshots
+              </button>
               {/* Full Screen Image Modal with Navigation */}
               {selectedImage && (
                 <div

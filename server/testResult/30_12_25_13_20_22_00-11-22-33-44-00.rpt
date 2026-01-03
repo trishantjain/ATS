@@ -1,0 +1,11 @@
+ATS Test Run - 30/12/25 13:20:22
+Device: 00-11-22-33-44-00
+Total Tests: 7
+
+Test: Password Test | Status: passed
+Test: 3 Fans | Status: passed
+Test: 5 Fans | Status: failed
+Test: 6 Fans | Status: failed
+Test: Door | Status: failed
+Test: Fire Alarm | Status: failed
+Test: Water Leakage Test | Status: failed
