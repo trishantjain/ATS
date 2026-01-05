@@ -1,9 +1,0 @@
-ATS Test Run - 03/01/26 13:07:15
-Device: 00-11-22-33-44-1d
-Total Tests: 7
-
-Test: Password Test | Status: passed
-Test: 3 Fan Test | Status: failed
-Test: 5 Fans | Status: failed
-Test: 6 Fans | Status: passed
-Test: Door | Status: failed
