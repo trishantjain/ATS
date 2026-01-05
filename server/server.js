@@ -815,10 +815,10 @@ const server = net.createServer((socket) => {
         const doorStatus = buffer[30] === 1 ? "OPEN" : "CLOSED";
         const waterLogging = !!buffer[31]; // "!!" -> converts true/false to 1/0
         const waterLeakage = !!buffer[32];
-        const outputVoltage = +buffer.readInt16LE(33).toFixed(2);
+        const outputVoltage = (buffer.readInt16LE(33)) / 100;
         const hupsDVC = buffer.readInt16LE(35);
-        const inputVoltage = +buffer.readInt16LE(37).toFixed(2);
-        const hupsBatVolt = buffer.readInt16LE(39);
+        const inputVoltage = (buffer.readInt16LE(37)) / 100;
+        const hupsBatVolt = (buffer.readInt16LE(39)) / 100;
         const batteryBackup = +buffer.readFloatLE(41).toFixed(2);
         const alarmActive = !!buffer[45];
         const fireAlarm = buffer[46];
