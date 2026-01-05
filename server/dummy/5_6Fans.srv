@@ -1,3 +1,0 @@
-name="6 Fans"
-msg="Turn On FG1, FG2, FG3 & FG4"
-EO='fanLevel1Running:true;fanLevel2Running:true;fanLevel3Running:true;fanLevel4Running:true'

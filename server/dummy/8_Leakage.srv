@@ -1,3 +1,0 @@
-name="Water Leakage Test"
-msg="Dip leakage sensor in water"
-EO='waterLeakage:true'
