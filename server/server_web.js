@@ -1773,20 +1773,23 @@ const tcpServer = net.createServer((socket) => {
           console.error('WebSocket broadcast failed:', err);
         }
 
-        // Notify waiting test ONLY if this MAC is the one we're waiting for
-        if (testWaitingForMAC && mac === testWaitingForMAC && deviceCommandWaiters.length > 0) {
-          const waiter = deviceCommandWaiters[0]; // peek without removing
-          const shouldResolve = waiter(reading);   // waiter returns true when it handled the reading
-
-          if (shouldResolve) {
-            deviceCommandWaiters.shift();
-            console.log(`✅ Test waiter resolved for MAC ${mac} with matching response`);
-          }
-        }
-
         // Keep an in-memory cache of recent readings for API access (capped)
         latestReadings.push(reading);
         if (latestReadings.length > 400) latestReadings.shift();
+
+        // Notify waiting test ASYNC - don't block reading flow
+        if (testWaitingForMAC && mac === testWaitingForMAC && deviceCommandWaiters.length > 0) {
+          setImmediate(() => {
+            if (deviceCommandWaiters.length > 0) {
+              const waiter = deviceCommandWaiters[0];
+              const shouldResolve = waiter(reading);
+          if (shouldResolve) {
+            deviceCommandWaiters.shift();
+                console.log(`✅ Test waiter resolved for MAC ${mac}`);
+          }
+            }
+          });
+        }
 
         buffer = buffer.slice(58);
         debug.log(`✅ Packet processed successfully for MAC: ${mac}`, `Time: ${getFormattedDateTime()}`);
