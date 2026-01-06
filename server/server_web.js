@@ -49,6 +49,25 @@ wss.on('connection', (ws, req) => {
     }
   }));
 
+  // Handle messages from frontend (dialog responses)
+  ws.on('message', (data) => {
+    try {
+      const message = JSON.parse(data);
+      console.log('📨 WebSocket message received:', message.type);
+
+      if (message.type === 'DIALOG_RESPONSE') {
+        console.log(`📝 Dialog response: ${message.confirmed ? 'OK' : 'Cancel'}`);
+        // Resolve any pending dialog waiter
+        if (pendingDialogResolver) {
+          pendingDialogResolver(message.confirmed);
+          pendingDialogResolver = null;
+        }
+      }
+    } catch (err) {
+      console.error('Error parsing WebSocket message:', err);
+    }
+  });
+
   ws.on('close', () => {
     console.log('🔌 WebSocket client disconnected');
     wsClients.delete(ws);
@@ -592,6 +611,15 @@ app.post("/api/tests/run-all", async (req, res) => {
         const numB = parseInt(b.split('_')[0]) || 0;
         return numA - numB;
       });
+
+    // Skip frontend tests (Visual & Burn-In) if already run on frontend
+    if (skipFrontendTests) {
+      testFiles = testFiles.filter(file => {
+        const num = parseInt(file.split('_')[0]) || 0;
+        return num > 2;  // Skip 1_Visual.srv and 2_Burn_In.srv
+      });
+      console.log(`Skipping frontend tests. Running ${testFiles.length} server tests.`);
+    }
 
     console.log(`Found ${testFiles.length} test file(s):`, testFiles);
 
