@@ -26,6 +26,7 @@ app.use(cors());
 const WS_PORT = process.env.WS_PORT || 8080;
 const wss = new WebSocket.Server({ port: WS_PORT });
 const wsClients = new Set();
+let pendingDialogResolver = null;  // Resolves when frontend responds to dialog
 
 // WebSocket connection handling with improved logging
 wss.on('connection', (ws, req) => {
@@ -663,7 +664,7 @@ app.post("/api/tests/run-all", async (req, res) => {
 
     await fs.promises.writeFile(
       testReportFilePath,
-      `ATS Test Run - ${getFormattedDateTime()}\nDevice: ${reportMac}\nTotal Tests: ${testFiles.length}\n\n`,
+      `ATS Test Run - ${getFormattedDateTime()}\nDevice: ${reportMac}\nTotal Tests: ${totalTests}\n\n`,
       { flag: 'w' }
     );
 
@@ -1271,7 +1272,7 @@ app.post("/api/tests/run-all", async (req, res) => {
               testResult.passed = testPassed;
             }
 
-            const reportContent = `Test: ${testResult.name} | Status: ${testResult.status}`;
+            const reportContent = `Test: ${testResult.name} , Status: ${testResult.status}`;
             try {
               await fs.promises.appendFile(testReportFilePath, `${reportContent}\n`);
               console.log(`✅ Test report appended to: ${testReportFileName}`);
