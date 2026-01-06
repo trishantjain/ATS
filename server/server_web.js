@@ -597,6 +597,7 @@ app.post("/api/tests/run-all", async (req, res) => {
       res.json({ msg: "Test Folder not found" });
     }
 
+    // Fetching test files
     const files = await fs.promises.readdir(testDir);
 
     // Sort files numerically (1_criticalload.srv, 2_nexttest.srv, etc.)
@@ -636,6 +637,7 @@ app.post("/api/tests/run-all", async (req, res) => {
       fs.mkdirSync(testResultDir, { recursive: true });
     }
 
+    // Generating Test Report File
     const reportMac = mac ? String(mac).replace(/:/g, '-') : 'unknown-device';
     const testReportFileName = `${getFormattedDateTime('file')}_${reportMac}.rpt`;
     const testReportFilePath = path.join(testResultDir, testReportFileName);
@@ -704,6 +706,7 @@ app.post("/api/tests/run-all", async (req, res) => {
           console.log(`▶️ Starting ATS test: ${testResult.name}`);
           console.log(`📝 Message to display: ${testResult.message}`);
           console.log(`🎯 Expected Outcome: ${testResult.expectedOutcome}`);
+          console.log(`📋 Steps defined: ${testConfig.steps.length}`);
 
           // Send test status to WebSocket clients
           broadcastTestStatus({
@@ -784,7 +787,7 @@ app.post("/api/tests/run-all", async (req, res) => {
                     const normalizedExpected = String(expectedValue).toUpperCase().trim();
                     const matches = normalizedReceived === normalizedExpected;
 
-                    console.log(`⚡ATC ===  ${property}: Expected="${expectedValue}" | Received="${receivedValue}" | Match=${matches}⚡`);
+                    console.log(`⚡ATS ===  ${property}: Expected="${expectedValue}" | Received="${receivedValue}" | Match=${matches}⚡`);
                     results.push({ property, expectedValue, receivedValue, matches });
 
                     if (!matches) {
@@ -863,11 +866,6 @@ app.post("/api/tests/run-all", async (req, res) => {
             } else {
               testResult.receivedOutcome = deviceResponse;
 
-              // Handle three types of EO comparisons:
-              // 1. Simple numeric: EO=1
-              // 2. Single property: EO=lockStatus:OPEN
-              // 3. Multi-property: EO=fanLevel1Running:true;fanLevel2Running:true
-
               let testPassed = false;
 
               const expectation = testResult.expectedOutcome?.toString() || "";
@@ -940,7 +938,7 @@ app.post("/api/tests/run-all", async (req, res) => {
             } catch (err) {
               console.log(`🔴 Error writing test report: ${err} 🔴`);
             }
-          }
+          } // End of EO-based test execution
 
           // Send test completion status
           broadcastTestStatus({
@@ -951,11 +949,6 @@ app.post("/api/tests/run-all", async (req, res) => {
             output: testResult.output,
             timestamp: getFormattedDateTime()
           });
-
-
-          // const logTestResult = await fs.promises.mkdir(testResultDir);
-
-
 
         } catch (err) {
           console.error(`Error parsing test file ${testFile}:`, err);
@@ -1112,7 +1105,7 @@ const tcpServer = net.createServer((socket) => {
 
         // Extract one full packet starting at MAC
         const packet = buffer.slice(0, 58);
-        console.log(packet);
+        // console.log(packet);
 
         const macRaw = packet.subarray(0, 17);
         let macRawStr = macRaw.toString("utf-8");
@@ -1244,7 +1237,7 @@ const tcpServer = net.createServer((socket) => {
 
         const pwsFailCount = buffer[54];
         // console.log("Password Bit: ", pwsFailCount);
-        // HUPS alarm bits (same logic as in server.js)
+
         const hupsStat = buffer[55];
         const hupsAlarms = [];
         for (let i = 0; i < 8; i++) {
@@ -1294,6 +1287,8 @@ const tcpServer = net.createServer((socket) => {
           batteryBackupAlarm: batteryBackup < thresholds.batteryBackup.min,
         };
 
+        console.log("🌀 === ALARMS STARTED === 🌀")
+
         const activeAlarms = [];
 
         if (thresholdAlarms.insideTemperatureAlarm) {
@@ -1317,22 +1312,27 @@ const tcpServer = net.createServer((socket) => {
 
         if (waterLogging) {
           activeAlarms.push("Water Logging Alarm");
+          console.log("Water Logging Alarm")
         }
 
         if (waterLeakage) {
           activeAlarms.push("Water Leakage Alarm");
+          console.log("Water Leakage Alarm")
         }
 
         if (doorStatus) {
           activeAlarms.push("Door Alarm");
+          console.log("Door Alarm")
         }
 
         if (lockStatus) {
           activeAlarms.push("Lock Alarm");
+          console.log("Lock Alarm")
         }
 
         if (fireAlarm) {
           activeAlarms.push("Fire Alarm");
+          console.log("Fire Alarm")
         }
 
         // Single console output
@@ -1398,8 +1398,6 @@ const tcpServer = net.createServer((socket) => {
           ...thresholdAlarms,
           timestamp: new Date().toISOString(),
         };
-
-        console.log("Fan 3 Status", fanStatus)
 
         // Track connected device socket and broadcast to any connected frontend clients
         connectedDevices.set(mac, socket);
