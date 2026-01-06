@@ -1,0 +1,12 @@
+name="Visual Test"
+pass="Visual Test Done"
+fail="Visual Test Failed"
+retryCount=0
+
+[step:1]
+msg="is Visual Test Done?"
+waitFor="dialog"
+waitTime=30
+expectedValue="ok"
+onPass="Visual Test Done"
+onFail="Visual Test Failed"

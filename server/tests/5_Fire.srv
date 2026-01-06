@@ -1,0 +1,30 @@
+name="Fire Test"
+pass="Fire Test successfully completed"
+fail="Fire Test failed"
+retryCount=0
+
+[step:1]
+msg="No Fire alarm should not appear now"
+waitFor="fireAlarm"
+waitTime=30
+expectedValue="0"
+onPass="Fire alarm is off, ready to test"
+onFail="Fire Alarm already ON"
+
+# Fan Group 1
+[step:2]
+msg="Start testing Fire Alarm"
+waitFor="fireAlarm"
+waitTime=20
+expectedValue="1"
+onPass="Fire alarm turned on successfully"
+onFail="Fire Alarm not turned on"
+
+[step:3]
+msg="Remove Fire from near sensor"
+waitFor="fireAlarm"
+waitTime=30
+expectedValue="0"
+onPass="Fire alarm turned off successfully"
+onFail="Fire alarm not turned off"
+

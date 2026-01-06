@@ -1,0 +1,13 @@
+name="Burn-In Test"
+pass="Burn-In Test Done"
+fail="Burn-In Test Failed"
+retryCount=0
+
+[step:1]
+msg="is Burn-In Test Done?"
+waitFor="dialog"
+waitTime=30
+expectedValue="ok"
+onPass="Burn-In Test Done"
+onFail="Burn-In Test Failed"
+

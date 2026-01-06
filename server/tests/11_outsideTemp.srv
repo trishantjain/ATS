@@ -1,0 +1,13 @@
+name="Outside Temperature Test"
+type="sensor"
+pass="Outside Temperature successfully completed"
+fail="Outside Temperature Test failed"
+retryCount=0
+
+[step:1]
+msg="Outside Temperature Sensor test started"
+waitFor="outsideTemperature"
+waitTime=30
+increasedBy=3
+onPass="Outside Temperature alarm successfully"
+onFail="Outside Temperature alarm not turned on"
