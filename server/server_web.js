@@ -1500,6 +1500,9 @@ const tcpServer = net.createServer((socket) => {
         const fanLevel3Running = !!buffer[49];
         const fanLevel4Running = !!buffer[50];
         const padding = buffer[51];
+        const hupsRes = buffer[56];
+
+        const failMask = buffer[57];
 
         console.log("Fan Status: ", fanLevel2Running)
 
@@ -1733,7 +1736,9 @@ const tcpServer = net.createServer((socket) => {
           waterLogging,
           waterLeakage,
           outputVoltage,
+          hupsDVC,
           inputVoltage,
+          hupsBatVolt,
           batteryBackup,
           alarmActive,
           fireAlarm,
@@ -1741,6 +1746,7 @@ const tcpServer = net.createServer((socket) => {
           fanLevel2Running,
           fanLevel3Running,
           fanLevel4Running,
+          pwsFailCount,
           fan1Status: fanStatus[0],
           fan2Status: fanStatus[1],
           fan3Status: fanStatus[2],
@@ -1753,6 +1759,7 @@ const tcpServer = net.createServer((socket) => {
           overStatus: hupsAlarms[3],
           mptStatus: hupsAlarms[4],
           mosfStatus: hupsAlarms[5],
+          hupsRes,
           ...thresholdAlarms,
           timestamp: new Date().toISOString(),
         };
