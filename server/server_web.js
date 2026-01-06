@@ -601,7 +601,7 @@ app.post("/api/tests/run-all", async (req, res) => {
     const files = await fs.promises.readdir(testDir);
 
     // Sort files numerically (1_criticalload.srv, 2_nexttest.srv, etc.)
-    const testFiles = files
+    let testFiles = files
       .filter(file => {
         const ext = path.extname(file).toLowerCase();
         return ['.srv'].includes(ext);
@@ -680,24 +680,82 @@ app.post("/api/tests/run-all", async (req, res) => {
             name: "",
             message: "",
             expectedOutcome: null,
-            commands: []
+            commands: [],
+            pre: "",
+            pass: "",
+            fail: "",
+            timeout: 20,
+            retryCount: 0,
+            type: "",
+            steps: []
           };
+
+          let currentStep = null;
 
           // Parse .srv file
           for (const line of lines) {
+            // Check for step header [step:N]
+            const stepMatch = line.match(/^\[step:(\d+)\]$/);
+            if (stepMatch) {
+              // Save previous step if exists
+              if (currentStep) {
+                testConfig.steps.push(currentStep);
+              }
+              // Start new step
+              currentStep = {
+                stepNumber: parseInt(stepMatch[1]),
+                msg: "",
+                waitFor: "",
+                waitTime: 20,
+                expectedValue: "",
+                onPass: "",
+                onFail: ""
+              };
+              continue;
+            }
+
+            // If we're inside a step, parse step properties
+            if (currentStep) {
+              if (line.startsWith('msg=')) {
+                currentStep.msg = line.substring(4).replace(/["\']/g, '');
+              } else if (line.startsWith('waitFor=')) {
+                currentStep.waitFor = line.substring(8).replace(/["\']/g, '');
+              } else if (line.startsWith('waitTime=')) {
+                currentStep.waitTime = parseInt(line.substring(9).replace(/["\']/g, '')) || 20;
+              } else if (line.startsWith('expectedValue=')) {
+                currentStep.expectedValue = line.substring(14).replace(/["\']/g, '');
+              } else if (line.startsWith('onPass=')) {
+                currentStep.onPass = line.substring(7).replace(/["\']/g, '');
+              } else if (line.startsWith('onFail=')) {
+                currentStep.onFail = line.substring(7).replace(/["\']/g, '');
+              }
+            } else {
+              // Top-level properties
             if (line.startsWith('name=')) {
               testConfig.name = line.substring(5).replace(/["\']/g, '');
             } else if (line.startsWith('msg=')) {
               testConfig.message = line.substring(4).replace(/["\']/g, '');
-            } else if (line.startsWith('EO=')) {
-              // Keep as string to support both numeric and property-based comparisons (e.g., lockStatus:OPEN)
-              testConfig.expectedOutcome = line.substring(3).replace(/["\']/g, '');
+              } else if (line.startsWith('pre=')) {
+                testConfig.pre = line.substring(4).replace(/["\']/g, '');
+              } else if (line.startsWith('pass=')) {
+                testConfig.pass = line.substring(5).replace(/["\']/g, '');
+              } else if (line.startsWith('fail=')) {
+                testConfig.fail = line.substring(5).replace(/["\']/g, '');
+              } else if (line.startsWith('retryCount=')) {
+                testConfig.retryCount = parseInt(line.substring(11).replace(/["\']/g, '')) || 0;
             } else if (line && !line.includes('=')) {
               // It's a command (if any in the test file)
               testConfig.commands.push(line);
             }
           }
+          }
 
+          // Don't forget to add the last step
+          if (currentStep) {
+            testConfig.steps.push(currentStep);
+          }
+          
+          // Sending test files details from config to result
           testResult.name = testConfig.name || path.parse(testFile).name;
           testResult.message = testConfig.message || "No message";
           testResult.expectedOutcome = testConfig.expectedOutcome;
@@ -714,7 +772,9 @@ app.post("/api/tests/run-all", async (req, res) => {
             testFile: testFile,
             name: testResult.name,
             message: testResult.message,
+            pre: testConfig.pre,
             expectedOutcome: testResult.expectedOutcome,
+            totalSteps: testConfig.steps.length,
             timestamp: getFormattedDateTime()
           });
 
@@ -728,7 +788,252 @@ app.post("/api/tests/run-all", async (req, res) => {
             testResult.output = "❌ Test FAILED: No connected devices available";
             testResult.status = "failed";
             testResult.passed = false;
+          }
+          // ========== STEP-BASED TEST EXECUTION ==========
+          else if (testConfig.steps.length > 0) {
+            const testDeviceMAC = connectedMACs[0];
+            let allStepsPassed = true;
+            const stepResults = [];
+
+            console.log(`🔄 Running step-based test with ${testConfig.steps.length} steps`);
+
+            for (let i = 0; i < testConfig.steps.length; i++) {
+              // Check if stop was requested
+              if (testStopRequested) {
+                console.log('🛑 Test stopped by user request');
+                testResult.status = 'stopped';
+                testResult.output = 'Test stopped by user';
+                break;
+              }
+
+              const step = testConfig.steps[i];
+              const stepNumber = step.stepNumber || (i + 1);
+
+              console.log(`\n📍 Step ${stepNumber}: ${step.msg}`);
+              console.log(`   Waiting for: ${step.waitFor} = ${step.expectedValue}`);
+              console.log(`   Timeout: ${step.waitTime}s`);
+
+              // Broadcast step started (same for all step types)
+              broadcastTestStatus({
+                type: 'STEP_STARTED',
+                testFile: testFile,
+                name: testResult.name,
+                stepNumber: stepNumber,
+                totalSteps: testConfig.steps.length,
+                message: step.msg,
+                waitFor: step.waitFor,
+                expectedValue: step.expectedValue,
+                waitTime: step.waitTime || 20,
+                timestamp: getFormattedDateTime()
+              });
+
+              // Handle dialog steps separately - wait for user confirmation
+              if (step.waitFor === "dialog") {
+                console.log(`    ⏳ Waiting for user dialog confirmation...`);
+
+                const dialogResult = await new Promise((resolve) => {
+                  const timeout = setTimeout(() => {
+                    pendingDialogResolver = null;
+                    resolve(false);  // Timeout = cancel
+                  }, (step.waitTime || 60) * 1000);  // Longer timeout for user interaction
+
+                  pendingDialogResolver = (confirmed) => {
+                    clearTimeout(timeout);
+                    resolve(confirmed);
+                  };
+                });
+
+                // Process dialog result
+                if (dialogResult) {
+                  console.log(`    ✅ Step ${stepNumber} PASSED: User confirmed`);
+                  stepResults.push({
+                    step: stepNumber,
+                    status: 'passed',
+                    message: step.onPass || 'User confirmed',
+                    received: 'dialog:confirmed'
+                  });
+
+                  broadcastTestStatus({
+                    type: 'STEP_COMPLETED',
+                    testFile: testFile,
+                    name: testResult.name,
+                    stepNumber: stepNumber,
+                    totalSteps: testConfig.steps.length,
+                    status: 'passed',
+                    message: step.onPass || 'User confirmed',
+                    timestamp: getFormattedDateTime()
+                  });
           } else {
+                  console.log(`   ❌ Step ${stepNumber} FAILED: User cancelled or timeout`);
+                  allStepsPassed = false;
+                  stepResults.push({
+                    step: stepNumber,
+                    status: 'failed',
+                    message: step.onFail || 'User cancelled or timeout',
+                    received: 'dialog:cancelled'
+                  });
+
+                  broadcastTestStatus({
+                    type: 'STEP_COMPLETED',
+                    testFile: testFile,
+                    name: testResult.name,
+                    stepNumber: stepNumber,
+                    totalSteps: testConfig.steps.length,
+                    status: 'failed',
+                    message: step.onFail || 'User cancelled or timeout',
+                    timestamp: getFormattedDateTime()
+                  });
+
+                  break;  // Stop on dialog failure
+                }
+
+                continue;  // Skip to next step (don't run device waiter)
+              }
+
+              // Wait for the expected value (device readings)
+              const stepResult = await new Promise((resolve) => {
+                const timeout = setTimeout(() => {
+                  clearTestWaitForMAC();
+                  if (currentStepHandler) {
+                    const idx = deviceCommandWaiters.indexOf(currentStepHandler);
+                    if (idx > -1) deviceCommandWaiters.splice(idx, 1);
+                  }
+                  resolve({ success: false, reason: 'TIMEOUT', received: null });
+                }, (step.waitTime || 20) * 1000);
+
+                setTestWaitForMAC(testDeviceMAC);
+
+                let currentStepHandler = null;
+
+                const stepHandler = (reading) => {
+                  if (!reading || typeof reading !== 'object') {
+                    return false;
+                  }
+
+                  // Check if multi-property (contains semicolons)
+                  const isMultiProperty = step.waitFor.includes(';');
+
+                  if (isMultiProperty) {
+                    // Multi-property check: ALL properties must match
+                    const properties = step.waitFor.split(';').map(p => p.trim());
+                    const expectedValues = step.expectedValue.split(';').map(v => v.trim());
+
+                    let allMatch = true;
+
+                    // Checking values defined in single step
+                    for (let j = 0; j < properties.length; j++) {
+                      const prop = properties[j];
+                      const expectedVal = expectedValues[j] || expectedValues[0];
+                      const receivedVal = String(reading[prop]).toUpperCase().trim();
+                      const normalizedExpected = String(expectedVal).toUpperCase().trim();
+
+                      console.log(`   🔍 Checking: ${prop} = "${reading[prop]}" (expected: "${expectedVal}")`);
+
+                      if (receivedVal !== normalizedExpected) {
+                        allMatch = false;
+                      }
+                    }
+
+                    if (allMatch) {
+                      clearTimeout(timeout);
+                      clearTestWaitForMAC();
+                      const idx = deviceCommandWaiters.indexOf(stepHandler);
+                      if (idx > -1) deviceCommandWaiters.splice(idx, 1);
+                      resolve({ success: true, received: 'All properties matched' });
+                      return true;
+                    }
+
+                    return false; // Keep waiting
+                  } else {
+                    // Single property check
+                    const receivedValue = reading[step.waitFor];
+                    const normalizedReceived = String(receivedValue).toUpperCase().trim();
+                    const normalizedExpected = String(step.expectedValue).toUpperCase().trim();
+
+                    console.log(`   🔍 Checking: ${step.waitFor} = "${receivedValue}" (expected: "${step.expectedValue}")`);
+
+                    if (normalizedReceived === normalizedExpected) {
+                      clearTimeout(timeout);
+                      clearTestWaitForMAC();
+                      const idx = deviceCommandWaiters.indexOf(stepHandler);
+                      if (idx > -1) deviceCommandWaiters.splice(idx, 1);
+                      resolve({ success: true, received: receivedValue });
+                      return true;
+                    }
+
+                    return false; // Keep waiting
+                  }
+                };
+
+                currentStepHandler = stepHandler;
+                deviceCommandWaiters.push(stepHandler);
+              });
+
+              // Process step result
+              if (stepResult.success) {
+                console.log(`   ✅ Step ${stepNumber} PASSED: ${step.onPass || 'Success'}`);
+                stepResults.push({
+                  step: stepNumber,
+                  status: 'passed',
+                  message: step.onPass || 'Step passed',
+                  received: stepResult.received
+                });
+
+                // sending message to UI after test completion
+                broadcastTestStatus({
+                  type: 'STEP_COMPLETED',
+                  testFile: testFile,
+                  name: testResult.name,
+                  stepNumber: stepNumber,
+                  totalSteps: testConfig.steps.length,
+                  status: 'passed',
+                  message: step.onPass || 'Step passed',
+                  timestamp: getFormattedDateTime()
+                });
+              } else {
+                console.log(`   ❌ Step ${stepNumber} FAILED: ${step.onFail || stepResult.reason}`);
+                allStepsPassed = false;
+                stepResults.push({
+                  step: stepNumber,
+                  status: 'failed',
+                  message: step.onFail || stepResult.reason,
+                  received: stepResult.received
+                });
+
+                broadcastTestStatus({
+                  type: 'STEP_COMPLETED',
+                  testFile: testFile,
+                  name: testResult.name,
+                  stepNumber: stepNumber,
+                  totalSteps: testConfig.steps.length,
+                  status: 'failed',
+                  message: step.onFail || stepResult.reason,
+                  timestamp: getFormattedDateTime()
+                });
+
+                // Stop on first failure (or continue based on config)
+                break;
+              }
+            }
+
+            // Set overall test result
+            testResult.passed = allStepsPassed;
+            testResult.status = allStepsPassed ? 'passed' : 'failed';
+            testResult.output = allStepsPassed
+              ? (testConfig.pass || `✅ All ${testConfig.steps.length} steps passed`)
+              : (testConfig.fail || `❌ Test failed at step ${stepResults.length}`);
+            testResult.stepResults = stepResults;
+
+            const reportContent = `Test: ${testResult.name} , Status: ${testResult.status} , Steps: ${stepResults.length}/${testConfig.steps.length}`;
+            try {
+              await fs.promises.appendFile(testReportFilePath, `${reportContent}\n`);
+              console.log(`✅ Test report appended to: ${testReportFileName}`);
+            } catch (err) {
+              console.log(`🔴 Error writing test report: ${err} 🔴`);
+            }
+          }
+          // ========== EO-BASED TEST EXECUTION (Original Logic) ==========
+          else {
             const testDeviceMAC = connectedMACs[0]; // Wait for first connected device
 
             let deviceResponse = null;
@@ -1071,10 +1376,10 @@ const tcpServer = net.createServer((socket) => {
       debug.bufferStats.totalBytes += data.length;
 
       debug.log(`Raw data received (${data.length} bytes) from`, clientInfo);
-      debug.log(`Raw data hex preview:`, data.toString('hex').substring(0, 100) + '...');
+      // debug.log(`Raw data hex preview:`, data.toString('hex').substring(0, 100) + '...');
 
       buffer = Buffer.concat([buffer, data]);
-      debug.log(`Total buffer size: ${buffer.length} bytes`);
+      // debug.log(`Total buffer size: ${buffer.length} bytes`);
 
       while (buffer.length >= 58) {
         const bufStr = buffer.toString("utf-8");
