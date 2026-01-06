@@ -288,51 +288,52 @@ function DashboardView() {
     }
   };
 
-  // Modified iMoni_test function with better error handling
+  // Run ATS: Frontend dialogs first, then server tests
   async function iMoni_test() {
-    setTestStatus("Starting tests...");
-    setAwaitingCommand(true);
-    setTestProgress([]);
+    setAwaitingCommand(true); // Shows 'Running...' state
+    const frontendResults = []; // Stores Visual & Burn-in results
 
+    // 1. Visual Test (frontend dialog)
+    const v = await swal.fire({
+      title: 'Visual Test',
+      text: 'Is Visual inspection passed?',
+      showCancelButton: true,
+      confirmButtonText: 'Pass',
+      cancelButtonText: 'Fail'
+    });
+    frontendResults.push({
+      name: 'Visual Test',
+      status: v.isConfirmed ? 'passed' : 'failed',
+      passed: v.isConfirmed
+    });
+
+    // 2. Burn-In Test (frontend dialog)  
+    const b = await swal.fire({
+      title: 'Burn-In Test',
+      text: 'Is Burn-In test passed?',
+      showCancelButton: true,
+      confirmButtonText: 'Pass',
+      cancelButtonText: 'Fail'
+    });
+    frontendResults.push({
+      name: 'Burn-In Test',
+      status: b.isConfirmed ? 'passed' : 'failed',
+      passed: b.isConfirmed
+    });
+
+    // 3. Runs API '/tests/run-all/'
     try {
       const resp = await fetch(`${process.env.REACT_APP_API_URL}/api/tests/run-all`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ mac: selectedMac })
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mac: selectedMac, skipFrontendTests: true, frontendResults })
       });
-
-      if (!resp.ok) {
-        throw new Error(`HTTP error! status: ${resp.status}`);
-      }
-
       const data = await resp.json();
-      console.log("Test response:", data);
-
-      // data.results is the array of tests parsed/run on the server
-      if (Array.isArray(data.results) && data.results.length) {
-        const first = data.results[0];
-        setCurrentTest(first.name || first.testFile);
-        setTestStatus(first.message || "Running...");
-
-        // Update test progress
-        setTestProgress(data.results.map(result => ({
-          test: result.testFile || result.name,
-          status: result.status,
-          output: result.output || "No output",
-          duration: result.duration || 0
-        })));
-      }
-
-      setAwaitingCommand(false);
-      setTestStatus(data.summary ? `Completed: ${data.summary.passed} passed, ${data.summary.failed} failed` : "All tests done");
-      setCurrentTest(null);
+      setTestStatus(`Done: ${data.summary.passed} passed, ${data.summary.failed} failed`);
     } catch (err) {
-      console.error("Test error:", err);
+      setTestStatus(`Error: ${err.message}`);
+      }
       setAwaitingCommand(false);
-      setTestStatus(`Test run failed: ${err.message}`);
-    }
   }
 
 
