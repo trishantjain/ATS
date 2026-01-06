@@ -855,9 +855,10 @@ function DashboardView() {
                     <div className="alarm-line">
                       <h4>Alarms</h4>
                       {alarmKeys.map((alarm, i) => (
+
                         <div key={i} className="alarm-indicator">
                           <div
-                            className={`alarm-led ${latestReading[alarm.key] ? "active" : ""
+                            className={`alarm-led ${latestReading[alarm.key] === 87 ? "wait" : latestReading[alarm.key] ? "active" : ""
                               }`}
                           />
                           <div className="alarm-label">{alarm.Name}</div>
