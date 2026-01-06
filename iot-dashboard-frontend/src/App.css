@@ -812,7 +812,7 @@ body {
   border: 1px solid #333;
   position: sticky;
   top: 0;
-  z-index: 100;
+  z-index: 90;
 }
 
 .test-buttons {
@@ -968,14 +968,17 @@ body {
   border-radius: 3px;
 }
 
-/* .logo-panel{
-  background-color: grey;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex: 50%;
-  position: fixed;
-} */
+.logo-panel {
+  /* background-color: grey; */
+  /* display: flex; */
+  /* justify-content: space-between; */
+  /* align-items: center; */
+  /* flex: 50%; */
+  /* position: fixed; */
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
 
 /* .logo-left{
   display: flex;
