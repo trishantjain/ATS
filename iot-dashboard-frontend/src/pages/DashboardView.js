@@ -42,6 +42,8 @@ function DashboardView() {
   const [currentTestStep, setCurrentTestStep] = useState(0);
   const [testCommandInput, setTestCommandInput] = useState("");
   const [notification, setNotification] = useState(null);
+  const [liveReading, setLiveReading] = useState(null);  // Separate state for immediate UI updates
+  const notificationTimeoutRef = useRef(null);  // Track notification auto-dismiss timeout
 
 
   //Map and marker refs
@@ -58,7 +60,8 @@ function DashboardView() {
   });
 
   const selectedDeviceMeta = deviceMeta.find((d) => d.mac === selectedMac);
-  const latestReading = readings.find((r) => r.mac === selectedMac);
+  // Use liveReading if available, otherwise fall back to readings array
+  const latestReading = liveReading?.mac === selectedMac ? liveReading : readings.find((r) => r.mac === selectedMac);
 
   // UseEffect for fetching Data
   useEffect(() => {
@@ -332,8 +335,8 @@ function DashboardView() {
       setTestStatus(`Done: ${data.summary.passed} passed, ${data.summary.failed} failed`);
     } catch (err) {
       setTestStatus(`Error: ${err.message}`);
-      }
-      setAwaitingCommand(false);
+    }
+    setAwaitingCommand(false);
   }
 
 
@@ -394,6 +397,7 @@ function DashboardView() {
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 
+      // Connecting WebSocket
       ws.onopen = () => {
         console.log('✅ WebSocket connected successfully');
       };
@@ -407,6 +411,12 @@ function DashboardView() {
             const newReading = message.data;
             setSelectedMac(prev => prev || newReading.mac);
             setSelectedDevice(prev => prev || newReading.locationId || newReading.mac);
+            // Update live reading immediately for current device
+            setLiveReading(prev => {
+              if (!prev || prev.mac === newReading.mac) return newReading;
+              return prev;
+            });
+            //! Also update readings array for history
             setReadings(prev => {
               const filtered = prev.filter(r => r.mac !== newReading.mac);
               return [...filtered, newReading].slice(-400);
@@ -441,31 +451,83 @@ function DashboardView() {
           // Handle multi-step test messages
           if (message.type === 'STEP_STARTED') {
             setCurrentTestStep(message.stepNumber);
-            // Server sends 'msg' field for step message
-            const stepMsg = message.msg && message.msg !== "No message" ? message.msg : `Step ${message.stepNumber}/${message.totalSteps}`;
-            setTestStatus(`🔄 ${message.testName} - ${stepMsg}`);
+            // Server sends 'message' field for step message
+            const stepMsg = message.message && message.message !== "No message" ? message.message : `Step ${message.stepNumber}/${message.totalSteps}`;
+            setTestStatus(`🔄 ${message.name} - ${stepMsg}`);
 
-            // Show notification for step message
-            if (message.msg && message.msg !== "No message") {
+            // Handle dialog confirmation steps
+            // if (message.waitFor === "dialog") {
+            //   swal.fire({
+            //     title: message.name,
+            //     text: message.msg || `Is Step ${message.stepNumber} completed?`,
+            //     icon: 'question',
+            //     showCancelButton: true,
+            //     confirmButtonText: 'Yes, Passed ✅',
+            //     cancelButtonText: 'No, Failed ❌',
+            //     confirmButtonColor: '#28a745',
+            //     cancelButtonColor: '#dc3545',
+            //     allowOutsideClick: false,
+            //     allowEscapeKey: false
+            //   }).then((result) => {
+            //     // Send response back to server via WebSocket
+            //     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+            //       wsRef.current.send(JSON.stringify({
+            //         type: 'DIALOG_RESPONSE',
+            //         confirmed: result.isConfirmed,
+            //         stepNumber: message.stepNumber,
+            //         testName: message.name
+            //       }));
+            //       console.log(`📤 Sent dialog response: ${result.isConfirmed ? 'OK' : 'Cancel'}`);
+            //     }
+            //   });
+            //   return;  // Don't show notification for dialog steps
+            // }
+
+            // Show notification immediately - cancel any pending timeout
+            if (message.message && message.message !== "No message") {
+              // Clear previous auto-dismiss timeout
+              if (notificationTimeoutRef.current) {
+                clearTimeout(notificationTimeoutRef.current);
+              }
+
+              const currentWaitTime = message.waitTime || 20;
+
               setNotification({
-                title: `${message.testName} - Step ${message.stepNumber}`,
-                message: message.msg,
-                type: 'info'
+                title: `${message.name} - Step ${message.stepNumber}/${message.totalSteps}`,
+                message: message.message,
+                type: 'info',
+                waitTime: currentWaitTime
               });
-              setTimeout(() => setNotification(null), 10000);
+
+              // Auto-dismiss after waitTime (but will be replaced by STEP_COMPLETED anyway)
+              notificationTimeoutRef.current = setTimeout(() => {
+                setNotification(null);
+              }, currentWaitTime * 1000);
             }
           }
 
           if (message.type === 'STEP_COMPLETED') {
-            // Server sends 'passed' field, not 'result'
-            const stepResult = message.passed ? '✅' : '❌';
-            setTestStatus(`${stepResult} ${message.testName} - Step ${message.stepNumber}/${message.totalSteps} ${message.passed ? 'PASSED' : 'FAILED'}`);
-          }
+            // Server sends 'status' field: 'passed' or 'failed'
+            const isPassed = message.status === 'passed';
+            const stepResult = isPassed ? '✅' : '❌';
+            setTestStatus(`${stepResult} ${message.name} - Step ${message.stepNumber}/${message.totalSteps} ${isPassed ? 'PASSED' : 'FAILED'}`);
 
-          if (message.type === 'ALL_TESTS_COMPLETED') {
-            setTestStatus(`📊 All tests completed: ${message.summary.passed} passed, ${message.summary.failed} failed`);
-            setAwaitingCommand(false);
-            setCurrentTest(null);
+            // Clear previous auto-dismiss timeout
+            if (notificationTimeoutRef.current) {
+              clearTimeout(notificationTimeoutRef.current);
+            }
+
+            // Show completion notification immediately
+            setNotification({
+              title: `${message.name} - Step ${message.stepNumber}/${message.totalSteps}`,
+              message: `${stepResult} ${message.message || (isPassed ? 'Step passed' : 'Step failed')}`,
+              type: isPassed ? 'success' : 'error'
+            });
+
+            // Auto-dismiss after 3 seconds (or will be replaced by next STEP_STARTED)
+            notificationTimeoutRef.current = setTimeout(() => {
+              setNotification(null);
+            }, 3000);
           }
 
         } catch (err) {
@@ -615,6 +677,40 @@ function DashboardView() {
           >
             {awaitingCommand ? "Running ATS..." : "Run ATS Tests"}
           </button>
+          {awaitingCommand && (
+            <button
+              className="btn-test-stop"
+              onClick={async () => {
+                try {
+                  await fetch(`${process.env.REACT_APP_API_URL}/api/tests/stop`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                  });
+                  setAwaitingCommand(false);
+                  setTestStatus('🛑 Tests stopped by user');
+                  setNotification({
+                    title: 'Tests Stopped',
+                    message: 'Testing process was stopped by user',
+                    type: 'error'
+                  });
+                } catch (err) {
+                  console.error('Failed to stop tests:', err);
+                }
+              }}
+              style={{
+                backgroundColor: '#cc3333',
+                color: 'white',
+                border: 'none',
+                padding: '10px 20px',
+                borderRadius: '5px',
+                cursor: 'pointer',
+                marginLeft: '10px',
+                fontWeight: 'bold'
+              }}
+            >
+              🛑 Stop Test
+            </button>
+          )}
           {/* <button
             className="btn-test-secondary"
             onClick={runTestsStepByStep}
@@ -635,6 +731,10 @@ function DashboardView() {
             justifyContent: 'space-between',
             alignItems: 'flex-start',
             color: '#fff',
+            boxShadow: `0 4px 12px ${notification.type === 'success' ? 'rgba(0, 204, 102, 0.3)' : notification.type === 'error' ? 'rgba(204, 51, 51, 0.3)' : 'rgba(0, 204, 204, 0.3)'}`,
+            animation: 'slideIn 0.3s ease-out',
+            transition: 'all 0.3s ease'
+          }}>
             <style>{`
               @keyframes slideIn {
                 from { opacity: 0; transform: translateY(-10px); }
