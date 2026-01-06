@@ -626,8 +626,8 @@ function DashboardView() {
         {/* Notification Banner */}
         {notification && (
           <div style={{
-            backgroundColor: '#1a3a3a',
-            border: '2px solid #00cccc',
+            backgroundColor: notification.type === 'success' ? '#1a3a2a' : notification.type === 'error' ? '#3a1a1a' : '#1a3a3a',
+            border: `2px solid ${notification.type === 'success' ? '#00cc66' : notification.type === 'error' ? '#cc3333' : '#00cccc'}`,
             borderRadius: '8px',
             padding: '16px',
             marginBottom: '16px',
@@ -635,16 +635,22 @@ function DashboardView() {
             justifyContent: 'space-between',
             alignItems: 'flex-start',
             color: '#fff',
-            boxShadow: '0 4px 12px rgba(0, 204, 204, 0.3)'
-          }}>
+            <style>{`
+              @keyframes slideIn {
+                from { opacity: 0; transform: translateY(-10px); }
+                to { opacity: 1; transform: translateY(0); }
+              }
+            `}</style>
             <div style={{ flex: 1 }}>
-              <h4 style={{ margin: '0 0 8px 0', color: '#00cccc' }}>
+              <h4 style={{ margin: '0 0 8px 0', color: notification.type === 'success' ? '#00cc66' : notification.type === 'error' ? '#cc3333' : '#00cccc', fontSize: '18px' }}>
                 {notification.title}
               </h4>
-              <h4 style={{ margin: '0 0 8px 0', color: '#00cccc' }}>
-                {notification.pre}
-              </h4>
-              <p style={{ margin: 0, fontSize: '14px', lineHeight: '1.5' }}>
+              {notification.pre && (
+                <p style={{ margin: '0 0 8px 0', color: '#ffcc00', fontSize: '14px', fontWeight: 'bold' }}>
+                  ⚠️ {notification.pre}
+                </p>
+              )}
+              <p style={{ margin: 0, fontSize: '16px', lineHeight: '1.6', fontWeight: '500' }}>
                 {notification.message}
               </p>
             </div>
@@ -653,7 +659,7 @@ function DashboardView() {
               style={{
                 background: 'transparent',
                 border: 'none',
-                color: '#00cccc',
+                color: notification.type === 'success' ? '#00cc66' : notification.type === 'error' ? '#cc3333' : '#00cccc',
                 fontSize: '20px',
                 cursor: 'pointer',
                 marginLeft: '12px',
