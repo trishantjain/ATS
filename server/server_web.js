@@ -570,9 +570,25 @@ app.post("/api/test/run", async (req, res) => {
   }
 });
 
+// ✅ Stop ongoing tests
+app.post("/api/tests/stop", (req, res) => {
+  console.log("🛑 /api/tests/stop endpoint called");
+  requestTestStop();
+
+  // Broadcast stop message to all WebSocket clients
+  broadcastTestStatus({
+    type: 'TESTS_STOPPED',
+    message: 'Tests stopped by user',
+    timestamp: getFormattedDateTime()
+  });
+
+  res.json({ success: true, message: 'Test stop requested' });
+});
+
 // ✅ Run all tests sequentially (one by one)
 app.post("/api/tests/run-all", async (req, res) => {
   console.log("📋 /api/tests/run-all endpoint called - ATS Mode");
+  resetTestStopFlag();  // Reset stop flag when starting new test
 
   try {
     const { mac } = req.body;
@@ -652,6 +668,12 @@ app.post("/api/tests/run-all", async (req, res) => {
 
     // Run test files one by one
     for (const testFile of testFiles) {
+      // Check if stop was requested before starting next test
+      if (testStopRequested) {
+        console.log('🛑 Test execution stopped by user - skipping remaining tests');
+        break;
+      }
+
       const testFilePath = path.join(testDir, testFile);
       console.log(`🔬 Processing test file: ${testFile}`);
 
@@ -1317,6 +1339,7 @@ const deviceCommandWaiters = [];
 
 // Track which MAC addresses have pending test waits
 let testWaitingForMAC = null;
+let testStopRequested = false;  // Flag to stop ongoing test
 
 function setTestWaitForMAC(mac) {
   testWaitingForMAC = mac;
@@ -1325,6 +1348,21 @@ function setTestWaitForMAC(mac) {
 
 function clearTestWaitForMAC() {
   testWaitingForMAC = null;
+}
+
+function requestTestStop() {
+  testStopRequested = true;
+  clearTestWaitForMAC();
+  // Clear all pending waiters
+  while (deviceCommandWaiters.length > 0) {
+    const waiter = deviceCommandWaiters.shift();
+    waiter({ stopped: true });  // Resolve with stopped flag
+  }
+  console.log('🛑 Test stop requested - all waiters cleared');
+}
+
+function resetTestStopFlag() {
+  testStopRequested = false;
 }
 
 
