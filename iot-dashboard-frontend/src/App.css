@@ -205,6 +205,11 @@ body {
   box-shadow: 0 0 12px red;
   animation: blinkAlarm 1s infinite alternate;
 }
+.alarm-led.wait {
+  background-color: white;
+  box-shadow: 0 0 12px white;
+  /* animation: blinkAlarm 1s infinite alternate; */
+}
 
 .alarm-led.pass-warn {
   background-color: orange;
