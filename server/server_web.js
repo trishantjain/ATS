@@ -591,7 +591,7 @@ app.post("/api/tests/run-all", async (req, res) => {
   resetTestStopFlag();  // Reset stop flag when starting new test
 
   try {
-    const { mac } = req.body;
+    const { mac, skipFrontendTests, frontendResults } = req.body;
     const testDir = path.join(__dirname, "tests");
 
     // Create test directory if it doesn't exist
@@ -658,6 +658,9 @@ app.post("/api/tests/run-all", async (req, res) => {
     const testReportFileName = `${getFormattedDateTime('file')}_${reportMac}.rpt`;
     const testReportFilePath = path.join(testResultDir, testReportFileName);
 
+    // Calculate total tests including frontend results
+    const totalTests = testFiles.length + (frontendResults?.length || 0);
+
     await fs.promises.writeFile(
       testReportFilePath,
       `ATS Test Run - ${getFormattedDateTime()}\nDevice: ${reportMac}\nTotal Tests: ${testFiles.length}\n\n`,
@@ -665,6 +668,16 @@ app.post("/api/tests/run-all", async (req, res) => {
     );
 
     const results = [];
+
+    // Write frontend test results to report first
+    if (frontendResults && Array.isArray(frontendResults)) {
+      for (const fr of frontendResults) {
+        const reportLine = `Test: ${fr.name} | Status: ${fr.status}\n`;
+        await fs.promises.appendFile(testReportFilePath, reportLine);
+        results.push(fr);
+        console.log(`📝 Frontend test saved: ${fr.name} - ${fr.status}`);
+      }
+    }
 
     // Run test files one by one
     for (const testFile of testFiles) {
@@ -779,7 +792,7 @@ app.post("/api/tests/run-all", async (req, res) => {
           
           // Sending test files details from config to result
           testResult.name = testConfig.name || path.parse(testFile).name;
-          testResult.message = testConfig.message || "No message";
+          testResult.message = testConfig.message || testConfig.pre || "No message";
           testResult.expectedOutcome = testConfig.expectedOutcome;
           testResult.commands = testConfig.commands;
 
@@ -1299,15 +1312,17 @@ app.post("/api/tests/run-all", async (req, res) => {
       }
     }
 
-    const passedCount = results.filter(r => r.passed).length;
-    const failedCount = results.filter(r => !r.passed).length;
+    const passedCount = results.filter(r => r.passed || r.status === 'passed').length;
+    const failedCount = results.filter(r => !r.passed && r.status !== 'passed').length;
 
     const response = {
       timestamp: getFormattedDateTime(),
       summary: {
         total: results.length,
         passed: passedCount,
-        failed: failedCount
+        failed: failedCount,
+        frontendTests: frontendResults?.length || 0,
+        serverTests: testFiles.length
       },
       results
     };
