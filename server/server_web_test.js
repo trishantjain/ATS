@@ -20,6 +20,7 @@ const connectedDevices = new Map();
 let latestReadings = [];
 app.use(bodyParser.json());
 const cors = require("cors");
+const { isDeepStrictEqual } = require("util");
 app.use(cors());
 
 // WebSocket Server
@@ -54,14 +55,17 @@ wss.on('connection', (ws, req) => {
   ws.on('message', (data) => {
     try {
       const message = JSON.parse(data);
-      console.log('📨 WebSocket message received:', message.type);
+      console.log('📨 WebSocket message received:', message);
 
       if (message.type === 'DIALOG_RESPONSE') {
-        console.log(`📝 Dialog response: ${message.confirmed ? 'OK' : 'Cancel'}`);
-        // Resolve any pending dialog waiter
-        if (pendingDialogResolver) {
-          pendingDialogResolver(message.confirmed);
-          pendingDialogResolver = null;
+        if (typeof message.confirmed === 'boolean') {
+          console.log(`📝 Dialog response: ${message.confirmed ? 'OK' : 'Cancel'}`);
+          if (pendingDialogResolver) {
+            pendingDialogResolver(message.confirmed);
+            pendingDialogResolver = null;
+          }
+        } else {
+          console.error('❌ Invalid DIALOG_RESPONSE: Missing or invalid "confirmed" property');
         }
       }
     } catch (err) {
@@ -207,6 +211,7 @@ const debug = {
     };
   }
 };
+
 
 // 🔌 DB connection
 mongoose
@@ -417,64 +422,6 @@ app.get("/api/thresholds", (req, res) => {
   res.json(thresholds);
 });
 
-// Debug endpoints
-// app.get("/api/debug/stats", (req, res) => {
-//   res.json(debug.stats());
-// });
-
-// app.get("/api/debug/health", (req, res) => {
-//   res.json(debug.healthCheck());
-// });
-
-// app.post("/api/debug/toggle", (req, res) => {
-//   debug.enabled = !debug.enabled;
-//   res.json({
-//     enabled: debug.enabled,
-//     message: `Debug ${debug.enabled ? 'enabled' : 'disabled'}`,
-//     timestamp: getFormattedDateTime()
-//   });
-// });
-
-// FIXED: Corrected connected-devices endpoint
-// app.post("/api/debug/connected-devices", (req, res) => {
-//   const devices = Array.from(connectedDevices.entries()).map(([mac, socket]) => ({
-//     mac,
-//     connected: !socket.destroyed,
-//     remoteAddress: socket.remoteAddress,
-//     remotePort: socket.remotePort,
-//     lastSeen: getFormattedDateTime()
-//   }));
-
-//   res.json(devices);
-// });
-
-// app.post("/api/debug/reset-counters", (req, res) => {
-//   debug.errorCount = 0;
-//   debug.packetCount = 0;
-//   debug.bufferStats.malformedPackets = 0;
-//   debug.bufferStats.discardedBytes = 0;
-//   debug.bufferStats.totalBytes = 0;
-//   debug.lastPacketTime = null;
-
-//   res.json({
-//     message: "All counters reset",
-//     resetTime: getFormattedDateTime()
-//   });
-// });
-
-// app.get("/api/debug/packet-stream", (req, res) => {
-//   res.json({
-//     currentTime: getFormattedDateTime(),
-//     totalPackets: debug.packetCount,
-//     lastPacketTime: debug.lastPacketTime ? getFormattedDateTime(new Date(debug.lastPacketTime)) : "Never",
-//     activeConnections: connectedDevices.size,
-//     bufferStatus: {
-//       currentReadings: latestReadings.length,
-//       maxBufferSize: BULK_SAVE_LIMIT
-//     }
-//   });
-// });
-
 // ✅ List all available test files (COMMENTED OUT - uncomment if needed in future)
 app.get("/api/tests/list", async (req, res) => {
   const testDir = path.join(__dirname, "tests");
@@ -597,20 +544,6 @@ app.post("/api/tests/run-all", async (req, res) => {
 
     // Create test directory if it doesn't exist
     if (!fs.existsSync(testDir)) {
-      // fs.mkdirSync(testDir, { recursive: true });
-      // console.log(`Created test directory: ${testDir}`);
-
-      // return res.json({
-      //   timestamp: getFormattedDateTime(),
-      //   summary: {
-      //     total: 0,
-      //     passed: 0,
-      //     failed: 0
-      //   },
-      //   results: [],
-      //   message: "Test directory created (no test files found)"
-      // });
-
       res.json({ msg: "Test Folder not found" });
     }
 
@@ -629,15 +562,6 @@ app.post("/api/tests/run-all", async (req, res) => {
         const numB = parseInt(b.split('_')[0]) || 0;
         return numA - numB;
       });
-
-    // Skip frontend tests (Visual & Burn-In) if already run on frontend
-    if (skipFrontendTests) {
-      testFiles = testFiles.filter(file => {
-        const num = parseInt(file.split('_')[0]) || 0;
-        return num > 2;  // Skip 1_Visual.srv and 2_Burn_In.srv
-      });
-      console.log(`Skipping frontend tests. Running ${testFiles.length} server tests.`);
-    }
 
     console.log(`Found ${testFiles.length} test file(s):`, testFiles);
 
@@ -676,7 +600,7 @@ app.post("/api/tests/run-all", async (req, res) => {
         const reportLine = `Test: ${fr.name} | Status: ${fr.status}\n`;
         await fs.promises.appendFile(testReportFilePath, reportLine);
         results.push(fr);
-        console.log(`📝 Frontend test saved: ${fr.name} - ${fr.status}`);
+        console.log(`    📝 Frontend test saved: ${fr.name} - ${fr.status}`);
       }
     }
 
@@ -684,7 +608,7 @@ app.post("/api/tests/run-all", async (req, res) => {
     for (const testFile of testFiles) {
       // Check if stop was requested before starting next test
       if (testStopRequested) {
-        console.log('🛑 Test execution stopped by user - skipping remaining tests');
+        console.log('    🛑 Test execution stopped by user - skipping remaining tests');
         break;
       }
 
@@ -710,7 +634,7 @@ app.post("/api/tests/run-all", async (req, res) => {
         // Parse .srv test file
         try {
           const fileContent = await fs.promises.readFile(testFilePath, "utf-8");
-          const lines = fileContent.split('\n').map(line => line.trim()).filter(line => line);
+          const lines = fileContent.split('\n').map(line => line.trim()).filter(line => line && !line.startsWith('#'));
 
           let testConfig = {
             name: "",
@@ -750,7 +674,7 @@ app.post("/api/tests/run-all", async (req, res) => {
               continue;
             }
 
-            // If we're inside a step, parse step properties
+            // Properties inside the steps
             if (currentStep) {
               if (line.startsWith('msg=')) {
                 currentStep.msg = line.substring(4).replace(/["\']/g, '');
@@ -760,13 +684,17 @@ app.post("/api/tests/run-all", async (req, res) => {
                 currentStep.waitTime = parseInt(line.substring(9).replace(/["\']/g, '')) || 20;
               } else if (line.startsWith('expectedValue=')) {
                 currentStep.expectedValue = line.substring(14).replace(/["\']/g, '');
+              } else if (line.startsWith('increasedBy=')) {
+                currentStep.increasedBy = parseFloat(line.substring(12).replace(/["\']/g, '')) || 0;
               } else if (line.startsWith('onPass=')) {
                 currentStep.onPass = line.substring(7).replace(/["\']/g, '');
               } else if (line.startsWith('onFail=')) {
                 currentStep.onFail = line.substring(7).replace(/["\']/g, '');
+              } else if (line.startsWith('cameraUrl=')) {
+                currentStep.cameraUrl = line.substring(10).replace(/["\']/g, '');
               }
             } else {
-              // Top-level properties
+              // Properties before the steps
               if (line.startsWith('name=')) {
                 testConfig.name = line.substring(5).replace(/["\']/g, '');
               } else if (line.startsWith('msg=')) {
@@ -777,10 +705,11 @@ app.post("/api/tests/run-all", async (req, res) => {
                 testConfig.pass = line.substring(5).replace(/["\']/g, '');
               } else if (line.startsWith('fail=')) {
                 testConfig.fail = line.substring(5).replace(/["\']/g, '');
+              } else if (line.startsWith('type=')) {
+                testConfig.type = line.substring(5).replace(/["\']/g, '');
               } else if (line.startsWith('retryCount=')) {
                 testConfig.retryCount = parseInt(line.substring(11).replace(/["\']/g, '')) || 0;
               } else if (line && !line.includes('=')) {
-              // It's a command (if any in the test file)
                 testConfig.commands.push(line);
               }
             }
@@ -790,19 +719,19 @@ app.post("/api/tests/run-all", async (req, res) => {
           if (currentStep) {
             testConfig.steps.push(currentStep);
           }
-          
+
           // Sending test files details from config to result
           testResult.name = testConfig.name || path.parse(testFile).name;
           testResult.message = testConfig.message || testConfig.pre || "No message";
           testResult.expectedOutcome = testConfig.expectedOutcome;
           testResult.commands = testConfig.commands;
 
-          console.log(`▶️ Starting ATS test: ${testResult.name}`);
-          console.log(`📝 Message to display: ${testResult.message}`);
-          console.log(`🎯 Expected Outcome: ${testResult.expectedOutcome}`);
-          console.log(`📋 Steps defined: ${testConfig.steps.length}`);
+          console.log(`    ▶️ Starting ATS test: ${testResult.name}`);
+          console.log(`    📝 Message to display: ${testResult.message}`);
+          console.log(`    🎯 Expected Outcome: ${testResult.expectedOutcome}`);
+          console.log(`    📋 Steps defined: ${testConfig.steps.length}`);
 
-          // Send test status to WebSocket clients
+          // Send TEST STARTING status to WebSocket clients
           broadcastTestStatus({
             type: 'TEST_STARTED',
             testFile: testFile,
@@ -822,18 +751,18 @@ app.post("/api/tests/run-all", async (req, res) => {
             testResult.status = "failed";
             testResult.passed = false;
           }
-          // ========== STEP-BASED TEST EXECUTION ==========
-          else if (testConfig.steps.length > 0) {
+          else if (testConfig.type === 'sensor') {
+            console.log(`   🔄Running sensor code part`)
             const testDeviceMAC = connectedMACs[0];
             let allStepsPassed = true;
             const stepResults = [];
 
-            console.log(`🔄 Running step-based test with ${testConfig.steps.length} steps`);
+            console.log(`   🔄 Running step-based test with ${testConfig.steps.length} steps`);
 
             for (let i = 0; i < testConfig.steps.length; i++) {
               // Check if stop was requested
               if (testStopRequested) {
-                console.log('🛑 Test stopped by user request');
+                console.log('    🛑 Test stopped by user request');
                 testResult.status = 'stopped';
                 testResult.output = 'Test stopped by user';
                 break;
@@ -842,9 +771,372 @@ app.post("/api/tests/run-all", async (req, res) => {
               const step = testConfig.steps[i];
               const stepNumber = step.stepNumber || (i + 1);
 
-              console.log(`\n📍 Step ${stepNumber}: ${step.msg}`);
-              console.log(`   Waiting for: ${step.waitFor} = ${step.expectedValue}`);
-              console.log(`   Timeout: ${step.waitTime}s`);
+              console.log(` \n📍 Step ${stepNumber}: ${step.msg}`);
+              console.log(`    Waiting for: ${step.waitFor} = ${step.expectedValue}`);
+              console.log(`    Timeout: ${step.waitTime}s`);
+
+              // Broadcast step started (same for all step types)
+              broadcastTestStatus({
+                type: 'STEP_STARTED',
+                testFile: testFile,
+                name: testResult.name,
+                stepNumber: stepNumber,
+                totalSteps: testConfig.steps.length,
+                message: step.msg,
+                waitFor: step.waitFor,
+                increasedBy: step.increasedBy,
+                waitTime: step.waitTime || 20,
+                timestamp: getFormattedDateTime()
+              });
+
+              // Wait for sensor value to increase by the defined amount
+              const stepResult = await new Promise((resolve) => {
+                let initialSensorValue = null;  // Capture initial value from first reading
+                const requiredIncrease = step.increasedBy || 0;
+
+                const timeout = setTimeout(() => {
+                  clearTestWaitForMAC();
+                  if (currentStepHandler) {
+                    const idx = deviceCommandWaiters.indexOf(currentStepHandler);
+                    if (idx > -1) deviceCommandWaiters.splice(idx, 1);
+                  }
+                  resolve({
+                    success: false,
+                    reason: `TIMEOUT - Value did not increase by ${requiredIncrease} within ${step.waitTime}s`,
+                    received: initialSensorValue
+                  });
+                }, (step.waitTime || 20) * 1000);
+
+                setTestWaitForMAC(testDeviceMAC);
+
+                let currentStepHandler = null;
+
+                // Handler to check if sensor value increased by required amount
+                const stepHandler = (reading) => {
+                  if (!reading || typeof reading !== 'object') {
+                    return false;
+                  }
+
+                  const currentValue = parseFloat(reading[step.waitFor]);
+
+                  if (isNaN(currentValue)) {
+                    console.log(`   ⚠️ Invalid sensor value for ${step.waitFor}: ${reading[step.waitFor]}`);
+                    return false;
+                  }
+
+                  // Capture initial value on first reading
+                  if (initialSensorValue === null) {
+                    initialSensorValue = currentValue;
+                    console.log(`   📊 Initial ${step.waitFor} value: ${initialSensorValue}`);
+                    console.log(`   🎯 Waiting for increase of: ${requiredIncrease}`);
+                    return false;  // Keep waiting for subsequent readings
+                  }
+
+                  const currentIncrease = currentValue - initialSensorValue;
+                  console.log(`   🔍 Checking: ${step.waitFor} = ${currentValue} (initial: ${initialSensorValue}, increase: ${currentIncrease.toFixed(2)}, required: ${requiredIncrease})`);
+
+                  // Check if value has increased by required amount
+                  if (currentIncrease >= requiredIncrease) {
+                    clearTimeout(timeout);
+                    clearTestWaitForMAC();
+                    const idx = deviceCommandWaiters.indexOf(stepHandler);
+                    if (idx > -1) deviceCommandWaiters.splice(idx, 1);
+                    resolve({
+                      success: true,
+                      received: `${currentValue} (increased by ${currentIncrease.toFixed(2)} from ${initialSensorValue})`
+                    });
+                    return true;
+                  }
+
+                  return false; // Keep waiting
+                };
+
+                currentStepHandler = stepHandler;
+                deviceCommandWaiters.push(stepHandler);
+              });
+
+              // Process step result
+              if (stepResult.success) {
+                console.log(`   ✅ Step ${stepNumber} PASSED: ${step.onPass || 'Success'}`);
+                stepResults.push({
+                  step: stepNumber,
+                  status: 'passed',
+                  message: step.onPass || 'Step passed',
+                  received: stepResult.received
+                });
+
+                // sending message to UI after test completion
+                broadcastTestStatus({
+                  type: 'STEP_COMPLETED',
+                  testFile: testFile,
+                  name: testResult.name,
+                  stepNumber: stepNumber,
+                  totalSteps: testConfig.steps.length,
+                  status: 'passed',
+                  message: step.onPass || 'Step passed',
+                  timestamp: getFormattedDateTime()
+                });
+              } else {
+                console.log(`   ❌ Step ${stepNumber} FAILED: ${step.onFail || stepResult.reason}`);
+                allStepsPassed = false;
+                stepResults.push({
+                  step: stepNumber,
+                  status: 'failed',
+                  message: step.onFail || stepResult.reason,
+                  received: stepResult.received
+                });
+
+                broadcastTestStatus({
+                  type: 'STEP_COMPLETED',
+                  testFile: testFile,
+                  name: testResult.name,
+                  stepNumber: stepNumber,
+                  totalSteps: testConfig.steps.length,
+                  status: 'failed',
+                  message: step.onFail || stepResult.reason,
+                  timestamp: getFormattedDateTime()
+                });
+
+                // Stop on first failure (or continue based on config)
+                break;
+              }
+            }
+
+            // Set overall test result
+            testResult.passed = allStepsPassed;
+            testResult.status = allStepsPassed ? 'passed' : 'failed';
+            testResult.output = allStepsPassed
+              ? (testConfig.pass || `✅ All ${testConfig.steps.length} steps passed`)
+              : (testConfig.fail || `❌ Test failed at step ${stepResults.length}`);
+            testResult.stepResults = stepResults;
+
+            const reportContent = `Test: ${testResult.name} , Status: ${testResult.status} , Steps: ${stepResults.length}/${testConfig.steps.length}`;
+            try {
+              await fs.promises.appendFile(testReportFilePath, `${reportContent}\n`);
+              console.log(`✅ Test report appended to: ${testReportFileName}`);
+            } catch (err) {
+              console.log(`🔴 Error writing test report: ${err} 🔴`);
+            }
+          }
+          else if (testConfig.type === 'camera') {
+            console.log(`    📷 Running camera test`);
+            const stepResults = [];
+            let allStepsPassed = true;
+
+            for (let i = 0; i < testConfig.steps.length; i++) {
+              // Check if stop was requested
+              if (testStopRequested) {
+                console.log('    🛑 Test stopped by user request');
+                testResult.status = 'stopped';
+                testResult.output = 'Test stopped by user';
+                break;
+              }
+
+              const step = testConfig.steps[i];
+              const stepNumber = step.stepNumber || (i + 1);
+
+              console.log(` \n📍 Step ${stepNumber}: ${step.msg}`);
+
+              // Broadcast step started
+              broadcastTestStatus({
+                type: 'STEP_STARTED',
+                testFile: testFile,
+                name: testResult.name,
+                stepNumber: stepNumber,
+                totalSteps: testConfig.steps.length,
+                message: step.msg,
+                waitFor: step.waitFor,
+                waitTime: step.waitTime || 60,
+                timestamp: getFormattedDateTime()
+              });
+
+              // Camera capture step
+              if (step.waitFor === 'capture') {
+                console.log(`   📸 Capturing image from camera...`);
+
+                const cameraUrl = step.cameraUrl || 'http://192.168.0.120/CGI/command/snap?channel=01';
+                const now = new Date();
+                const timestamp = now.toISOString()
+                  .replace(/[-:]/g, '')
+                  .replace(/T/, '_')
+                  .replace(/\..+/, '')
+                  .slice(0, 15);
+
+                const fileName = `test_${timestamp}.jpg`;
+                const outputDir = 'C:/snaps';
+                const outputPath = path.join(outputDir, fileName);
+
+                if (!fs.existsSync(outputDir)) {
+                  fs.mkdirSync(outputDir, { recursive: true });
+                }
+
+                try {
+                  // Capture image from camera
+                  const response = await axios({
+                    method: 'GET',
+                    url: cameraUrl,
+                    responseType: 'stream',
+                    timeout: 10000
+                  });
+
+                  // Save the image
+                  await new Promise((resolve, reject) => {
+                    const writer = fs.createWriteStream(outputPath);
+                    response.data.pipe(writer);
+                    writer.on('finish', resolve);
+                    writer.on('error', reject);
+                  });
+
+                  console.log(`    ✅ Image captured: ${fileName}`);
+                  console.log(`    📁 Image saved at: ${outputPath}`);
+
+                  // FIRST: Set up the dialog resolver BEFORE broadcasting
+                  const dialogPromise = new Promise((resolve) => {
+                    const timeout = setTimeout(() => {
+                      console.log(`    ⏰ Dialog timeout after ${step.waitTime || 60}s`);
+                      pendingDialogResolver = null;
+                      resolve({ confirmed: false, reason: 'TIMEOUT' });
+                    }, (step.waitTime || 60) * 1000);
+
+                    pendingDialogResolver = (confirmed) => {
+                      console.log(`    📨 Dialog response received: ${confirmed}`);
+                      clearTimeout(timeout);
+                      pendingDialogResolver = null;
+                      resolve({ confirmed, reason: confirmed ? 'USER_CONFIRMED' : 'USER_CANCELLED' });
+                    };
+                  });
+
+                  // THEN: Broadcast to show dialog on frontend
+                  console.log(`   📤 Broadcasting CAMERA_IMAGE_CAPTURED to ${wsClients.size} clients`);
+
+                  // Broadcast image captured - send to frontend for display
+                  broadcastTestStatus({
+                    type: 'CAMERA_IMAGE_CAPTURED',
+                    testFile: testFile,
+                    name: testResult.name,
+                    stepNumber: stepNumber,
+                    totalSteps: testConfig.steps.length,
+                    imagePath: outputPath,
+                    imageName: fileName,
+                    message: step.msg || 'Camera image captured. Please verify.',
+                    waitTime: step.waitTime || 60,
+                    timestamp: getFormattedDateTime()
+                  });
+
+                  // Wait for user dialog confirmation
+                  console.log(`   ⏳ Waiting for user confirmation...`);
+
+                  const dialogResult = await dialogPromise;
+
+                  // Process dialog result
+                  if (dialogResult.confirmed) {
+                    console.log(`   ✅ Step ${stepNumber} PASSED: User confirmed camera working`);
+                    stepResults.push({
+                      step: stepNumber,
+                      status: 'passed',
+                      message: step.onPass || 'Camera test passed - User confirmed',
+                      received: `Image: ${fileName}`
+                    });
+
+                    broadcastTestStatus({
+                      type: 'STEP_COMPLETED',
+                      testFile: testFile,
+                      name: testResult.name,
+                      stepNumber: stepNumber,
+                      totalSteps: testConfig.steps.length,
+                      status: 'passed',
+                      message: step.onPass || 'Camera test passed',
+                      timestamp: getFormattedDateTime()
+                    });
+                  } else {
+                    console.log(`   ❌ Step ${stepNumber} FAILED: ${dialogResult.reason}`);
+                    allStepsPassed = false;
+                    stepResults.push({
+                      step: stepNumber,
+                      status: 'failed',
+                      message: step.onFail || `Camera test failed - ${dialogResult.reason}`,
+                      received: `Image: ${fileName}`
+                    });
+
+                    broadcastTestStatus({
+                      type: 'STEP_COMPLETED',
+                      testFile: testFile,
+                      name: testResult.name,
+                      stepNumber: stepNumber,
+                      totalSteps: testConfig.steps.length,
+                      status: 'failed',
+                      message: step.onFail || `Camera test failed - ${dialogResult.reason}`,
+                      timestamp: getFormattedDateTime()
+                    });
+
+                    break; // Stop on failure
+                  }
+
+                } catch (err) {
+                  console.log(`   ❌ Step ${stepNumber} FAILED: Camera error - ${err.message}`);
+                  allStepsPassed = false;
+                  stepResults.push({
+                    step: stepNumber,
+                    status: 'failed',
+                    message: step.onFail || `Camera capture failed: ${err.message}`,
+                    received: null
+                  });
+
+                  broadcastTestStatus({
+                    type: 'STEP_COMPLETED',
+                    testFile: testFile,
+                    name: testResult.name,
+                    stepNumber: stepNumber,
+                    totalSteps: testConfig.steps.length,
+                    status: 'failed',
+                    message: `Camera capture failed: ${err.message}`,
+                    timestamp: getFormattedDateTime()
+                  });
+
+                  break; // Stop on failure
+                }
+              }
+            }
+
+            // Set overall test result
+            testResult.passed = allStepsPassed;
+            testResult.status = allStepsPassed ? 'passed' : 'failed';
+            testResult.output = allStepsPassed
+              ? (testConfig.pass || `✅ Camera test passed`)
+              : (testConfig.fail || `❌ Camera test failed`);
+            testResult.stepResults = stepResults;
+
+            const reportContent = `Test: ${testResult.name} , Status: ${testResult.status} , Steps: ${stepResults.length}/${testConfig.steps.length}`;
+            try {
+              await fs.promises.appendFile(testReportFilePath, `${reportContent}\n`);
+              console.log(`✅ Test report appended to: ${testReportFileName}`);
+            } catch (err) {
+              console.log(`🔴 Error writing test report: ${err} 🔴`);
+            }
+          }
+          // ========== STEP-BASED TEST EXECUTION ==========
+          else if (testConfig.steps.length > 0) {
+            const testDeviceMAC = connectedMACs[0];
+            let allStepsPassed = true;
+            const stepResults = [];
+
+            console.log(`   🔄 Running step-based test with ${testConfig.steps.length} steps`);
+
+            for (let i = 0; i < testConfig.steps.length; i++) {
+              // Check if stop was requested
+              if (testStopRequested) {
+                console.log('    🛑 Test stopped by user request');
+                testResult.status = 'stopped';
+                testResult.output = 'Test stopped by user';
+                break;
+              }
+
+              const step = testConfig.steps[i];
+              const stepNumber = step.stepNumber || (i + 1);
+
+              console.log(` \n📍 Step ${stepNumber}: ${step.msg}`);
+              console.log(`    Waiting for: ${step.waitFor} = ${step.expectedValue}`);
+              console.log(`    Timeout: ${step.waitTime}s`);
 
               // Broadcast step started (same for all step types)
               broadcastTestStatus({
@@ -861,67 +1153,68 @@ app.post("/api/tests/run-all", async (req, res) => {
               });
 
               // Handle dialog steps separately - wait for user confirmation
-              if (step.waitFor === "dialog") {
-                console.log(`    ⏳ Waiting for user dialog confirmation...`);
+              // if (step.waitFor === "dialog") {
+              //   console.log(`   ⏳ Waiting for user dialog confirmation...`);
 
-                const dialogResult = await new Promise((resolve) => {
-                  const timeout = setTimeout(() => {
-                    pendingDialogResolver = null;
-                    resolve(false);  // Timeout = cancel
-                  }, (step.waitTime || 60) * 1000);  // Longer timeout for user interaction
+              //   const dialogResult = await new Promise((resolve) => {
+              //     const timeout = setTimeout(() => {
+              //       pendingDialogResolver = null;
+              //       resolve(false);  // Timeout = cancel
+              //     }, (step.waitTime || 60) * 1000);  // Longer timeout for user interaction
 
-                  pendingDialogResolver = (confirmed) => {
-                    clearTimeout(timeout);
-                    resolve(confirmed);
-                  };
-                });
+              //     pendingDialogResolver = (confirmed) => {
+              //       clearTimeout(timeout);
+              //       resolve(confirmed);
+              //     };
+              //   });
 
-                // Process dialog result
-                if (dialogResult) {
-                  console.log(`    ✅ Step ${stepNumber} PASSED: User confirmed`);
-                  stepResults.push({
-                    step: stepNumber,
-                    status: 'passed',
-                    message: step.onPass || 'User confirmed',
-                    received: 'dialog:confirmed'
-                  });
+              //   // Process dialog result
+              //   if (dialogResult) {
+              //     console.log(`   ✅ Step ${stepNumber} PASSED: User confirmed`);
+              //     stepResults.push({
+              //       step: stepNumber,
+              //       status: 'passed',
+              //       message: step.onPass || 'User confirmed',
+              //       received: 'dialog:confirmed'
+              //     });
 
-                  broadcastTestStatus({
-                    type: 'STEP_COMPLETED',
-                    testFile: testFile,
-                    name: testResult.name,
-                    stepNumber: stepNumber,
-                    totalSteps: testConfig.steps.length,
-                    status: 'passed',
-                    message: step.onPass || 'User confirmed',
-                    timestamp: getFormattedDateTime()
-                  });
-                } else {
-                  console.log(`   ❌ Step ${stepNumber} FAILED: User cancelled or timeout`);
-                  allStepsPassed = false;
-                  stepResults.push({
-                    step: stepNumber,
-                    status: 'failed',
-                    message: step.onFail || 'User cancelled or timeout',
-                    received: 'dialog:cancelled'
-                  });
+              //     broadcastTestStatus({
+              //       type: 'STEP_COMPLETED',
+              //       testFile: testFile,
+              //       name: testResult.name,
+              //       stepNumber: stepNumber,
+              //       totalSteps: testConfig.steps.length,
+              //       status: 'passed',
+              //       message: step.onPass || 'User confirmed',
+              //       timestamp: getFormattedDateTime()
+              //     });
+              //   } else {
+              //     console.log(`   ❌ Step ${stepNumber} FAILED: User cancelled or timeout`);
+              //     allStepsPassed = false;
+              //     stepResults.push({
+              //       step: stepNumber,
+              //       status: 'failed',
+              //       message: step.onFail || 'User cancelled or timeout',
+              //       received: 'dialog:cancelled'
+              //     });
 
-                  broadcastTestStatus({
-                    type: 'STEP_COMPLETED',
-                    testFile: testFile,
-                    name: testResult.name,
-                    stepNumber: stepNumber,
-                    totalSteps: testConfig.steps.length,
-                    status: 'failed',
-                    message: step.onFail || 'User cancelled or timeout',
-                    timestamp: getFormattedDateTime()
-                  });
+              //     broadcastTestStatus({
+              //       type: 'STEP_COMPLETED',
+              //       testFile: testFile,
+              //       name: testResult.name,
+              //       stepNumber: stepNumber,
+              //       totalSteps: testConfig.steps.length,
+              //       status: 'failed',
+              //       message: step.onFail || 'User cancelled or timeout',
+              //       timestamp: getFormattedDateTime()
+              //     });
 
-                  break;  // Stop on dialog failure
-                }
+              //     break;  // Stop on dialog failure
+              //   }
 
-                continue;  // Skip to next step (don't run device waiter)
-              }
+              //   continue;  // Skip to next step (don't run device waiter)
+              // }
+
 
               // Wait for the expected value (device readings)
               const stepResult = await new Promise((resolve) => {
@@ -934,10 +1227,11 @@ app.post("/api/tests/run-all", async (req, res) => {
                   resolve({ success: false, reason: 'TIMEOUT', received: null });
                 }, (step.waitTime || 20) * 1000);
 
-                setTestWaitForMAC(testDeviceMAC);
+                setTestWaitForMAC(testDeviceMAC);  //Setting device for testing so it can wait for device readings 
 
                 let currentStepHandler = null;
 
+                // Handler wait for expecting outputs inside the steps
                 const stepHandler = (reading) => {
                   if (!reading || typeof reading !== 'object') {
                     return false;
@@ -976,7 +1270,8 @@ app.post("/api/tests/run-all", async (req, res) => {
                       return true;
                     }
 
-                    return false; // Keep waiting
+                    console.log(`⏳ Not all properties matched yet, continuing to wait...`);
+                    return false;
                   } else {
                     // Single property check
                     const receivedValue = reading[step.waitFor];
@@ -985,6 +1280,7 @@ app.post("/api/tests/run-all", async (req, res) => {
 
                     console.log(`   🔍 Checking: ${step.waitFor} = "${receivedValue}" (expected: "${step.expectedValue}")`);
 
+                    // Checking expected Value
                     if (normalizedReceived === normalizedExpected) {
                       clearTimeout(timeout);
                       clearTestWaitForMAC();
@@ -1069,6 +1365,7 @@ app.post("/api/tests/run-all", async (req, res) => {
           else {
             const testDeviceMAC = connectedMACs[0]; // Wait for first connected device
 
+
             let deviceResponse = null;
 
             // Precompute expectation (property-based or numeric)
@@ -1134,6 +1431,7 @@ app.post("/api/tests/run-all", async (req, res) => {
                   }
 
                   if (allMatch) {
+                    testPassed = true;
                     console.log(`✅ ALL properties matched!`);
                     clearTimeout(timeout);
                     clearTestWaitForMAC();
@@ -1161,6 +1459,7 @@ app.post("/api/tests/run-all", async (req, res) => {
                     const normalizedExpected = String(expectedValue).toUpperCase().trim();
 
                     if (normalizedReceived === normalizedExpected) {
+                      testPassed = true;
                       clearTimeout(timeout);
                       clearTestWaitForMAC();
                       // Cleanup handler on success
@@ -1433,11 +1732,27 @@ const tcpServer = net.createServer((socket) => {
       // debug.log(`Total buffer size: ${buffer.length} bytes`);
 
       while (buffer.length >= 58) {
+        console.log("Buffer: ", buffer);
         const bufStr = buffer.toString("utf-8");
+        console.log("BufStr: ", bufStr);
 
+        const ipStr = bufStr.substring(0, 8);
+        const ip = ipStr.match(/.{1,2}/g).map((hex) => parseInt(hex, 16)).join(".");
+        // const ip = `${ipStr[3]}.${ipStr[2]}.${ipStr[1]}.${ipStr[0]}`;
         // Search for first valid MAC pattern in buffer string
-        const macPattern = /[0-9a-fA-F]{2}(:[0-9a-fA-F]{2}){5}/;
-        const match = bufStr.match(macPattern);
+        // const macPattern = /[0-9a-fA-F]{2}(:[0-9a-fA-F]{2}){5}/;
+        // const ip = bufStr.substring(0,8);
+        console.log("Getted IP: ", ip);
+        console.log("Type of ip remote", typeof (socket.remoteAddress));
+
+        if (ip === socket.remoteAddress) {
+          console.log("IP Matched")
+        } else {
+          console.log("Not Matched")
+        }
+
+        const macPattern = /[0-9]{3}(.[0-9]{3})(.[0-9]{1})(.[0-9]{2})/;
+        const match = ip.match(macPattern);
 
         if (!match) {
           console.warn(
@@ -1463,8 +1778,10 @@ const tcpServer = net.createServer((socket) => {
         const packet = buffer.slice(0, 58);
         // console.log(packet);
 
-        const macRaw = packet.subarray(0, 17);
+        const macRaw = packet.subarray(0, 8);
+        console.log("Raw", macRaw);
         let macRawStr = macRaw.toString("utf-8");
+        console.log("Mac Str", macRawStr)
         console.log(
           `Received MAC: [${macRawStr}], length: ${macRawStr.length}`
         );
@@ -1472,20 +1789,21 @@ const tcpServer = net.createServer((socket) => {
         // Sanitize and verify MAC
         const sanitizedMac = macRawStr.replace(/[^0-9A-Fa-f:]/g, "");
         const macRegex = /^[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}$/;
-        if (sanitizedMac.length !== 17 || !macRegex.test(sanitizedMac)) {
-          console.warn(`⚠️ Dropping malformed MAC: INVALID_${Date.now()}`);
-          buffer = buffer.slice(58);
-          continue;
-        }
+        // if (sanitizedMac.length !== 17 || !macRegex.test(sanitizedMac)) {
+        //   console.warn(`⚠️ Dropping malformed MAC: INVALID_${Date.now()}`);
+        //   buffer = buffer.slice(58);
+        //   continue;
+        // }
 
-        const mac = sanitizedMac.toLowerCase();
+        // const mac = sanitizedMac.toLowerCase();
+        const mac = socket.remoteAddress;
         const humidity = +buffer.readFloatLE(17).toFixed(2);
         const insideTemperature = +buffer.readFloatLE(21).toFixed(2);
         const outsideTemperature = +buffer.readFloatLE(25).toFixed(2);
         const lockStatus = buffer[29] === 1 ? "OPEN" : "CLOSED";
         const doorStatus = buffer[30] === 1 ? "OPEN" : "CLOSED";
         const waterLogging = !!buffer[31];
-        const waterLeakage = !!buffer[32].toFixed(2);
+        const waterLeakage = !!buffer[32];
         const outputVoltage = (buffer.readInt16LE(33)) / 100;
         const hupsDVC = buffer.readInt16LE(35);
         const inputVoltage = (buffer.readInt16LE(37)) / 100;
@@ -1499,6 +1817,7 @@ const tcpServer = net.createServer((socket) => {
         const fanLevel4Running = !!buffer[50];
         const padding = buffer[51];
         console.log("Fire alarm: ", fireAlarm);
+        console.log("Water Leakage: ", waterLeakage);
 
         const hupsRes = buffer[56];
 
@@ -1596,7 +1915,6 @@ const tcpServer = net.createServer((socket) => {
         for (let i = 0; i < 6; i++) {
           fanStatus[i] = (fanStatusBits >> (i * 2)) & 0x03; // 0=off,1=healthy,2=faulty
         }
-        // console.log("fanStatus", fanStatusBits);
 
         const pwsFailCount = buffer[54];
         // console.log("Password Bit: ", pwsFailCount);
@@ -1712,6 +2030,7 @@ const tcpServer = net.createServer((socket) => {
           let logAlarm;
           if (fanStatus.includes(2)) {
             logAlarm = `[${timestamp}] | MAC: ${mac}| ${activeAlarms} | Fan Status: ${fanStatus}\n`;
+            console.log("Fan not working: ", fanStatus);
           } else {
             logAlarm = `[${timestamp}] | MAC: ${mac}| ${activeAlarms}\n`;
           }
@@ -1755,12 +2074,6 @@ const tcpServer = net.createServer((socket) => {
           fan4Status: fanStatus[3],
           fan5Status: fanStatus[4],
           fan6Status: fanStatus[5],
-          mainStatus: hupsAlarms[0],
-          rectStatus: hupsAlarms[1],
-          inveStatus: hupsAlarms[2],
-          overStatus: hupsAlarms[3],
-          mptStatus: hupsAlarms[4],
-          mosfStatus: hupsAlarms[5],
           hupsRes,
           ...thresholdAlarms,
           timestamp: new Date().toISOString(),

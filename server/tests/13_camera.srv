@@ -1,0 +1,14 @@
+name="Camera Test"
+msg="Testing camera capture functionality"
+pre="Please ensure camera is connected and accessible"
+type=camera
+pass="Camera is working correctly"
+fail="Camera test failed"
+
+[step:1]
+msg="Capturing image from camera."
+waitFor=capture
+cameraUrl="https://picsum.photos/640/480"
+waitTime=60
+onPass="Camera capture successful"
+onFail="Camera capture failed or user rejected"

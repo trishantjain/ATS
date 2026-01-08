@@ -1,7 +1,0 @@
-ATS Test Run - 06/01/26 16:28:55
-Device: 00-11-22-33-44-1d
-Total Tests: 3
-
-Test: Visual Test | Status: passed
-Test: Burn-In Test | Status: failed
-Test: Outside Temperature Test , Status: failed , Steps: 1/1

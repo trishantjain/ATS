@@ -1,0 +1,14 @@
+ATS Test Run - 07/01/26 17:49:01
+Device: 00-11-22-33-44-1d
+Total Tests: 15
+
+Test: Visual Test | Status: passed
+Test: Burn-In Test | Status: passed
+Test: Fan Test , Status: passed , Steps: 9/9
+Test: Limit Switch Test , Status: failed , Steps: 1/3
+Test: Fire Test , Status: passed , Steps: 3/3
+Test: Water Leakage Test , Status: failed , Steps: 1/3
+Test: EM Lock through Keypad , Status: passed , Steps: 3/3
+Test: EM Lock through eMS , Status: passed , Steps: 3/3
+Test: Water Logging Test , Status: failed , Steps: 1/3
+Test: Humidity Test , Status: failed , Steps: 1/1

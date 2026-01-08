@@ -31,8 +31,8 @@ onFail="Fan Group 1 not turned off"
 msg="Turn ON Fan Group 2"
 waitFor="fanLevel1Running;fanLevel2Running;fanLevel3Running;fanLevel4Running;fan1Status;fan2Status;fan3Status;fan4Status;fan5Status;fan6Status"
 waitTime=20
-expectedValue="false;true;false;false;0;0;1;0;0;0"
-onPass="Fan Group 2 turned on successfully"
+expectedValue="false;true;false;false;0;0;2;0;0;0"
+onPass="Fan Group 2 turned on successfull"
 onFail="Fan Group 2 not turned on"
 
 [step:5]

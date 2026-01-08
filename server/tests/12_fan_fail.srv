@@ -1,0 +1,28 @@
+name="Fan-Fail Test Test"
+pass="Fan-Fail Test successfully completed"
+fail="Fan-Fail Test failed"
+retryCount=0
+
+[step:1]
+msg="Turn On FG 1"
+waitFor="fanLevel1Running;fanLevel2Running;fanLevel3Running;fanLevel4Running;fan1Status;fan2Status;fan3Status;fan4Status;fan5Status;fan6Status"
+waitTime=30
+expectedValue="true;false;false;false;2;2;0;0;0;0"
+onPass="Door is closed, | Ready to test |"
+onFail="Door is still open. Close the door first."
+
+[step:2]
+msg="Remove Fan 1 Wire"
+waitFor="fanLevel1Running;fanLevel2Running;fanLevel3Running;fanLevel4Running;fan1Status;fan2Status;fan3Status;fan4Status;fan5Status;fan6Status"
+waitTime=20
+expectedValue="true;false;false;true;2;2;0;0;0;2"
+onPass="Door alarm triggered successfully"
+onFail="Door alarm did not trigger within time"
+
+[step:3]
+msg="Again connect Fan 1 Wire"
+waitFor="fanLevel1Running;fanLevel2Running;fanLevel3Running;fanLevel4Running;fan1Status;fan2Status;fan3Status;fan4Status;fan5Status;fan6Status"
+waitTime=20
+expectedValue="true;false;false;false;2;2;0;0;0;0"
+onPass="Door alarm went off successfully"
+onFail="Door alarm did not go off within time"

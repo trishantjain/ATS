@@ -11,7 +11,6 @@ expectedValue="0"
 onPass="Fire alarm is off, ready to test"
 onFail="Fire Alarm already ON"
 
-# Fan Group 1
 [step:2]
 msg="Start testing Fire Alarm"
 waitFor="fireAlarm"

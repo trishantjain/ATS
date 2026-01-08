@@ -8,6 +8,6 @@ retryCount=0
 msg="Outside Temperature Sensor test started"
 waitFor="outsideTemperature"
 waitTime=30
-increasedBy=3
+increasedBy=5
 onPass="Outside Temperature alarm successfully"
 onFail="Outside Temperature alarm not turned on"
