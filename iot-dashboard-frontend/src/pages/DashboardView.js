@@ -386,6 +386,40 @@ function DashboardView() {
   //   }
   // }
 
+  const showCameraDialog = ({ imagePath, message, onConfirm, onCancel }) => {
+    swal.fire({
+      title: '📷 Camera Test',
+      html: `
+      <div style="text-align: center;">
+        <p style="margin-bottom: 15px; font-size: 16px;">${message || 'Camera image captured. Please verify.'}</p>
+        <div style="background: #2a2a3a; padding: 15px; border-radius: 8px; margin: 15px 0;">
+          <p style="color: #00cccc; font-size: 14px; margin: 0;">📁 Image saved at:</p>
+          <p style="color: #ffcc00; font-size: 18px; font-family: monospace; margin: 10px 0; word-break: break-all;">
+            ${imagePath}
+          </p>
+        </div>
+        <p style="color: #aaa; font-size: 14px;">Please open the file to verify the image and confirm the result.</p>
+      </div>
+    `,
+      showCancelButton: true,
+      confirmButtonText: '✅ Pass',
+      cancelButtonText: '❌ Fail',
+      confirmButtonColor: '#28a745',
+      cancelButtonColor: '#dc3545',
+      background: '#1a1a2e',
+      color: '#fff',
+      width: '550px',
+      allowOutsideClick: false,
+      allowEscapeKey: false
+    }).then((result) => {
+      if (result.isConfirmed) {
+        onConfirm();
+      } else {
+        onCancel();
+      }
+    });
+  };
+
   useEffect(() => {
     const connectWebSocket = () => {
       console.log('🔄 Attempting WebSocket connection...');
@@ -407,6 +441,7 @@ function DashboardView() {
           const message = JSON.parse(event.data);
           console.log('📨 WebSocket message type:', message.type);
 
+          // Getting New Reading from Socket
           if (message.type === 'NEW_READING') {
             const newReading = message.data;
             setSelectedMac(prev => prev || newReading.mac);
@@ -530,6 +565,44 @@ function DashboardView() {
             }, 3000);
           }
 
+          if (message.type === 'CAMERA_IMAGE_CAPTURED') {
+            console.log('📷 Camera image captured:', message);
+
+            swal.fire({
+              title: '📷 Camera Test',
+              html: `
+      <div style="text-align: center;">
+        <p style="margin-bottom: 15px; font-size: 16px;">${message.message || 'Camera image captured. Please verify.'}</p>
+        <div style="background: #2a2a3a; padding: 15px; border-radius: 8px; margin: 15px 0;">
+          <p style="color: #00cccc; font-size: 14px; margin: 0;">📁 Image saved at:</p>
+          <p style="color: #ffcc00; font-size: 18px; font-family: monospace; margin: 10px 0; word-break: break-all;">
+            ${message.imagePath}
+          </p>
+        </div>
+        <p style="color: #aaa; font-size: 14px;">Please open the file to verify and confirm the result.</p>
+      </div>
+    `,
+              showCancelButton: true,
+              confirmButtonText: '✅ Pass',
+              cancelButtonText: '❌ Fail',
+              confirmButtonColor: '#28a745',
+              cancelButtonColor: '#dc3546ff',
+              background: '#1a1a2e',
+              color: '#fff',
+              width: '550px',
+              allowOutsideClick: false,
+              allowEscapeKey: false
+            }).then((result) => {
+              // Send the user's response back to the WebSocket
+              if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+                wsRef.current.send(JSON.stringify({
+                  type: 'DIALOG_RESPONSE',
+                  confirmed: result.isConfirmed // true for Pass, false for Fail
+                }));
+                console.log(`📤 Sent camera dialog response: ${result.isConfirmed ? 'PASS' : 'FAIL'}`);
+              }
+            });
+          }
         } catch (err) {
           console.error('❌ WebSocket message parse error:', err);
         }
