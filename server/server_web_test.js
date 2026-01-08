@@ -1754,13 +1754,13 @@ const tcpServer = net.createServer((socket) => {
         const macPattern = /[0-9]{3}(.[0-9]{3})(.[0-9]{1})(.[0-9]{2})/;
         const match = ip.match(macPattern);
 
-        if (!match) {
-          console.warn(
-            `No MAC found in buffer, discarding ${buffer.length} bytes`
-          );
-          buffer = Buffer.alloc(0);
-          break;
-        }
+        // if (!match) {
+        //   console.warn(
+        //     `No MAC found in buffer, discarding ${buffer.length} bytes`
+        //   );
+        //   buffer = Buffer.alloc(0);
+        //   break;
+        // }
 
         const macStartIndex = bufStr.indexOf(match[0]);
 
