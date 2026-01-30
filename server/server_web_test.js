@@ -2075,6 +2075,40 @@ app.post('/api/tests/fan-test', async (req, res) => {
 });
 
 // ✅ TEST LIST GET API 
+app.get('/api/tests/:testType', async (req, res) => {
+  try {
+    const testType = req.params.testType;
+
+    const testDir = path.join(__dirname, `/tests/${testType}`);
+
+    // Create test directory if it doesn't exist
+    if (!fs.existsSync(testDir)) {
+      res.json({ msg: "Test Folder not found" });
+    }
+
+    // Fetching test files
+    const files = await fs.promises.readdir(testDir);
+
+    let testFiles = files
+      .filter(file => {
+        const ext = path.extname(file).toLowerCase();
+        return ['.srv'].includes(ext);
+      })
+      .sort((a, b) => {
+        // Extract numbers from filenames for sorting
+        const numA = parseInt(a.split('_')[0]) || 0;
+        const numB = parseInt(b.split('_')[0]) || 0;
+        return numA - numB;
+      });
+
+    console.log("Files fettched: ", testFiles);
+    res.status(200).send(testFiles);
+  } catch (err) {
+    console.error("Error in Fan Test List API", err);
+  }
+});
+
+
 // 📡 TCP Server
 const BULK_SAVE_LIMIT = 1000;
 let alreadyReplied = 0;
