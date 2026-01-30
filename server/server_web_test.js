@@ -12,6 +12,7 @@ const thresholds = require("./thresholds");
 const fs = require("fs");
 const path = require("path");
 const axios = require('axios');
+const { spawn } = require('child_process');
 const WebSocket = require('ws');
 
 const app = express();
@@ -529,7 +530,7 @@ app.post("/api/test/run", async (req, res) => {
   }
 });
 
-// ✅ Stop ongoing tests
+// ✅ STOP TEST EXECUTION
 app.post("/api/tests/stop", (req, res) => {
   console.log("🛑 /api/tests/stop endpoint called");
   requestTestStop();
@@ -608,7 +609,7 @@ app.post("/api/tests/run-all", async (req, res) => {
     // Write frontend test results to report first
     if (frontendResults && Array.isArray(frontendResults)) {
       for (const fr of frontendResults) {
-        const reportLine = `Test: ${fr.name} | Status: ${fr.status}\n`;
+        const reportLine = `Test: ${fr.name} , Status: ${fr.status}\n`;
         await fs.promises.appendFile(testReportFilePath, reportLine);
         results.push(fr);
         console.log(`    📝 Frontend test saved: ${fr.name} - ${fr.status}`);
@@ -2724,7 +2725,8 @@ const tcpServer = net.createServer((socket) => {
           mosfStatus: hupsAlarms[5],
           hupsRes,
           ...thresholdAlarms,
-          timestamp: new Date().toISOString(),
+          // Set timestamp to IST
+          timestamp: packetTimestamp
         };
 
         // Track connected device socket and broadcast to any connected frontend clients
