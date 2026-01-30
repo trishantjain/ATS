@@ -219,7 +219,14 @@ mongoose
   .then(() => console.log("MongoDB connected"))
   .catch((err) => console.error("MongoDB connection error:", err.message));
 
-// ===================== HTTP API Endpoints =====================
+
+
+
+// ===================== HTTP API Endpoints (unchanged) =====================
+/* When a GET request is made to "/ping", it will attempt to ping the MongoDB database using Mongoose. 
+   If the ping is successful, it will respond with "pong". If the ping fails, it will log an error message and
+   respond with "MongoDB unreachable" along with a status code of 500. 
+*/
 app.get("/ping", async (req, res) => {
   try {
     await mongoose.connection.db.admin().ping();
@@ -254,6 +261,10 @@ app.get("/api/websocket-test", (req, res) => {
 });
 
 // ✅ Login route (admin hardcoded via .env)
+/* It is checking if the provided username and password in the request body match the admin username and password stored in the
+   environment variables. If the credentials match, it generates a JSON Web Token (JWT) with the
+   username "admin" and role "admin" and sends it back in the response along with the role "admin". 
+*/
 app.post("/api/login", async (req, res) => {
   const { username, password } = req.body;
 
@@ -283,7 +294,7 @@ app.post("/api/login", async (req, res) => {
     { expiresIn: "2h" }
   );
 
-  res.json({ role: user.role, token });
+  res.json({ role: user.role, token }); // ✅ return role and token
 });
 
 // ✅ Get registered device metadata
@@ -636,6 +647,7 @@ app.post("/api/tests/run-all", async (req, res) => {
           const fileContent = await fs.promises.readFile(testFilePath, "utf-8");
           const lines = fileContent.split('\n').map(line => line.trim()).filter(line => line && !line.startsWith('#'));
 
+          // OBJECT: SINGLE TEST DETAILS
           let testConfig = {
             name: "",
             message: "",
@@ -674,7 +686,7 @@ app.post("/api/tests/run-all", async (req, res) => {
               continue;
             }
 
-            // Properties inside the steps
+            // PROPERTIES INSIDE THE STEPS
             if (currentStep) {
               if (line.startsWith('msg=')) {
                 currentStep.msg = line.substring(4).replace(/["\']/g, '');
@@ -693,8 +705,9 @@ app.post("/api/tests/run-all", async (req, res) => {
               } else if (line.startsWith('cameraUrl=')) {
                 currentStep.cameraUrl = line.substring(10).replace(/["\']/g, '');
               }
-            } else {
-              // Properties before the steps
+            }
+            // PROPERTIES BEFORE THE STEPS
+            else {
               if (line.startsWith('name=')) {
                 testConfig.name = line.substring(5).replace(/["\']/g, '');
               } else if (line.startsWith('msg=')) {
@@ -2175,7 +2188,13 @@ function resetTestStopFlag() {
   testStopRequested = false;
 }
 
-
+// Function to get formatted Date and Time
+/*
+  Pass any string to function to get Date & Time in below format: 
+  20_01_26_12_45_52
+  Without passing any argument will get below Data & Time format: 
+  20/01/26 12:45:52
+*/
 function getFormattedDateTime(outType = 'string') {
   // Pass any string to function if you want output in second way
   const today = new Date();
