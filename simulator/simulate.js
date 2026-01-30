@@ -51,8 +51,14 @@ setTimeout(() => {
   scheduleCameraClicker();
 }, 30000);
 
-function generateMac(index) {
-  return `00:11:22:33:44:${(index % 256).toString(16).padStart(2, '0').toUpperCase()}`;
+// CREATING IP FOR DEVICES
+function generateIP(index) {
+  return `192.168.0.${(index % 256).toString(10).padStart(2, '0')}`;
+}
+
+
+function ipStringToBuffer(ip) {
+  return Buffer.from(ip.split('.').map(n => parseInt(n, 10)));
 }
 
 function toFloatLE(value) {
@@ -67,7 +73,7 @@ function toShortLE(value){
   return buf;
 }
 
-// Reading CSV File
+// READING CSV FILE
 function readCSV(filePath) {
   return new Promise((resolve, reject) => {
     const results = [];
@@ -262,31 +268,36 @@ function startDevice(mac, index) {
           const triggerAlarm = !isHealthyDevice || inAlarmPhase;
 
           // SENSOR DATA GENERATION
+          // Gauge
           const humidity = triggerAlarm ? 85 + Math.random() * 10 : 55 + Math.random() * 5;
           const insideTemp = triggerAlarm ? 55 + Math.random() * 5 : 35 + Math.random() * 3;
           const outsideTemp = triggerAlarm ? 65 + Math.random() * 5 : 40 + Math.random() * 3;
+          const outputVoltage = triggerAlarm ? 2.5 + Math.random() * 10 : 3.3 + Math.random() * 10;
+          const inputVoltage = triggerAlarm ? 2.5 + Math.random() * 10 : 3.3 + Math.random() * 10;
+          const batteryBackup = triggerAlarm ? 12 + Math.random() * 2 : 20 + Math.random() * 3;
+
+          // status
           const lockStatus = Math.random() < 0.5 ? 1 : 0;
-          const doorStatus = 1;
           // const doorStatus = Math.random() < 0.5 ? 1 : 0;
+          const doorStatus = 1;
           const waterLogging = triggerAlarm && Math.random() < 0.2 ? 1 : 0;
           // const waterLeakage = !triggerAlarm && Math.random() < 0.2 ? 1 : 0;
           const waterLeakage = 1;
-          const outputVoltage = triggerAlarm ? 2.5 + Math.random() * 10 : 3.3 + Math.random() * 10;
-          const hupsDVC = triggerAlarm ? 2.5 + Math.random() * 10 : 3.3 + Math.random() * 10;
-          const inputVoltage = triggerAlarm ? 2.5 + Math.random() * 10 : 3.3 + Math.random() * 10;
-          const hupsBat = triggerAlarm ? 2.5 + Math.random() * 10 : 3.3 + Math.random() * 10;
-          const batteryBackup = triggerAlarm ? 12 + Math.random() * 2 : 20 + Math.random() * 3;
-          const alarmActive = waterLogging || waterLeakage;
           const fireAlarm = 1;
-
+          
           // Fan Group Control
           const fan1 = 1;
           const fan2 = 1;
           const fan3 = 0;
           const fan4 = 0;
 
-          // 6 Fans Status
-          const fanManualBits = [1,1,0,0,0,0]
+          // hups
+          const hupsDVC = triggerAlarm ? 2.5 + Math.random() * 10 : 3.3 + Math.random() * 10;
+          const hupsBat = triggerAlarm ? 2.5 + Math.random() * 10 : 3.3 + Math.random() * 10;
+          const alarmActive = waterLogging || waterLeakage;
+
+          // 6 FANS INDIVIDUAL STATUS
+          const fanManualBits = [0, 0, 0, 0, 0, 0]
           const fanStatuses = [];
           for (let i = 0; i < 6; i++) {
             const rand = Math.random();
@@ -323,7 +334,9 @@ function startDevice(mac, index) {
           // failBuf4.writeUInt16LE(failMask4, 0);
 
           const packet = Buffer.concat([
-            Buffer.from(mac.padEnd(17, ' '), 'utf-8'), //0-16
+            // Buffer.from(mac.padEnd(17, ' '), 'utf-8'), //0-16
+            ipStringToBuffer(mac),
+            Buffer.alloc(13, 0x00),   // 13 bytes ZERO padding
             toFloatLE(humidity),  //17-20
             toFloatLE(insideTemp), //21-24
             toFloatLE(outsideTemp), //25-28
@@ -561,8 +574,10 @@ function startDataDispatcher() {
 
 async function initializeSimulator() {
   try {
+    if (isCSVMode === true) {
+
     console.log('📄 Attempting to load CSV data...');
-    csvData = await readCSV('D:/TechnoTrendz/simulator/sim_pack.csv');
+      csvData = await readCSV(process.env.CSV_PATH || './sim_pack2.csv');
 
     preIndexCSVData();
 
@@ -579,7 +594,7 @@ async function initializeSimulator() {
 
     // Start all devices
     for (let i = 0; i < TOTAL_DEVICES; i++) {
-      const mac = generateMac(i);
+        const mac = generateIP(i);
       startDevice(mac, i);
       devices.push(mac);
     }
@@ -589,16 +604,19 @@ async function initializeSimulator() {
       startDataDispatcher();
     }, 3000);
 
-  } catch (err) {
+    } else {
     console.log('❌ CSV not found, using FULL RANDOM mode...');
     isCSVMode = false;
 
     // Start all devices in random mode
     for (let i = 0; i < TOTAL_DEVICES; i++) {
-      const mac = generateMac(i);
+        const mac = generateIP(i);
       startDevice(mac, i);
       devices.push(mac);
     }
+    }
+  } catch (err) {
+    console.log("Error in starting Simulator");
   }
 }
 
