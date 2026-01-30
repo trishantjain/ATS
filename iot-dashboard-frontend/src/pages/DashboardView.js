@@ -270,53 +270,6 @@ function DashboardView() {
     }
   };
 
-  // Run ATS: Frontend dialogs first, then server tests
-  async function iMoni_test() {
-    setAwaitingCommand(true); // Shows 'Running...' state
-    const frontendResults = []; // Stores Visual & Burn-in results
-
-    // 1. Visual Test (frontend dialog)
-    const v = await swal.fire({
-      title: 'Visual Test',
-      text: 'Is Visual inspection passed?',
-      showCancelButton: true,
-      confirmButtonText: 'Pass',
-      cancelButtonText: 'Fail'
-    });
-    frontendResults.push({
-      name: 'Visual Test',
-      status: v.isConfirmed ? 'passed' : 'failed',
-      passed: v.isConfirmed
-    });
-
-    // 2. Burn-In Test (frontend dialog)  
-    const b = await swal.fire({
-      title: 'Burn-In Test',
-      text: 'Is Burn-In test passed?',
-      showCancelButton: true,
-      confirmButtonText: 'Pass',
-      cancelButtonText: 'Fail'
-    });
-    frontendResults.push({
-      name: 'Burn-In Test',
-      status: b.isConfirmed ? 'passed' : 'failed',
-      passed: b.isConfirmed
-    });
-
-    // 3. Runs API '/tests/run-all/'
-    try {
-      const resp = await fetch(`${process.env.REACT_APP_API_URL}/api/tests/run-all`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mac: selectedMac, skipFrontendTests: true, frontendResults })
-      });
-      const data = await resp.json();
-      setTestStatus(`Done: ${data.summary.passed} passed, ${data.summary.failed} failed`);
-    } catch (err) {
-      setTestStatus(`Error: ${err.message}`);
-    }
-    setAwaitingCommand(false);
-  }
 
 
   // New test function with step-by-step execution
@@ -632,6 +585,97 @@ function DashboardView() {
 
     return () => clearInterval(snapshotInterval); // ✅ Cleanup
   }, [selectedMac]);
+  // Run ATS: Frontend dialogs first, then server tests
+  async function iMoni_test() {
+    setAwaitingCommand(true); // Shows 'Running...' state
+    const frontendResults = []; // Stores Visual & Burn-in results
+
+    if (selectedTests.length === testList.length) {
+
+
+      // 1. Visual Test (frontend dialog)
+      const v = await swal.fire({
+        title: 'Visual Test',
+        text: 'Is Visual inspection passed?',
+        showCancelButton: true,
+        confirmButtonText: 'Pass',
+        cancelButtonText: 'Fail'
+      });
+      frontendResults.push({
+        name: 'Visual Test',
+        status: v.isConfirmed ? 'passed' : 'failed',
+        passed: v.isConfirmed
+      });
+
+      // 2. Burn-In Test (frontend dialog)  
+      const b = await swal.fire({
+        title: 'Burn-In Test',
+        text: 'Is Burn-In test passed?',
+        showCancelButton: true,
+        confirmButtonText: 'Pass',
+        cancelButtonText: 'Fail'
+      });
+      frontendResults.push({
+        name: 'Burn-In Test',
+        status: b.isConfirmed ? 'passed' : 'failed',
+        passed: b.isConfirmed
+      });
+
+      // 3. Runs API '/tests/run-all/'
+      try {
+        const resp = await fetch(`${process.env.REACT_APP_API_URL}/api/tests/run-all`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ mac: selectedMac, skipFrontendTests: true, frontendResults })
+        });
+        const data = await resp.json();
+        setTestStatus(`Done: ${data.summary.passed} passed, ${data.summary.failed} failed`);
+      } catch (err) {
+        setTestStatus(`Error: ${err.message}`);
+      }
+    } else {
+      console.log("Selected Test code runs ...");
+
+      try {
+        const resp = await fetch(`${process.env.REACT_APP_API_URL}/api/tests/run`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ mac: selectedMac, selectedProduct, selectedTests })
+        });
+        const data = await resp.json();
+        setTestStatus(`Done: ${data.summary.passed} passed, ${data.summary.failed} failed`);
+      } catch (err) {
+        setTestStatus(`Error: ${err.message}`);
+      }
+    }
+    setAwaitingCommand(false);
+  }
+
+  async function fan_test() {
+    setFanTestStatus(true);
+
+    try {
+      console.log("Calling /fan-test API...");
+      const resp = await fetch(`${process.env.REACT_APP_API_URL}/api/tests/fan-test`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mac: selectedMac })
+      });
+      console.log("...API Called")
+      const data = await resp.json();
+      console.log("Data: ", data);
+      setTestStatus(`Done: ${data.summary.passed} passed, ${data.summary.failed} failed`);
+    } catch (err) {
+      setTestStatus(`Error: ${err.message}`);
+    }
+    setFanTestStatus(false);
+  }
+
+  async function pdu_test() {
+    console.log("PDU Test function called");
+  };
+
+
 
   const alarmKeys = [
     {
@@ -895,7 +939,6 @@ function DashboardView() {
                 Gauges
               </button>
 
-
               {"gauges" && (
                 <div className="gauges grid-3x3">
                   <Gauge
@@ -982,7 +1025,7 @@ function DashboardView() {
                 Status
               </button>
               <span>SysId: {selectedMac.slice(9, 17)}</span>
-
+              <span>SysId: {selectedMac.slice(8)}</span>
               {"status" && (
                 <div className="alarm-group">
                   <div className="fan-status">
@@ -1130,7 +1173,8 @@ function DashboardView() {
               >
                 Snapshots
               </button>
-              {/* Full Screen Image Modal with Navigation */}
+
+              {/* FULL SCREEN IMAGE MODAL */}
               {selectedImage && (
                 <div
                   className="fullscreen-modal"
