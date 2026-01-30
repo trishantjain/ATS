@@ -365,6 +365,7 @@ function DashboardView() {
   //   }
   // }
 
+  // CAMERA TEST DIALOG BOX
   const showCameraDialog = ({ imagePath, message, onConfirm, onCancel }) => {
     swal.fire({
       title: '📷 Camera Test',
@@ -621,7 +622,7 @@ function DashboardView() {
   //   }
   // };
 
-  // Fetch snapshots on component mount
+  // SNAPSHOT FETCHING USEEFFECT
   useEffect(() => {
     fetchSnapshots(selectedMac);
 
@@ -719,16 +720,11 @@ function DashboardView() {
         </div>
       </div>
 
+      {/* TEST PANEL */}
       <div className="test-controls-panel">
         <h2>🧪 ATS Test Controls</h2>
         <div className="test-buttons">
-          <button
-            className="btn-test"
-            onClick={iMoni_test}
-            disabled={awaitingCommand}
-          >
-            {awaitingCommand ? "Running ATS..." : "Run ATS Tests"}
-          </button>
+          {/* CANCEL ATS TEST BUTTON */}
           {awaitingCommand && (
             <button
               className="btn-test-stop"
@@ -771,7 +767,7 @@ function DashboardView() {
           </button> */}
         </div>
 
-        {/* Notification Banner */}
+        {/* TEST NOTIFICATION BANNER */}
         {notification && (
           <div style={{
             backgroundColor: notification.type === 'success' ? '#1a3a2a' : notification.type === 'error' ? '#3a1a1a' : '#1a3a3a',
@@ -868,6 +864,7 @@ function DashboardView() {
         )}
       </div>
 
+      {/* DASHBOARD */}
       <div className="dashboard">
         <div className="panel">
           <h2 className="selected-heading">
@@ -890,7 +887,7 @@ function DashboardView() {
                 </button> */}
               </div>
 
-              {/* GAUGES */}
+              {/* ============================== TAB : GAUGES ============================== */}
               <button
                 className="tabs-button"
                 onClick={() => setActiveTab("gauges")}
@@ -977,7 +974,7 @@ function DashboardView() {
                 </div>
               )}
 
-              {/* STATUS */}
+              {/* ============================== TAB : STATUS ============================== */}
               <button
                 className="tabs-button"
                 onClick={() => setActiveTab("status")}
@@ -1126,7 +1123,7 @@ function DashboardView() {
                 </div>
               )}
 
-              {/* SNAPSHOTS */}
+              {/* ============================== TAB : SNAPSHOTS ============================== */}
               <button
                 className="tabs-button"
                 onClick={() => setActiveTab("gauges")}
@@ -1210,7 +1207,6 @@ function DashboardView() {
                 </div>
               )}
 
-              {/* Snapshots */}
               {activeTab === "snapshots" && (
                 <div className="camera-tab">
                   <h4>🖼️ Snapshots</h4>
@@ -1252,6 +1248,7 @@ function DashboardView() {
   );
 }
 
+// GAUGE COMPONENT
 function Gauge({ label, value, max, color, alarm = false }) {
   return (
     <div className={`gauge-box small ${alarm ? "alarm" : ""}`}>
