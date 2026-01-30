@@ -2175,123 +2175,166 @@ function sendX(socket) {
 
 // TCP Server
 const tcpServer = net.createServer((socket) => {
-  let buffer = Buffer.alloc(0);
+  socket.buffer = Buffer.alloc(0);
   const clientInfo = `${socket.remoteAddress}:${socket.remotePort}`;
 
   debug.log(`New TCP Connection from`, clientInfo);
 
   socket.on("data", async (data) => {
-    console.log(
-      `Received packet (${data.length} bytes):`,
-      data.toString("hex")
-    );
-    buffer = Buffer.concat([buffer, data]);
+    let packetCount = 0;
+    const dataStart = Date.now();
+    // buffer = Buffer.concat([buffer, data]);
+    socket.buffer = Buffer.concat([socket.buffer, data]);
+    const PACKET_LEN = 58;
 
     try {
-      debug.packetCount++;
-      debug.lastPacketTime = Date.now();
-      debug.bufferStats.totalBytes += data.length;
+      // console.packetCount++;
+      // debug.lastPacketTime = Date.now();
+      // debug.bufferStats.discardedBytes.totalBytes += data.length;
 
-      debug.log(`Raw data received (${data.length} bytes) from`, clientInfo);
-      // debug.log(`Raw data hex preview:`, data.toString('hex').substring(0, 100) + '...');
+      console.log(`Raw data received ${data.toString('hex')} with length (${data.length} bytes) from`, clientInfo);
+      // console.log(`Raw data hex preview:`, data.toString('hex').substring(0, 100) + '...');
 
-      buffer = Buffer.concat([buffer, data]);
-      // debug.log(`Total buffer size: ${buffer.length} bytes`);
+      // buffer = Buffer.concat([buffer, data]);
+      // console.log(`Total buffer size: ${buffer.length} bytes`);
 
-      while (buffer.length >= 58) {
-        console.log("Buffer: ", buffer);
-        const bufStr = buffer.toString("utf-8");
-        console.log("BufStr: ", bufStr);
+      while (socket.buffer.length >= 58) {
+        packetCount++;
+        // const packet = socket.buffer.slice(0, PACKET_LEN);
 
-        const ipStr = bufStr.substring(0, 8);
-        const ip = ipStr.match(/.{1,2}/g).map((hex) => parseInt(hex, 16)).join(".");
-        // const ip = `${ipStr[3]}.${ipStr[2]}.${ipStr[1]}.${ipStr[0]}`;
-        // Search for first valid MAC pattern in buffer string
-        // const macPattern = /[0-9a-fA-F]{2}(:[0-9a-fA-F]{2}){5}/;
-        // const ip = bufStr.substring(0,8);
-        console.log("Getted IP: ", ip);
-        console.log("Type of ip remote", typeof (socket.remoteAddress));
+        // console.log(`[eMS_LOGS] Parsing packet #${packetCount} in this data event, buffer.length=${buffer.length}`);
 
-        if (ip === socket.remoteAddress) {
-          console.log("IP Matched")
-        } else {
-          console.log("Not Matched")
+        // if (buffer.length < 4) break;
+
+        const b0 = socket.buffer[0];
+        const b1 = socket.buffer[1];
+        const b2 = socket.buffer[2];
+        const b3 = socket.buffer[3];
+
+
+        // invalid / garbage header → resync exactly like MAC
+        if (
+          b0 === 0 || b0 === 255 ||           // invalid first octet
+          b1 === undefined || b2 === undefined || b3 === undefined
+        ) {
+          socket.buffer = socket.buffer.slice(1);
+          continue;
         }
 
-        const macPattern = /[0-9]{3}(.[0-9]{3})(.[0-9]{1})(.[0-9]{2})/;
-        const match = ip.match(macPattern);
+
+        // wait for full packet
+        if (socket.buffer.length < 58) break;
+
+        const packet = socket.buffer.slice(0, 58);
+        socket.buffer = socket.buffer.slice(58);
+
+        const ip = `${packet[0]}.${packet[1]}.${packet[2]}.${packet[3]}`;
+
+        //! =============== CODE FOR MAC CHECKING =============== 
+        // const bufStr = buffer.toString("utf-8");
+
+        // // Search for first valid MAC pattern in buffer string
+        // const macPattern = /[0-9]{3}(.[0-9]{3})(.[0-9]{1})(.[0-9]{3})/;
+        // const match = bufStr.match(macPattern);
 
         // if (!match) {
         //   console.warn(
-        //     `No MAC found in buffer, discarding ${buffer.length} bytes`
+        //     `No IP found in buffer, discarding ${buffer.length} bytes`
         //   );
         //   buffer = Buffer.alloc(0);
         //   break;
         // }
 
-        const macStartIndex = bufStr.indexOf(match[0]);
+        // const macStartIndex = bufStr.indexOf(match[0]);
 
-        if (macStartIndex > 0) {
-          console.warn(`Discarding ${macStartIndex} bytes of junk before MAC`);
-          buffer = buffer.slice(macStartIndex);
-          continue;
-        }
+        // if (macStartIndex > 0) {
+        //   console.warn(`Discarding ${macStartIndex} bytes of junk before MAC`);
+        //   buffer = buffer.slice(macStartIndex);
+        //   continue;
+        // }
 
-        if (buffer.length < 58) {
-          break;
-        }
+        // if (socket.buffer.length < 58) {
+        //   // Wait for more data for complete packet
+        //   break;
+
 
         // Extract one full packet starting at MAC
-        const packet = buffer.slice(0, 58);
-        // console.log(packet);
+        // const packet = buffer.slice(0, 58);
 
-        const macRaw = packet.subarray(0, 8);
-        console.log("Raw", macRaw);
-        let macRawStr = macRaw.toString("utf-8");
-        console.log("Mac Str", macRawStr)
-        console.log(
-          `Received MAC: [${macRawStr}], length: ${macRawStr.length}`
-        );
+        // const macRaw = packet.subarray(0, 17);
+        // let macRawStr = macRaw.toString("utf-8");
+        // console.log(
+        //   `Received MAC: [${macRawStr}], length: ${macRawStr.length}`
+        // );
 
         // Sanitize and verify MAC
-        const sanitizedMac = macRawStr.replace(/[^0-9A-Fa-f:]/g, "");
-        const macRegex = /^[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}$/;
+        // const sanitizedMac = macRawStr.replace(/[^0-9A-Fa-f:]/g, "");
+        // const macRegex = /^[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}$/;
         // if (sanitizedMac.length !== 17 || !macRegex.test(sanitizedMac)) {
         //   console.warn(`⚠️ Dropping malformed MAC: INVALID_${Date.now()}`);
         //   buffer = buffer.slice(58);
         //   continue;
         // }
-
+        //! =============== CODE FOR MAC CHECKING =============== 
         // const mac = sanitizedMac.toLowerCase();
-        const mac = socket.remoteAddress;
-        const humidity = +buffer.readFloatLE(17).toFixed(2);
-        const insideTemperature = +buffer.readFloatLE(21).toFixed(2);
-        const outsideTemperature = +buffer.readFloatLE(25).toFixed(2);
-        const lockStatus = buffer[29] === 1 ? "OPEN" : "CLOSED";
-        const doorStatus = buffer[30] === 1 ? "OPEN" : "CLOSED";
-        const waterLogging = !!buffer[31];
-        const waterLeakage = !!buffer[32];
-        const outputVoltage = (buffer.readInt16LE(33)) / 100;
-        const hupsDVC = buffer.readInt16LE(35);
-        const inputVoltage = (buffer.readInt16LE(37)) / 100;
-        const hupsBatVolt = (buffer.readInt16LE(39)) / 100;
-        const batteryBackup = +buffer.readFloatLE(41).toFixed(2);
-        const alarmActive = !!buffer[45];
-        const fireAlarm = buffer[46];
-        const fanLevel1Running = !!buffer[47];
-        const fanLevel2Running = !!buffer[48];
-        const fanLevel3Running = !!buffer[49];
-        const fanLevel4Running = !!buffer[50];
-        const padding = buffer[51];
-        console.log("Fire alarm: ", fireAlarm);
-        console.log("Water Leakage: ", waterLeakage);
 
-        const hupsRes = buffer[56];
+        // console.log("Extracted IP: ", extractedIP);
+        const mac = ip; //! Converting to LowerCase()
+        const humidity = +packet.readFloatLE(17).toFixed(2);
+        const insideTemperature = +packet.readFloatLE(21).toFixed(2);
+        const outsideTemperature = +packet.readFloatLE(25).toFixed(2); // "+" converts string to number as toFixed return string
 
-        const failMask = buffer[57];
+        const lockStatus = packet[29] === 1 ? "OPEN" : "CLOSED";
+        const doorStatus = packet[30] === 1 ? "OPEN" : "CLOSED";
+        const waterLogging = !!packet[31]; // "!!" -> converts true/false to 1/0
+        const waterLeakage = !!packet[32];
 
-        console.log("Fan Status: ", fanLevel2Running)
-        console.log("⚡Output Volt: ", outputVoltage);
+        const outputVoltage = +packet.readInt16LE(33).toFixed(2);
+        const hupsDVC = packet.readInt16LE(35);
+        const inputVoltage = +packet.readInt16LE(37).toFixed(2);
+        const hupsBatVolt = packet.readInt16LE(39);
+        const batteryBackup = +packet.readFloatLE(41).toFixed(2);
+
+        const alarmActive = !!packet[45];
+        const fireAlarm = packet[46];
+        const fanLevel1Running = !!packet[47];
+        const fanLevel2Running = !!packet[48];
+        const fanLevel3Running = !!packet[49];
+        const fanLevel4Running = !!packet[50];
+
+        const padding = packet[51]; // unused
+        const fanStatusBits = packet.readUInt16LE(52);
+
+        const pwsFailCount = packet[54]; // Password Failure Count
+        const hupsStat = packet[55]; // unused
+        const hupsRes = packet[56]; // unused
+        const failMask = packet[57]; // unused
+
+        const packetTimestamp = new Date();
+
+        // Getting HUPS Alarms
+        const hupsAlarms = []
+        /* 
+            Extracting Individual HUPS Alarms from 'hupsStat' using bitwise operations. 
+            Each alarm is represented by a single bit within the 'hupsStat' integer. 
+            The loop iterates 8 times (for 8 alarms), extracting each bit and 
+            storing the alarm status in the 'hupsAlarms' array.
+        */
+        for (let i = 0; i < 8; i++) {
+          hupsAlarms[i] = (hupsStat >> (i) & 0x01);
+        }
+
+        /*
+          Extracting Individual Fan Status from 'fanStatusBits' using bitwise operations. 
+          Each fan's status is represented by 2 bits within the 'fanStatusBits' integer. 
+          The loop iterates 6 times (for 6 fans), extracting the relevant 2 bits for each fan and 
+          storing the status in the 'fanStatus' array.
+        */
+        const fanStatus = [];
+        for (let i = 0; i < 6; i++) {
+          fanStatus[i] = (fanStatusBits >> (i * 2)) & 0x03; // 0=off, 1=healthy, 2=faulty
+        }
+
 
         if (padding === 0x31 && !alreadyReplied) {
           sendX(socket);
@@ -2403,8 +2446,8 @@ const tcpServer = net.createServer((socket) => {
 
         if (floats.some((val) => isNaN(val) || Math.abs(val) > 100000)) {
           console.warn(`⚠️ Skipping packet from ${mac}: bad float value(s)`);
-          buffer = buffer.slice(58);
-          continue;
+          // buffer = buffer.slice(58);
+          // continue;
         }
 
         if (Math.random() < 0.01) {
@@ -2577,12 +2620,12 @@ const tcpServer = net.createServer((socket) => {
             }
           });
         }
+        socket.buffer = socket.buffer.slice(PACKET_LEN);
 
-        buffer = buffer.slice(58);
-        debug.log(`✅ Packet processed successfully for MAC: ${mac}`, `Time: ${getFormattedDateTime()}`);
+        debugger;
+        if (eMS_LOGS) console.log(`✅ Packet processed successfully for MAC: ${mac}`, `Time: ${getFormattedDateTime()}`);
       }
     } catch (err) {
-      debug.error(`Critical error in data handler from ${clientInfo}`, err);
       console.error("Packet parsing failed:", err.message);
       socket.destroy();
     }
@@ -2591,7 +2634,7 @@ const tcpServer = net.createServer((socket) => {
   socket.on("end", () => {
     for (const [mac, sock] of connectedDevices.entries()) {
       if (sock === socket) {
-        connectedDevices.delete(mac);
+        connectedDevices.delete(socket.deviceId);
         console.log(`Device ${mac} disconnected`);
       }
     }
@@ -2603,9 +2646,6 @@ const tcpServer = net.createServer((socket) => {
     }
   });
 });
-
-// Periodic bulk save
-// No periodic DB bulk save during real-time testing (removed)
 
 // Start servers
 tcpServer.listen(4000, "0.0.0.0", () => {
