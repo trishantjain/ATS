@@ -1,7 +1,0 @@
-ATS Test Run - 06/01/26 00:51:26
-Device: 00-11-22-33-44-00
-Total Tests: 9
-
-Test: Visual Test | Status: passed
-Test: Burn-In Test | Status: passed
-Test: Fan Test , Status: failed , Steps: 1/9

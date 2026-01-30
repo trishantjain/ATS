@@ -1,0 +1,19 @@
+ATS Test Run - 09/01/26 12:23:19
+Device: 192.168.0.24
+Total Tests: 15
+
+Test: Visual Test , Status: passed
+Test: Burn-In Test , Status: passed
+Test: Fan Test , Status: passed , Steps: 9/9
+Test: Limit Switch Test , Status: passed , Steps: 3/3
+Test: Fire Test , Status: failed , Steps: 1/3
+Test: Water Leakage Test , Status: passed , Steps: 3/3
+Test: EM Lock through Keypad , Status: passed , Steps: 3/3
+Test: EM Lock through eMS , Status: passed , Steps: 3/3
+Test: Water Logging Test , Status: passed , Steps: 3/3
+Test: Humidity Test , Status: failed , Steps: 1/1
+Test: Inside Temperature Test , Status: failed , Steps: 1/1
+Test: Outside Temperature Test , Status: passed , Steps: 1/1
+Test: Non - Critical Load Test , Status: passed , Steps: 3/3
+Test: Fan-Fail Test Test , Status: failed , Steps: 2/3
+Test: Camera Test , Status: passed , Steps: 1/1
