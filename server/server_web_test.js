@@ -2109,6 +2109,37 @@ app.get('/api/tests/:testType', async (req, res) => {
 });
 
 
+
+const eMS_LOGS = process.env.eMS_LOGS === "true";
+console.log(`[BOOT] eMS_LOGS is`, eMS_LOGS);
+
+const INC_LOGS_CMD = process.env.INC_LOGS_CMD === "true";
+const OUT_LOGS_CMD = process.env.OUT_LOGS_CMD === "true";
+const ALARM_LOGS_CMD = process.env.ALARM_LOGS_CMD === "true";
+const SNAP_CMD = process.env.SNAP_CMD === "true";
+
+const IncLogDir = process.env.INC_LOG_DIR;
+const outLogDir = process.env.OUT_LOG_DIR;
+const alarmLogDir = process.env.ALARM_LOG_DIR;
+const snapshotOutputDir = process.env.SNAP_DIR;
+
+
+function dirCheck(dir, enabled) {
+  if (!enabled) return;
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+  } catch (err) {
+    console.error(`Failed to create dir ${dir}:`, err.message);
+  }
+}
+
+dirCheck(IncLogDir, INC_LOGS_CMD);
+dirCheck(outLogDir, OUT_LOGS_CMD);
+dirCheck(alarmLogDir, ALARM_LOGS_CMD);
+dirCheck(snapshotOutputDir, SNAP_CMD);
+
+
+
 // 📡 TCP Server
 const BULK_SAVE_LIMIT = 1000;
 let alreadyReplied = 0;
@@ -2172,8 +2203,31 @@ function sendX(socket) {
   }
 }
 
+const logStreams = {};
 
 // TCP Server
+function getLogStream(filePath) {
+  if (!logStreams[filePath]) {
+    // make sure directory exists
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+
+    logStreams[filePath] = fs.createWriteStream(filePath, {
+      flags: "a" // append mode
+    });
+
+    logStreams[filePath].on("error", (err) => {
+      console.error("Log stream error:", err.message);
+    });
+  }
+
+  return logStreams[filePath];
+}
+
+function writeLog(filePath, data) {
+  const stream = getLogStream(filePath);
+  stream.write(data + "\n");
+}
+
 const tcpServer = net.createServer((socket) => {
   socket.buffer = Buffer.alloc(0);
   const clientInfo = `${socket.remoteAddress}:${socket.remotePort}`;
@@ -2342,35 +2396,91 @@ const tcpServer = net.createServer((socket) => {
         }
 
         // ========== CAMERA LOGIC ==========
-        if ((padding === 0x43)) {
-          sendX(socket);
+        if ((padding === 0x43) && (doorStatus === "OPEN")) {
+          console.log("⚡Camera Function runs ...⚡")
 
-          // console.log("📸 Capture pictures command received");
+          let timestamp = getFormattedDateTime("path");
+          const snapshotFileName = `image_${timestamp}.jpg`;
 
-          const now = new Date();
-          const timestamp = now.toISOString()
-            .replace(/[-:]/g, '')
-            .replace(/T/, '_')
-            .replace(/\..+/, '')
-            .slice(0, 15);
 
-          const fileName = `image_${timestamp}.jpg`;
-          const outputDir = 'C:/snaps';
-          const outputPath = path.join(outputDir, fileName);
+          /* 
+            Function that captures snapshots from Hi-Focus and Sparsh Cameras. 
+          */
+          try {
+            console.log("⏰ Snapshot for Hi-Focus Camera ⏰");
 
-          if (!fs.existsSync(outputDir)) {
-            fs.mkdirSync(outputDir, { recursive: true });
-          }
+            const cameraDetails = await Device.findOne({ mac }, 'ipCamera').lean();
+            const cameraMake = cameraDetails.ipCamera.type.trim();
+            console.log("Camera Make: ", cameraMake);
 
-          const url = `http://192.168.0.120/CGI/command/snap?channel=01`;
+            if (cameraMake === 'H') {
+              console.log("⏰ Snapshot for HiFocus Camera ⏰");
+
+              const ip = cameraDetails.ipCamera.ip.trim();
+              const snapshotOutputDir_MAC = path.join(snapshotOutputDir, mac.slice(8).replace(/[: ]/g, '_'));
+
+              // Using ffmpeg to capture snapshot from the HI-Focus Camera
+              const args = [
+                '-rtsp_transport', 'tcp',
+                '-i', `rtsp://${ip}/media/video1`,
+                '-frames:v', '1',
+                `${snapshotOutputDir_MAC}/${snapshotFileName}`
+              ];
+
+              const ffmpeg = spawn('ffmpeg', args);
+
+              // For Debugging
+              ffmpeg.stderr.on('data', (data) => {
+                console.log(`ffmpeg: ${data}`);
+              });
+
+              ffmpeg.on('close', (code) => {
+                if (code === 0) {
+                  if (eMS_LOGS) console.log("Captured successfully...");
+                } else {
+                  console.error(`ffmpeg process exited with code ${code}`);
+                }
+              });
+
+              ffmpeg.on('error', (err) => {
+                console.error(`❌ Failed to start ffmpeg:`, err.message);
+              });
+
+            } else {
+              console.log("⏰ Snapshot for Sparsh Camera ⏰");
+
+              console.log("Timestamp: ", timestamp);
+
+              // Extracting Camera IP from DB for Sparsh Camera
+              let camIP = cameraDetails.ipCamera.ip.trim();
+
+              // Added 3 seconds delay for first snapshot capture to wait for opening the door 
+              setTimeout(() => {
+                let url = `https://${camIP}/CGI/command/snap?channel=01`;
+                console.log("📸 Capturing from URL:", url);
+
+                const snapshotOutputDir_MAC = path.join(snapshotOutputDir, mac.slice(8).replace(/[. ]/g, '_'));
+                const snapshotOutputPath = path.join(snapshotOutputDir_MAC, snapshotFileName);
+
+                if (eMS_LOGS) console.log("🔴outputDir: ", snapshotOutputDir, "🔴");
+
+                try {
+                  if (!fs.existsSync(snapshotOutputDir)) {
+                    fs.mkdirSync(snapshotOutputDir, { recursive: true });
+                    console.log(`📁 Created directory: ${snapshotOutputDir}`);
+                  }
+                } catch (err) {
+                  console.error(`❌ Failed to create directory ${snapshotOutputDir}:`, err.message);
+                }
 
           axios({
             method: 'GET',
             url: url,
-            responseType: 'stream'
+                  responseType: 'stream',
+                  timeout: 10000
           })
             .then((response) => {
-              const writer = fs.createWriteStream(outputPath);
+                    const writer = fs.createWriteStream(snapshotOutputPath);
               response.data.pipe(writer);
 
               return new Promise((resolve, reject) => {
@@ -2379,62 +2489,57 @@ const tcpServer = net.createServer((socket) => {
               });
             })
             .then(() => {
-              console.log(`✅ Snapshot captured: ${fileName}`);
+                    if (eMS_LOGS) console.log(`✅ Snapshot captured: ${snapshotFileName}`);
             })
             .catch((error) => {
               console.error(`❌ Error capturing snapshot: ${error.message}`);
             });
+              }, 3000); // 3 second delay
+            }
+          } catch (err) {
+            console.error(`Error occured while caputuring snapshots: ${err}`)
+          }
         }
 
-        // Logging Incoming Data from Simulator
+
+        // ===================== Logging Incoming Data from Simulator =====================
+        if (INC_LOGS_CMD) {
         const now = new Date();
         const fileName = `${now.getDate()}_${now.getMonth() + 1
           }_${now.getHours()}.inc`;
-        const logDir = "C:/CommandLogs/inc";
 
-        const sensorData = {
-          humidity: humidity,
-          insideTemperature: insideTemperature,
-          outsideTemperature: outsideTemperature,
-          inputVoltage: inputVoltage,
-          outputVoltage: outputVoltage,
-          batteryBackup: batteryBackup,
-        };
+          // const sensorData = {
+          //   humidity: humidity,
+          //   insideTemperature: insideTemperature,
+          //   outsideTemperature: outsideTemperature,
+          //   inputVoltage: inputVoltage,
+          //   outputVoltage: outputVoltage,
+          //   batteryBackup: batteryBackup,
+          // };
 
-        if (!fs.existsSync(logDir)) {
-          fs.mkdirSync(logDir, { recursive: true });
-        }
-
-        const filePath = path.join(logDir, fileName);
+          const IncLogFilePath = path.join(IncLogDir, fileName);
         const timestamp = now.toLocaleString();
-        const logEntry = `[${timestamp}] | MAC:${mac} | Data:${JSON.stringify(
-          sensorData
-        )}"\n`;
+          const IncLogEntry = `[${timestamp}] | MAC:${mac} | Humid=${humidity} | IT=${insideTemperature} | OT=${outsideTemperature} | IV=${inputVoltage} | OV=${outputVoltage} | BB=${batteryBackup}`;
 
-        fs.appendFile(filePath, logEntry, (err) => {
-          if (err) {
-            console.error("Failed to save log:", err);
-          } else {
-            console.log(`✅ Log saved: ${filePath}`);
-          }
-        });
+          // File writing happens after response
+          // fs.appendFile(IncLogFilePath, IncLogEntry, (err) => {
+          //   if (err) {
+          //     console.error("Failed to save log:", err);
+          //   } else {
+          //     if (eMS_LOGS) console.log(`✅ Log saved: ${IncLogFilePath}`);
+          //   }
+          // });
+
+          writeLog(
+            `${IncLogFilePath}`,
+            IncLogEntry
+          );
+
+        }
+        // ===================== Logging Incoming Data from Simulator =====================
+
 
         if (alreadyReplied) alreadyReplied--;
-        const fanStatusBits = buffer.readUInt16LE(52);
-        const fanStatus = [];
-        for (let i = 0; i < 6; i++) {
-          fanStatus[i] = (fanStatusBits >> (i * 2)) & 0x03; // 0=off,1=healthy,2=faulty
-        }
-
-        const pwsFailCount = buffer[54];
-        // console.log("Password Bit: ", pwsFailCount);
-
-        const hupsStat = buffer[55];
-        const hupsAlarms = [];
-        for (let i = 0; i < 8; i++) {
-          hupsAlarms[i] = (hupsStat >> i) & 0x01;
-        }
-        // console.log("hupsAlarms: ", hupsAlarms);
         const floats = [
           humidity,
           insideTemperature,
@@ -2528,34 +2633,42 @@ const tcpServer = net.createServer((socket) => {
 
         // Single console output
         if (activeAlarms.length > 0) {
-          const alarmLogDir = "C:/CommandLogs/alarm"
+          // const alarmLogDir = "C:/CommandLogs/alarm"
 
-          if (!fs.existsSync(alarmLogDir)) {
-            fs.mkdirSync(alarmLogDir, { recursive: true });
-          }
+          // if (!fs.existsSync(alarmLogDir)) {
+          //   fs.mkdirSync(alarmLogDir, { recursive: true });
+          // }
+
+          const now = new Date();
+          const timestamp = now.toLocaleString();
 
           const alarmFileName = `${now.getDate()}_${now.getMonth() + 1
             }_${now.getHours()}_Alarm.inc`;
 
-          let logAlarm;
           if (fanStatus.includes(2)) {
-            logAlarm = `[${timestamp}] | MAC: ${mac}| ${activeAlarms} | Fan Status: ${fanStatus}\n`;
-            console.log("Fan not working: ", fanStatus);
+            var logAlarm = `[${timestamp}] | MAC: ${mac}| ${activeAlarms} | Fan Status: ${fanStatus}\n`;
           } else {
-            logAlarm = `[${timestamp}] | MAC: ${mac}| ${activeAlarms}\n`;
+            var logAlarm = `[${timestamp}] | MAC: ${mac}| ${activeAlarms}\n`;
           }
 
           const alarmFilePath = path.join(alarmLogDir, alarmFileName);
 
-          fs.appendFile(alarmFilePath, logAlarm, (err) => {
-            if (err) {
-              console.error("Failed to save log:", err);
-            } else {
-              console.log(`✅ Log saved: ${alarmFilePath}`);
-            }
-          });
+          // fs.appendFile(alarmFilePath, logAlarm, (err) => {
+          //   if (err) {
+          //     console.error("Failed to save log:", err);
+          //   } else {
+          //     if (eMS_LOGS) console.log(`✅ Log saved: ${alarmFilePath}`);
+          //   }
+          // });
+
+          writeLog(
+            `${alarmFilePath}`,
+            logAlarm
+          );
         }
 
+        socket.deviceId = mac;
+        connectedDevices.set(mac, socket);
         // Build a lightweight reading object and broadcast to web clients
         const reading = {
           mac,
