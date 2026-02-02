@@ -37,7 +37,6 @@ function DashboardView() {
   const [selectedDevice, setSelectedDevice] = useState("");
   const [testStatus, setTestStatus] = useState("");
   const [currentTest, setCurrentTest] = useState(null);
-  const [awaitingCommand, setAwaitingCommand] = useState(false);
   const [testProgress, setTestProgress] = useState([]);
   const [currentTestStep, setCurrentTestStep] = useState(0);
   const [testCommandInput, setTestCommandInput] = useState("");
@@ -45,6 +44,12 @@ function DashboardView() {
   const [liveReading, setLiveReading] = useState(null);  // Separate state for immediate UI updates
   const notificationTimeoutRef = useRef(null);  // Track notification auto-dismiss timeout
 
+  const [selectedTests, setSelectedTests] = useState([]);
+  const [testList, setTestList] = useState([]);
+  const [selectedProduct, setSelectedProduct] = useState("");
+
+  const [awaitingCommand, setAwaitingCommand] = useState(false);
+  const [fanTestStatus, setFanTestStatus] = useState(false);
 
   //Map and marker refs
   const mapRef = useRef(null);
@@ -575,6 +580,16 @@ function DashboardView() {
   //   }
   // };
 
+  const confirmDialogBox = async ({ title, text, cancelBtn, confirmBtn, cancelText }) => {
+    return await swal.fire({
+      title: title,
+      text: text,
+      showCancelButton: cancelBtn,
+      confirmButtonText: confirmBtn,
+      cancelButtonText: cancelText,
+    })
+  }
+
   // SNAPSHOT FETCHING USEEFFECT
   useEffect(() => {
     fetchSnapshots(selectedMac);
@@ -586,21 +601,51 @@ function DashboardView() {
     return () => clearInterval(snapshotInterval); // ✅ Cleanup
   }, [selectedMac]);
   // Run ATS: Frontend dialogs first, then server tests
+
+
+  const handleProductChange = async (e) => {
+    setSelectedProduct(e.target.value);
+  }
+
+  useEffect(() => {
+    const fetchTests = async () => {
+      try {
+        const res = await fetch(`${process.env.REACT_APP_API_URL}/api/tests/${selectedProduct}`);
+        const tests = await res.json();
+        setTestList(tests);
+      } catch (err) {
+        console.error('Error fetching tests:', err);
+      }
+    };
+
+    if (selectedProduct) {
+      fetchTests();
+    }
+  }, [selectedProduct]);
+
   async function iMoni_test() {
     setAwaitingCommand(true); // Shows 'Running...' state
     const frontendResults = []; // Stores Visual & Burn-in results
 
     if (selectedTests.length === testList.length) {
 
-
       // 1. Visual Test (frontend dialog)
-      const v = await swal.fire({
+      // const v = await swal.fire({
+      //   title: 'Visual Test',
+      //   text: 'Is Visual inspection passed?',
+      //   showCancelButton: true,
+      //   confirmButtonText: 'Pass',
+      //   cancelButtonText: 'Fail'
+      // });
+
+      const v = confirmDialogBox({
         title: 'Visual Test',
         text: 'Is Visual inspection passed?',
         showCancelButton: true,
         confirmButtonText: 'Pass',
-        cancelButtonText: 'Fail'
-      });
+        cancelButtonText: "Fail"
+      })
+
       frontendResults.push({
         name: 'Visual Test',
         status: v.isConfirmed ? 'passed' : 'failed',
@@ -661,6 +706,7 @@ function DashboardView() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ mac: selectedMac })
       });
+
       console.log("...API Called")
       const data = await resp.json();
       console.log("Data: ", data);
@@ -768,6 +814,45 @@ function DashboardView() {
       <div className="test-controls-panel">
         <h2>🧪 ATS Test Controls</h2>
         <div className="test-buttons">
+
+          <div>
+            <select value={selectedProduct} onChange={handleProductChange}>
+              <option defaultChecked>Select</option>
+              <option value="iMoni">iMoni Tests</option>
+              <option value="fan">Fan Tests</option>
+              <option value="pdu">PDU Tests</option>
+            </select>
+          </div>
+
+
+          {selectedProduct === "iMoni" ?
+            <button
+              className="btn-test"
+              onClick={iMoni_test}
+              disabled={awaitingCommand}
+            >
+              {awaitingCommand ? "Running ATS..." : "Run ATS Tests"}
+            </button> : selectedProduct === "fan" ?
+              <button
+                className="btn-test"
+                onClick={fan_test}
+                disabled={awaitingCommand}
+              >
+                {fanTestStatus ? "Running Fan Test..." : "Run Fan Test"}
+              </button> : selectedProduct === "pdu" ?
+                <button
+                  className="btn-test"
+                  onClick={pdu_test}
+                  disabled={awaitingCommand}
+                >
+                  {awaitingCommand ? "Running PDU Test..." : "Run PDU Test"}
+                </button> :
+                <h4>Select a product to run tests</h4>
+          }
+
+
+
+
           {/* CANCEL ATS TEST BUTTON */}
           {awaitingCommand && (
             <button
@@ -803,6 +888,43 @@ function DashboardView() {
               🛑 Stop Test
             </button>
           )}
+
+          {/* CANCEL FAN TEST BUTTON */}
+          {fanTestStatus && (
+            <button
+              className="btn-test-stop"
+              onClick={async () => {
+                try {
+                  await fetch(`${process.env.REACT_APP_API_URL}/api/tests/stop`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                  });
+                  setFanTestStatus(false);
+                  setTestStatus('🛑 Tests stopped by user');
+                  setNotification({
+                    title: 'Tests Stopped',
+                    message: 'Testing process was stopped by user',
+                    type: 'error'
+                  });
+                } catch (err) {
+                  console.error('Failed to stop tests:', err);
+                }
+              }}
+              style={{
+                backgroundColor: '#cc3333',
+                color: 'white',
+                border: 'none',
+                padding: '10px 20px',
+                borderRadius: '5px',
+                cursor: 'pointer',
+                marginLeft: '10px',
+                fontWeight: 'bold'
+              }}
+            >
+              🛑 Stop Test
+            </button>
+          )}
+
           {/* <button
             className="btn-test-secondary"
             onClick={runTestsStepByStep}
@@ -906,6 +1028,13 @@ function DashboardView() {
             </div>
           </div>
         )}
+
+        {testList.length > 0 ? testList.map((test) => (
+          <label style={{ display: "block" }}>
+            <input type="checkbox" defaultChecked />
+            {test}
+          </label>
+        )) : <p>No Tests found</p>}
       </div>
 
       {/* DASHBOARD */}

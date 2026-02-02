@@ -604,7 +604,6 @@ app.post("/api/tests/run-all", async (req, res) => {
       { flag: 'w' }
     );
 
-    const results = [];
 
     // Write frontend test results to report first
     if (frontendResults && Array.isArray(frontendResults)) {
@@ -2208,10 +2207,10 @@ const OUT_LOGS_CMD = process.env.OUT_LOGS_CMD === "true";
 const ALARM_LOGS_CMD = process.env.ALARM_LOGS_CMD === "true";
 const SNAP_CMD = process.env.SNAP_CMD === "true";
 
-const IncLogDir = process.env.INC_LOG_DIR;
-const outLogDir = process.env.OUT_LOG_DIR;
-const alarmLogDir = process.env.ALARM_LOG_DIR;
-const snapshotOutputDir = process.env.SNAP_DIR;
+const IncLogDir = process.env.INC_LOG_DIR || "C:/CommandLogs/inc";
+const outLogDir = process.env.OUT_LOG_DIR || "C:/CommandLogs/out";
+const alarmLogDir = process.env.ALARM_LOG_DIR || "C:/CommandLogs/alarm";
+const snapshotOutputDir = process.env.SNAP_DIR || "C:/snaps";
 
 
 function dirCheck(dir, enabled) {
@@ -2500,6 +2499,7 @@ const tcpServer = net.createServer((socket) => {
           fanStatus[i] = (fanStatusBits >> (i * 2)) & 0x03; // 0=off, 1=healthy, 2=faulty
         }
 
+        console.log("Fan Status: ", fanStatus);
 
         if (padding === 0x31 && !alreadyReplied) {
           sendX(socket);
