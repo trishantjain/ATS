@@ -13,17 +13,17 @@ onPass="All fans are off, | Ready to test |"
 onFail="Some fans are still running. Turn off all fans first."
 
 [step:2]
-msg="Testing Fan 1 | Turning ON Fan 1"
-action=R01N
+msg="Testing Fan 1 & 2 | Turning ON Fan 1 & 2"
+action=%R01N
 waitFor="fan1Status;fan2Status;fan3Status;fan4Status;fan5Status;fan6Status"
 waitTime=20
-expectedValue="2;0;0;0;0;0"
+expectedValue="2;2;0;0;0;0"
 onPass="Fan 1 turned on successfully"
 onFail="Fan 1 not turned on"
 
 [step:3]
-msg="Testing Fan 1 | Turning OFF Fan 1"
-action=R01F
+msg="Testing Fan 1 & 2 | Turning OFF Fan 1 & 2"
+action=%R01F
 waitFor="fan1Status;fan2Status;fan3Status;fan4Status;fan5Status;fan6Status"
 waitTime=20
 expectedValue="0;0;0;0;0;0"
@@ -31,8 +31,8 @@ onPass="Fan 1 turned off successfully"
 onFail="Fan 1 not turned off"
 
 [step:4]
-msg="Testing Fan 2 | Turning ON Fan 2"
-action=R02N
+msg="Testing Fan 3 | Turning ON Fan 3"
+action=%R02N
 waitFor="fan1Status;fan2Status;fan3Status;fan4Status;fan5Status;fan6Status"
 waitTime=20
 expectedValue="0;0;2;0;0;0"
@@ -40,8 +40,8 @@ onPass="Fan 2 turned on successfull"
 onFail="Fan 2 not turned on"
 
 [step:5]
-msg="Testing Fan 2 | Turning OFF Fan 2"
-action=R02F
+msg="Testing Fan 3 | Turning OFF Fan 3"
+action=%R02F
 waitFor="fan1Status;fan2Status;fan3Status;fan4Status;fan5Status;fan6Status"
 waitTime=20
 expectedValue="0;0;0;0;0;0"
@@ -49,8 +49,8 @@ onPass="Fan 2 turned off successfully"
 onFail="Fan 2 not turned off"
 
 [step:6]
-msg="Testing Fan 3 | Turning ON Fan 3"
-action=R03N
+msg="Testing Fan 4 & 5 | Turning ON Fan 4 & 5"
+action=%R03N
 waitFor="fan1Status;fan2Status;fan3Status;fan4Status;fan5Status;fan6Status"
 waitTime=20
 expectedValue="0;0;0;2;2;0"
@@ -58,8 +58,8 @@ onPass="Fan 3 turned on successfully"
 onFail="Fan 3 not turned on"
 
 [step:7]
-msg="Testing Fan 3 | Turning OFF Fan 3"
-action=R03F
+msg="Testing Fan 4 & 5 | Turning OFF Fan 4 & 5"
+action=%R03F
 waitFor="fan1Status;fan2Status;fan3Status;fan4Status;fan5Status;fan6Status"
 waitTime=20
 expectedValue="0;0;0;0;0;0"
@@ -67,8 +67,8 @@ onPass="Fan 3 turned off successfully"
 onFail="Fan 3 not turned off"
 
 [step:8]
-msg="Testing Fan 4 | Turning ON Fan 4"
-action=R04N
+msg="Testing Fan 6 | Turning ON Fan 6"
+action=%R04N
 waitFor="fan1Status;fan2Status;fan3Status;fan4Status;fan5Status;fan6Status"
 waitTime=20
 expectedValue="0;0;0;0;0;2"
@@ -76,46 +76,10 @@ onPass="Fan 4 turned off successfully"
 onFail="Fan 4 not turned off"
 
 [step:9]
-msg="Testing Fan 4 | Turning OFF Fan 4"
-action=R04F
+msg="Testing Fan 6 | Turning OFF Fan 6"
+action=%R04F
 waitFor="fan1Status;fan2Status;fan3Status;fan4Status;fan5Status;fan6Status"
 waitTime=20
 expectedValue="0;0;0;0;0;0"
 onPass="Fan 4 turned off successfully"
 onFail="Fan 4 not turned off"
-
-[step:10]
-msg="Testing Fan 5 | Turning ON Fan 5"
-action=R05N
-waitFor="fan1Status;fan2Status;fan3Status;fan4Status;fan5Status;fan6Status"
-waitTime=20
-expectedValue="0;0;0;0;0;2"
-onPass="Fan 5 turned off successfully"
-onFail="Fan 5 not turned off"
-
-[step:11]
-msg="Testing Fan 5 | Turning OFF Fan 5"
-action=R05F
-waitFor="fan1Status;fan2Status;fan3Status;fan4Status;fan5Status;fan6Status"
-waitTime=20
-expectedValue="0;0;0;0;0;0"
-onPass="Fan 5 turned off successfully"
-onFail="Fan 5 not turned off"
-
-[step:12]
-msg="Testing Fan 6 | Turning ON Fan 6"
-action=R06N
-waitFor="fan1Status;fan2Status;fan3Status;fan4Status;fan5Status;fan6Status"
-waitTime=20
-expectedValue="0;0;0;0;0;2"
-onPass="Fan 6 turned off successfully"
-onFail="Fan 6 not turned off"
-
-[step:13]
-msg="Testing Fan 6 | Turning OFF Fan 6"
-action=R06F
-waitFor="fan1Status;fan2Status;fan3Status;fan4Status;fan5Status;fan6Status"
-waitTime=20
-expectedValue="0;0;0;0;0;0"
-onPass="Fan 6 turned off successfully"
-onFail="Fan 6 not turned off"
