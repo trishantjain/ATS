@@ -616,6 +616,8 @@ app.post("/api/tests/run-all", async (req, res) => {
       }
     }
 
+    const results = [];
+
     // Run test files one by one
     for (const testFile of testFiles) {
       // Check if stop was requested before starting next test
@@ -2354,21 +2356,36 @@ const tcpServer = net.createServer((socket) => {
 
         // if (buffer.length < 4) break;
 
-        const b0 = socket.buffer[0];
-        const b1 = socket.buffer[1];
-        const b2 = socket.buffer[2];
-        const b3 = socket.buffer[3];
+        if (!socket.preambleHandled && socket.buffer.length >= 4) {
+          const preamble = socket.buffer.slice(0, 4).toString('ascii');
+          if (preamble === 'tcp2') {
+            socket.buffer = socket.buffer.slice(4);
+            socket.preambleHandled = true;
+          }
+        }
 
+        const header = socket.buffer.slice(0, 8).toString('ascii');
 
-        // invalid / garbage header → resync exactly like MAC
-        if (
-          b0 === 0 || b0 === 255 ||           // invalid first octet
-          b1 === undefined || b2 === undefined || b3 === undefined
-        ) {
+        if (!/^[0-9a-fA-F]{8}$/.test(header)) {
+          // corrupted / misaligned packet → resync like MAC server
           socket.buffer = socket.buffer.slice(1);
           continue;
         }
 
+        const ipHexAscii = socket.buffer.slice(0, 8).toString('ascii');
+
+        // Convert hex pairs → decimal
+        const ip = ipHexAscii
+          .match(/.{2}/g)
+          .map(h => parseInt(h, 16))
+          .join('.');
+
+        // Reject obvious garbage IPs
+        if (!ip.startsWith('192.168.')) {
+          console.warn('🚫 Dropping invalid IP:', ip);
+          socket.buffer = socket.buffer.slice(1);
+          continue;
+        }
 
         // wait for full packet
         if (socket.buffer.length < 58) break;
@@ -2376,7 +2393,7 @@ const tcpServer = net.createServer((socket) => {
         const packet = socket.buffer.slice(0, 58);
         socket.buffer = socket.buffer.slice(58);
 
-        const ip = `${packet[0]}.${packet[1]}.${packet[2]}.${packet[3]}`;
+        // const ip = `${packet[0]}.${packet[1]}.${packet[2]}.${packet[3]}`;
 
         //! =============== CODE FOR MAC CHECKING =============== 
         // const bufStr = buffer.toString("utf-8");
