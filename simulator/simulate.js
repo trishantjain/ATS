@@ -9,7 +9,7 @@ const TOTAL_DEVICES = 1;
 const devices = [];
 let csvData = [];
 let currentSecond = 0;
-let isCSVMode = true;
+let isCSVMode = false;
 
 // 🔥 PRE-INDEXING: Fast lookup structure
 let csvDataBySecond = new Map(); // { second → [row1, row2, ...] }
@@ -57,8 +57,8 @@ function generateIP(index) {
 }
 
 
-function ipStringToBuffer(ip) {
-  return Buffer.from(ip.split('.').map(n => parseInt(n, 10)));
+function ipStringToAsciiHexBuffer(ip) {
+  return Buffer.from(ip.split('.').map(n => parseInt(n, 10).toString(16).padStart(2, '0')).join(''), 'ascii');
 }
 
 function toFloatLE(value) {
@@ -67,7 +67,7 @@ function toFloatLE(value) {
   return buf;
 }
 
-function toShortLE(value){
+function toShortLE(value) {
   const buf = Buffer.alloc(2);
   buf.writeInt16LE(value, 0);
   return buf;
@@ -179,6 +179,7 @@ function sendPacketForRow(client, row, mac, index) {
 
   // Build packet
   const packet = Buffer.concat([
+
     Buffer.from(mac.padEnd(17, ' '), 'utf-8'),
     toFloatLE(humidity),
     toFloatLE(insideTemp),
@@ -284,10 +285,10 @@ function startDevice(mac, index) {
           // const waterLeakage = !triggerAlarm && Math.random() < 0.2 ? 1 : 0;
           const waterLeakage = 1;
           const fireAlarm = 1;
-          
+
           // Fan Group Control
-          const fan1 = 1;
-          const fan2 = 1;
+          const fan1 = 0;
+          const fan2 = 0;
           const fan3 = 0;
           const fan4 = 0;
 
@@ -335,7 +336,7 @@ function startDevice(mac, index) {
 
           const packet = Buffer.concat([
             // Buffer.from(mac.padEnd(17, ' '), 'utf-8'), //0-16
-            ipStringToBuffer(mac),
+            ipStringToAsciiHexBuffer(mac),
             Buffer.alloc(13, 0x00),   // 13 bytes ZERO padding
             toFloatLE(humidity),  //17-20
             toFloatLE(insideTemp), //21-24
@@ -576,44 +577,44 @@ async function initializeSimulator() {
   try {
     if (isCSVMode === true) {
 
-    console.log('📄 Attempting to load CSV data...');
+      console.log('📄 Attempting to load CSV data...');
       csvData = await readCSV(process.env.CSV_PATH || './sim_pack2.csv');
 
-    preIndexCSVData();
+      preIndexCSVData();
 
-    // 🔍 Debug: Analyze CSV data
-    const uniqueMACs = [...new Set(csvData.map(row => row.mac))];
-    console.log(`🔍 CSV Analysis:`);
-    console.log(`   Total rows: ${csvData.length}`);
-    console.log(`   Unique MACs: ${uniqueMACs.length}`);
-    console.log(`   MACs in CSV: ${uniqueMACs.join(', ')}`);
+      // 🔍 Debug: Analyze CSV data
+      const uniqueMACs = [...new Set(csvData.map(row => row.mac))];
+      console.log(`🔍 CSV Analysis:`);
+      console.log(`   Total rows: ${csvData.length}`);
+      console.log(`   Unique MACs: ${uniqueMACs.length}`);
+      console.log(`   MACs in CSV: ${uniqueMACs.join(', ')}`);
 
-    // Show seconds distribution
-    const secondsSample = [...new Set(csvData.map(row => parseInt(row.seconds)))].sort((a, b) => a - b).slice(0, 10);
-    console.log(`   First 10 seconds: [${secondsSample.join(', ')}]`);
+      // Show seconds distribution
+      const secondsSample = [...new Set(csvData.map(row => parseInt(row.seconds)))].sort((a, b) => a - b).slice(0, 10);
+      console.log(`   First 10 seconds: [${secondsSample.join(', ')}]`);
 
-    // Start all devices
-    for (let i = 0; i < TOTAL_DEVICES; i++) {
+      // Start all devices
+      for (let i = 0; i < TOTAL_DEVICES; i++) {
         const mac = generateIP(i);
-      startDevice(mac, i);
-      devices.push(mac);
-    }
+        startDevice(mac, i);
+        devices.push(mac);
+      }
 
-    // 🔧 NEW: Start the central data dispatcher after a brief delay
-    setTimeout(() => {
-      startDataDispatcher();
-    }, 3000);
+      // 🔧 NEW: Start the central data dispatcher after a brief delay
+      setTimeout(() => {
+        startDataDispatcher();
+      }, 3000);
 
     } else {
-    console.log('❌ CSV not found, using FULL RANDOM mode...');
-    isCSVMode = false;
+      console.log('❌ CSV not found, using FULL RANDOM mode...');
+      isCSVMode = false;
 
-    // Start all devices in random mode
-    for (let i = 0; i < TOTAL_DEVICES; i++) {
+      // Start all devices in random mode
+      for (let i = 0; i < TOTAL_DEVICES; i++) {
         const mac = generateIP(i);
-      startDevice(mac, i);
-      devices.push(mac);
-    }
+        startDevice(mac, i);
+        devices.push(mac);
+      }
     }
   } catch (err) {
     console.log("Error in starting Simulator");
