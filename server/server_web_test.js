@@ -22,6 +22,7 @@ let latestReadings = [];
 app.use(bodyParser.json());
 const cors = require("cors");
 const { isDeepStrictEqual } = require("util");
+const { runTests } = require("./ATS/atsRunner");
 app.use(cors());
 
 // WebSocket Server
@@ -459,11 +460,14 @@ app.get("/api/tests/list", async (req, res) => {
 
 // ✅ Run a single test file (COMMENTED OUT - uncomment if needed in future)
 app.post("/api/test/run", async (req, res) => {
+  console.log("▶️ /api/test/run endpoint called");
   const { testFile } = req.body;
 
   if (!testFile) {
     return res.status(400).json({ error: "testFile is required" });
   }
+
+  console.log("Test File passed: ", testFile);
 
   const testPath = path.join(__dirname, "test", testFile);
   const baseDir = path.join(__dirname, "test");
@@ -473,46 +477,33 @@ app.post("/api/test/run", async (req, res) => {
     return res.status(400).json({ error: "Invalid test file path" });
   }
 
+  // Sort files numerically (1_criticalload.srv, 2_nexttest.srv, etc.)
+  let testFiles = files
+    .filter(file => {
+      const ext = path.extname(file).toLowerCase();
+      return ['.srv'].includes(ext);
+    })
+    .sort((a, b) => {
+      // Extract numbers from filenames for sorting
+      const numA = parseInt(a.split('_')[0]) || 0;
+      const numB = parseInt(b.split('_')[0]) || 0;
+      return numA - numB;
+    });
+
+  console.log(`Found ${testFiles.length} test file(s):`, testFiles);
+
+  if (testFiles.length === 0) {
+    return res.status(400).json({
+      error: "No test files found in test directory",
+      timestamp: getFormattedDateTime()
+    });
+  }
+
   try {
-    const stat = await fs.promises.stat(testPath);
-
-    if (stat.isDirectory()) {
-      return res.status(400).json({ error: "Path is a directory, not a test file" });
-    }
-
-    const fileExt = path.extname(testFile).toLowerCase();
-    let testResult = { testFile, status: "pending", output: "" };
-
-    // Handle JavaScript test files
-    if (fileExt === ".js") {
-      try {
-        delete require.cache[require.resolve(testPath)];
-        const testModule = require(testPath);
-
-        if (typeof testModule === "function") {
-          const result = await testModule();
-          testResult.status = "passed";
-          testResult.output = result || "Test executed successfully";
-        } else if (testModule.run && typeof testModule.run === "function") {
-          const result = await testModule.run();
-          testResult.status = "passed";
-          testResult.output = result || "Test executed successfully";
-        } else {
-          testResult.status = "passed";
-          testResult.output = "Test file loaded successfully";
-        }
-      } catch (err) {
-        testResult.status = "failed";
-        testResult.output = err.message;
-      }
-    }
-    // Handle text/CSV/JSON files (read and return)
-    else if ([".txt", ".csv", ".json"].includes(fileExt)) {
-      const fileContent = await fs.promises.readFile(testPath, "utf-8");
-      testResult.status = "passed";
-      testResult.output = fileContent;
-      testResult.fileType = fileExt;
-    }
+    const testResult = await runTests({
+      testFiles: [testPath],
+      onStatus: broadcastTestStatus
+    });
 
     res.json({
       timestamp: getFormattedDateTime(),
@@ -552,7 +543,7 @@ app.post("/api/tests/run-all", async (req, res) => {
 
   try {
     const { mac, skipFrontendTests, frontendResults } = req.body;
-    const testDir = path.join(__dirname, "tests");
+    const testDir = path.join(__dirname, "tests/iMoni");
 
     // Create test directory if it doesn't exist
     if (!fs.existsSync(testDir)) {
@@ -589,6 +580,7 @@ app.post("/api/tests/run-all", async (req, res) => {
     if (!fs.existsSync(testResultDir)) {
       fs.mkdirSync(testResultDir, { recursive: true });
     }
+    const results = [];
 
     // Generating Test Report File
     const reportMac = mac ? String(mac).replace(/:/g, '-') : 'unknown-device';
@@ -615,7 +607,6 @@ app.post("/api/tests/run-all", async (req, res) => {
       }
     }
 
-    const results = [];
 
     // Run test files one by one
     for (const testFile of testFiles) {
@@ -2584,27 +2575,27 @@ const tcpServer = net.createServer((socket) => {
                   console.error(`❌ Failed to create directory ${snapshotOutputDir}:`, err.message);
                 }
 
-          axios({
-            method: 'GET',
-            url: url,
+                axios({
+                  method: 'GET',
+                  url: url,
                   responseType: 'stream',
                   timeout: 10000
-          })
-            .then((response) => {
+                })
+                  .then((response) => {
                     const writer = fs.createWriteStream(snapshotOutputPath);
-              response.data.pipe(writer);
+                    response.data.pipe(writer);
 
-              return new Promise((resolve, reject) => {
-                writer.on('finish', resolve);
-                writer.on('error', reject);
-              });
-            })
-            .then(() => {
+                    return new Promise((resolve, reject) => {
+                      writer.on('finish', resolve);
+                      writer.on('error', reject);
+                    });
+                  })
+                  .then(() => {
                     if (eMS_LOGS) console.log(`✅ Snapshot captured: ${snapshotFileName}`);
-            })
-            .catch((error) => {
-              console.error(`❌ Error capturing snapshot: ${error.message}`);
-            });
+                  })
+                  .catch((error) => {
+                    console.error(`❌ Error capturing snapshot: ${error.message}`);
+                  });
               }, 3000); // 3 second delay
             }
           } catch (err) {
@@ -2615,9 +2606,9 @@ const tcpServer = net.createServer((socket) => {
 
         // ===================== Logging Incoming Data from Simulator =====================
         if (INC_LOGS_CMD) {
-        const now = new Date();
-        const fileName = `${now.getDate()}_${now.getMonth() + 1
-          }_${now.getHours()}.inc`;
+          const now = new Date();
+          const fileName = `${now.getDate()}_${now.getMonth() + 1
+            }_${now.getHours()}.inc`;
 
           // const sensorData = {
           //   humidity: humidity,
@@ -2629,7 +2620,7 @@ const tcpServer = net.createServer((socket) => {
           // };
 
           const IncLogFilePath = path.join(IncLogDir, fileName);
-        const timestamp = now.toLocaleString();
+          const timestamp = now.toLocaleString();
           const IncLogEntry = `[${timestamp}] | MAC:${mac} | Humid=${humidity} | IT=${insideTemperature} | OT=${outsideTemperature} | IV=${inputVoltage} | OV=${outputVoltage} | BB=${batteryBackup}`;
 
           // File writing happens after response
