@@ -1,0 +1,17 @@
+FAN Test Run - 03/02/26 18:06:11
+Device: 192.168.0.20
+Total Tests: 1
+
+Test: Fan Tray Test 
+Status: passed 
+Steps Results:
+Step 1: PASSED | Message: All fans are off, | Ready to test | | Received: [object Object]
+Step 2: PASSED | Message: Fan 1 turned on successfully | Received: [object Object]
+Step 3: PASSED | Message: Fan 1 turned off successfully | Received: [object Object]
+Step 4: PASSED | Message: Fan 2 turned on successfull | Received: [object Object]
+Step 5: PASSED | Message: Fan 2 turned off successfully | Received: [object Object]
+Step 6: PASSED | Message: Fan 3 turned on successfully | Received: [object Object]
+Step 7: PASSED | Message: Fan 3 turned off successfully | Received: [object Object]
+Step 8: PASSED | Message: Fan 4 turned off successfully | Received: [object Object]
+Step 9: PASSED | Message: Fan 4 turned off successfully | Received: [object Object]
+

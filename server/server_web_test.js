@@ -1694,7 +1694,7 @@ app.post('/api/tests/fan-test', async (req, res) => {
     }
 
     // Prepare a single report file for this run
-    const testResultDir = path.join(__dirname, "testResult");
+    const testResultDir = path.join(__dirname, "testResult/fan");
     if (!fs.existsSync(testResultDir)) {
       fs.mkdirSync(testResultDir, { recursive: true });
     }
@@ -1911,13 +1911,32 @@ app.post('/api/tests/fan-test', async (req, res) => {
 
               // WAITING FOR EXPECTED VALUE (device readings)
               const stepResult = await new Promise((resolve) => {
+                let isCurrentlyMatching = false;
+                let lastReceivedValue = null;
+
+
                 const timeout = setTimeout(() => {
                   clearTestWaitForMAC();
                   if (currentStepHandler) {
                     const idx = deviceCommandWaiters.indexOf(currentStepHandler);
                     if (idx > -1) deviceCommandWaiters.splice(idx, 1);
                   }
-                  resolve({ success: false, reason: 'TIMEOUT', received: null });
+                  if (isCurrentlyMatching) {
+                    console.log("✅ Step passed after full waitTime");
+
+                    resolve({
+                      success: true,
+                      received: lastReceivedValue
+                    });
+                  } else {
+                    console.log("❌ Step failed after full waitTime");
+
+                    resolve({
+                      success: false,
+                      reason: 'VALUE_NOT_MATCHING_AT_END',
+                      received: lastReceivedValue
+                    });
+                  }
                 }, (step.waitTime || 20) * 1000);
 
 
@@ -1925,13 +1944,14 @@ app.post('/api/tests/fan-test', async (req, res) => {
                 console.log("🟨 Setting wait MAC:", testDeviceMAC);
 
 
-                let currentStepHandler = null;
 
                 // Handler wait for expecting outputs inside the steps
                 const stepHandler = (reading) => {
                   if (!reading || typeof reading !== 'object') {
                     return false;
                   }
+
+                  // let isMatch = false;
 
                   console.log("📥 Reading received:", reading);
 
@@ -1943,6 +1963,7 @@ app.post('/api/tests/fan-test', async (req, res) => {
                     const properties = step.waitFor.split(';').map(p => p.trim());
                     const expectedValues = step.expectedValue.split(';').map(v => v.trim());
 
+                    // let matchStartTime = null;
                     let allMatch = true;
 
                     console.log("🔎 Expected values:", expectedValues);
@@ -1957,20 +1978,29 @@ app.post('/api/tests/fan-test', async (req, res) => {
 
                       console.log(`   🔍 Checking: ${prop} = "${reading[prop]}" (expected: "${expectedVal}")`);
 
-                      if (receivedVal !== normalizedExpected) {
-                        allMatch = false;
-                      }
+                      // if (receivedVal !== normalizedExpected) {
+                      //   allMatch = false;
+                      // }
+
+                      isCurrentlyMatching = properties.every((prop, i) => {
+                        const expected = (expectedValues[i] || expectedValues[0]).toUpperCase().trim();
+                        const received = String(reading[prop]).toUpperCase().trim();
+                        return received === expected;
+                      });
+
+                      lastReceivedValue = reading;
+
                     }
 
-                    // CHECKING ALL PROPERTIES MATCHED OF SINGLE STEP
-                    if (allMatch) {
-                      clearTimeout(timeout);
-                      clearTestWaitForMAC();
-                      const idx = deviceCommandWaiters.indexOf(stepHandler);
-                      if (idx > -1) deviceCommandWaiters.splice(idx, 1);
-                      resolve({ success: true, received: 'All properties matched' });
-                      return true;
-                    }
+                    // // CHECKING ALL PROPERTIES MATCHED OF SINGLE STEP
+                    // if (allMatch) {
+                    //   clearTimeout(timeout);
+                    //   clearTestWaitForMAC();
+                    //   const idx = deviceCommandWaiters.indexOf(stepHandler);
+                    //   if (idx > -1) deviceCommandWaiters.splice(idx, 1);
+                    //   resolve({ success: true, received: 'All properties matched' });
+                    //   return true;
+                    // }
 
                     console.log("🔎 All properties matched?", allMatch);
 
@@ -1980,20 +2010,24 @@ app.post('/api/tests/fan-test', async (req, res) => {
                   // SINGLE PROPERTY CHECK
                   else {
                     const receivedValue = reading[step.waitFor];
+                    lastReceivedValue = receivedValue;
+
                     const normalizedReceived = String(receivedValue).toUpperCase().trim();
                     const normalizedExpected = String(step.expectedValue).toUpperCase().trim();
 
                     console.log(`   🔍 Checking: ${step.waitFor} = "${receivedValue}" (expected: "${step.expectedValue}")`);
 
-                    // COMPARING VALUES 
-                    if (normalizedReceived === normalizedExpected) {
-                      clearTimeout(timeout);
-                      clearTestWaitForMAC();
-                      const idx = deviceCommandWaiters.indexOf(stepHandler);
-                      if (idx > -1) deviceCommandWaiters.splice(idx, 1);
-                      resolve({ success: true, received: receivedValue });
-                      return true;
-                    }
+                    isCurrentlyMatching = (normalizedReceived === normalizedExpected);
+
+                    // // COMPARING VALUES 
+                    // if (normalizedReceived === normalizedExpected) {
+                    //   clearTimeout(timeout);
+                    //   clearTestWaitForMAC();
+                    //   const idx = deviceCommandWaiters.indexOf(stepHandler);
+                    //   if (idx > -1) deviceCommandWaiters.splice(idx, 1);
+                    //   resolve({ success: true, received: receivedValue });
+                    //   return true;
+                    // }
 
                     return false; // Keep waiting
                   }
@@ -2067,21 +2101,33 @@ app.post('/api/tests/fan-test', async (req, res) => {
                 });
 
                 // STOPPING ON SINGLE STEP FAILING
-                break;
+                // break;
+                continue
               }
             }
 
             // Set overall test result
             testResult.passed = allStepsPassed;
             testResult.status = allStepsPassed ? 'passed' : 'failed';
+
+            let reportBlock = `Test: ${testResult.name} \nStatus: ${testResult.status} \nSteps Results:\n`;
+
+            for (const step of stepResults) {
+              reportBlock +=
+                `Step ${step.step}: ` +
+                `${step.status.toUpperCase()} | ` +
+                `Message: ${step.message} | `
+            }
+
             testResult.output = allStepsPassed
               ? (testConfig.pass || `✅ All ${testConfig.steps.length} steps passed`)
               : (testConfig.fail || `❌ Test failed at step ${stepResults.length}`);
             testResult.stepResults = stepResults;
 
-            const reportContent = `Test: ${testResult.name} , Status: ${testResult.status} , Steps: ${stepResults.length}/${testConfig.steps.length}`;
+
+            // const reportContent = `Test: ${testResult.name} , Status: ${testResult.status} , Steps: ${stepResults.length}/${testConfig.steps.length}`;
             try {
-              await fs.promises.appendFile(testReportFilePath, `${reportContent}\n`);
+              await fs.promises.appendFile(testReportFilePath, `${reportBlock}\n`);
               console.log(`✅ Test report appended to: ${testReportFileName}`);
             } catch (err) {
               console.log(`🔴 Error writing test report: ${err} 🔴`);
