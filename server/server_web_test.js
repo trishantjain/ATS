@@ -2116,7 +2116,7 @@ app.post('/api/tests/fan-test', async (req, res) => {
               reportBlock +=
                 `Step ${step.step}: ` +
                 `${step.status.toUpperCase()} | ` +
-                `Message: ${step.message} | `
+                `Message: ${step.message} \n `
             }
 
             testResult.output = allStepsPassed

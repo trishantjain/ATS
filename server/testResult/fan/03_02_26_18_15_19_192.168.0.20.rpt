@@ -1,0 +1,8 @@
+FAN Test Run - 03/02/26 18:15:19
+Device: 192.168.0.20
+Total Tests: 1
+
+Test: Fan Tray Test 
+Status: failed 
+Steps Results:
+Step 1: PASSED | Message: All fans are off, | Ready to test | | Step 2: FAILED | Message: Fan 1 not turned on | Step 3: PASSED | Message: Fan 1 turned off successfully | Step 4: PASSED | Message: Fan 2 turned on successfull | Step 5: PASSED | Message: Fan 2 turned off successfully | Step 6: PASSED | Message: Fan 3 turned on successfully | Step 7: PASSED | Message: Fan 3 turned off successfully | Step 8: PASSED | Message: Fan 4 turned off successfully | Step 9: PASSED | Message: Fan 4 turned off successfully | 
