@@ -1,0 +1,33 @@
+ATS Test Run - 03/02/26 13:11:27
+Device: unknown-device
+
+Step 1: PASS
+Message: Check continuity between L1 and N1
+
+Step 2: PASS
+Message: Check continuity between L1 and N2
+
+Step 3: PASS
+Message: Check continuity between L1 and N3
+
+Step 4: PASS
+Message: Check continuity between L1 and N4
+
+Step 5: PASS
+Message: Check continuity between L1 and N5
+
+Step 6: FAIL
+Message: Check continuity between L1 and C1
+
+Step 7: FAIL
+Message: Check continuity between L1 and C2
+
+Step 8: PASS
+Message: Check continuity between L1 and C3
+
+Step 9: PASS
+Message: Check continuity between L1 and C4
+
+Step 10: PASS
+Message: Check continuity between L1 and C5
+

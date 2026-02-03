@@ -1,0 +1,7 @@
+ATS Test Run - 03/02/26 01:43:43
+Device: 192.168.0.0
+Total Tests: 15
+
+Test: Visual Test , Status: passed
+Test: Burn-In Test , Status: passed
+Test: Fan Test , Status: failed , Steps: 1/9
