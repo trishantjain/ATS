@@ -16,6 +16,7 @@ import "leaflet/dist/leaflet.css";
 //   ResponsiveContainer,
 // } from "recharts";
 import swal from "sweetalert2";
+import PDU_STEPS from "./pdu_steps";
 // import thresholds from "../../../server/thresholds";
 // import GaugeComponent from 'react-gauge-component';
 
@@ -44,12 +45,15 @@ function DashboardView() {
   const [liveReading, setLiveReading] = useState(null);  // Separate state for immediate UI updates
   const notificationTimeoutRef = useRef(null);  // Track notification auto-dismiss timeout
 
-  const [selectedTests, setSelectedTests] = useState([]);
-  const [fetchedTestList, setFetchedTestList] = useState([]);
   const [selectedProduct, setSelectedProduct] = useState("");
 
-  const [awaitingCommand, setAwaitingCommand] = useState(false);
-  const [fanTestStatus, setFanTestStatus] = useState(false);
+  // States for Test Lists
+  const [selectedTests, setSelectedTests] = useState([]);  // Stores selected tests
+  const [fetchedTestList, setFetchedTestList] = useState([]); // Stores Fetched tests from backend
+
+  const [awaitingCommand, setAwaitingCommand] = useState(false); // Waiting for ATS Execution
+  const [fanTestStatus, setFanTestStatus] = useState(false); // Waiting for Fan Test Execution
+  const [pduTestStatus, setPduTestStatus] = useState(false); // Waiting for PDU Test Execution
 
   //Map and marker refs
   const mapRef = useRef(null);
@@ -611,11 +615,13 @@ function DashboardView() {
   useEffect(() => {
     const fetchTests = async () => {
       try {
-        const res = await fetch(`${process.env.REACT_APP_API_URL}/api/tests/${selectedProduct}`);
-        const tests = await res.json();
-        setFetchedTestList(tests);
+        if (selectedProduct !== "pdu") {
+          const res = await fetch(`${process.env.REACT_APP_API_URL}/api/tests/${selectedProduct}`);
+          const tests = await res.json();
+          setFetchedTestList(tests);
+          setSelectedTests(tests);
+        }
         // Auto-select all tests when fetched
-        setSelectedTests(tests);
       } catch (err) {
         console.error('Error fetching tests:', err);
       }
@@ -729,7 +735,72 @@ function DashboardView() {
 
   // PDU TEST FUNCTION
   async function pdu_test() {
-    console.log("PDU Test function called");
+    setPduTestStatus(true);
+
+    const frontendPDUResults = [];
+    let testCancelled = false;
+
+    for (const step of PDU_STEPS) {
+      const r = await swal.fire({
+        title: `Step ${step.step}`,
+        text: step.msg,
+        imageUrl: step.image,
+        imageWidth: 800,
+        imageHeight: 300,
+        width: '900px',
+        showCancelButton: true,
+        showDenyButton: true,
+        confirmButtonText: 'PASS',
+        denyButtonText: 'FAIL',
+        cancelButtonText: '🛑 Cancel Test',
+        allowOutsideClick: false,
+        allowEscapeKey: false,
+        cancelButton: true,
+        didOpen: () => {
+          const image = document.querySelector('.swal2-image');
+          if (image) {
+            image.style.width = '800px';
+            image.style.height = '300px';
+            image.style.objectFit = 'contain';
+            image.style.maxWidth = '100%';
+          }
+        }
+      });
+
+      // 🛑 Cancel test completely
+      if (r.isDismissed) {
+        testCancelled = true;
+        break;
+      }
+
+      frontendPDUResults.push({
+        step: step.step,
+        message: step.msg,
+        image: step.image,
+        passed: r.isConfirmed
+      });
+    }
+
+    try {
+      console.log("Calling /pdu-test API...");
+      const resp = await fetch(`${process.env.REACT_APP_API_URL}/api/tests/pdu-test`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mac: selectedMac, frontendPDUResults,
+          cancelled: testCancelled
+        })
+      });
+
+      console.log("...API Called")
+      const data = await resp.json();
+      console.log("Data: ", data);
+      setTestStatus(`Done: ${data.summary.passed} passed, ${data.summary.failed} failed`);
+    } catch (err) {
+      setTestStatus(`Error: ${err.message}`);
+    }
+
+    setPduTestStatus(false);
   };
 
 
@@ -854,16 +925,16 @@ function DashboardView() {
                 <button
                   className="btn-test"
                   onClick={pdu_test}
-                  disabled={awaitingCommand}
+                  disabled={pduTestStatus}
                 >
-                  {awaitingCommand ? "Running PDU Test..." : "Run PDU Test"}
+                  {pduTestStatus ? "Running PDU Test..." : "Run PDU Test"}
                 </button> :
                 <h4>Select a product to run tests</h4>
           }
 
 
           {/* STOP TEST BUTTON */}
-          {(awaitingCommand || fanTestStatus) && (
+          {(awaitingCommand || fanTestStatus || pduTestStatus) && (
             <button
               className="btn-test-stop"
               onClick={async () => {
@@ -881,13 +952,16 @@ function DashboardView() {
                   // Set states to false AFTER the API call completes
                   setAwaitingCommand(false);
                   setFanTestStatus(false);
+                  setPduTestStatus(false);
                 } catch (err) {
                   console.error('Failed to stop tests:', err);
                   // Still reset states even on error
                   setAwaitingCommand(false);
                   setFanTestStatus(false);
+                  setPduTestStatus(false);
                 }
-              }}
+              }
+              }
               style={{
                 backgroundColor: '#cc3333',
                 color: 'white',
@@ -1060,6 +1134,12 @@ function DashboardView() {
             {test}
           </label>
         )) : <p>No Tests found</p>}
+
+
+        {/* {pduTestStatus && (
+          <img className="pdu-image" src="./pdu/ch1.png">
+          </img>
+        )} */}
       </div>
 
       {/* DASHBOARD */}

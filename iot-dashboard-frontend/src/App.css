@@ -993,3 +993,11 @@ body {
 .logo-right{
   justify-content: right;
 } */
+
+.pdu-image{  
+  background-color: white;
+  padding: 10px;
+  margin: 30px;
+  width: 70%;
+  height: auto;
+}

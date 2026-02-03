@@ -1707,7 +1707,7 @@ app.post('/api/tests/fan-test', async (req, res) => {
 
     await fs.promises.writeFile(
       testReportFilePath,
-      `ATS Test Run - ${getFormattedDateTime()}\nDevice: ${reportMac}\nTotal Tests: ${totalTests}\n\n`,
+      `FAN Test Run - ${getFormattedDateTime()}\nDevice: ${reportMac}\nTotal Tests: ${totalTests}\n\n`,
       { flag: 'w' }
     );
 
@@ -2144,6 +2144,56 @@ app.post('/api/tests/fan-test', async (req, res) => {
 
     console.log(`📊 ATS Tests completed: ${passedCount} passed, ${failedCount} failed`);
     res.json(response);
+
+  } catch (err) {
+    console.error("❌ Error running all tests:", err.message);
+    res.status(500).json({
+      error: `Failed to run tests: ${err.message}`,
+      timestamp: getFormattedDateTime()
+    });
+  }
+});
+
+// ✅ FAN ASSEMBLY TEST API
+app.post('/api/tests/pdu-test', async (req, res) => {
+  console.log("/api/tests/pdu-test API called");
+
+  // RESETING STOP TEST FLAG
+  resetTestStopFlag();
+
+  try {
+    const { mac, frontendPDUResults } = req.body;
+
+    console.log("Frontend PDU Results: ", frontendPDUResults);
+    console.log("MAC Address: ", mac);
+
+    const testResultDir = path.join(__dirname, "testResult/pdu");
+    if (!fs.existsSync(testResultDir)) {
+      fs.mkdirSync(testResultDir, { recursive: true });
+    }
+
+    const reportMac = mac ? String(mac).replace(/:/g, '-') : 'unknown-device';
+    const testReportFileName = `${getFormattedDateTime('file')}_${reportMac}.rpt`;
+    const testReportFilePath = path.join(testResultDir, testReportFileName);
+
+    // const totalTests = testFiles.length;
+
+    // await fs.promises.writeFile(
+    //   testReportFilePath,
+    //   `ATS Test Run - ${getFormattedDateTime()}\nDevice: ${reportMac}\nTotal Tests: ${totalTests}\n\n`,
+    //   { flag: 'w' }
+    // );
+
+    // const results = [];
+    let content = `PDU Test Run - ${getFormattedDateTime()}\nDevice: ${reportMac}\n\n`;
+
+    frontendPDUResults.forEach(r => {
+      content += `Step ${r.step}: ${r.passed ? 'PASS' : 'FAIL'}\n`;
+      content += `Message: ${r.message}\n\n`;
+    });
+
+    await fs.promises.writeFile(testReportFilePath, content);
+    res.json({ ok: true });
 
   } catch (err) {
     console.error("❌ Error running all tests:", err.message);

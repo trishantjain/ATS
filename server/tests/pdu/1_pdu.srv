@@ -1,0 +1,75 @@
+name="PDU Test"
+msg="PDU Test Started" 
+pass="Fan Tray test successfully completed"
+fail="Fan Tray test failed"
+retryCount=0
+
+[step:1]
+msg=Check continuity between L1 and N1
+waitTime:60
+image=./pdu/ch1.png
+onPass="L1 and N1 connection are ok "
+onFail="Some fans are still running. Turn off all fans first."
+
+[step:2]
+msg=Check continuity between L1 and N2
+waitTime:60
+image=./pdu/ch2.png
+onPass="L1 and N2 connection are ok"
+onFail="L1 and N2 fans are still running. Turn off all fans first."
+
+[step:3]
+msg=Check continuity between L1 and N3
+waitTime:60
+image=./pdu/ch3.png
+onPass="L1 and N3 connection are ok"
+onFail="Some fans are still running. Turn off all fans first."
+
+[step:4]
+msg=Check continuity between L1 and N4
+waitTime:60
+image=./pdu/ch4.png
+onPass="L1 and N4 connection are ok"
+onFail="Some fans are still running. Turn off all fans first."
+
+[step:5]
+msg=Check continuity between L1 and N5
+waitTime:60
+image=./pdu/ch5.png
+onPass="L1 and N5 connection are ok"
+onFail="Some fans are still running. Turn off all fans first."
+
+[step:6]
+msg=Check continuity between L2 and C1
+waitTime:60
+image=./pdu/ch6.png
+onPass="L2 and C1 connection are ok"
+onFail="Some fans are still running. Turn off all fans first."
+
+[step:7]
+msg=Check continuity between L2 and C2
+waitTime:60
+image=./pdu/ch7.png
+onPass="L2 and C2 connection are ok"
+onFail="Some fans are still running. Turn off all fans first."
+
+[step:8]
+msg=Check continuity between L2 and C3
+waitTime:60
+image=./pdu/ch8.png
+onPass="L2 and C3 connection are ok"
+onFail="Some fans are still running. Turn off all fans first."
+
+[step:9]
+msg=Check continuity between L2 and C4
+waitTime:60
+image=./pdu/ch9.png
+onPass="L2 and C4 connection are ok"
+onFail="Some fans are still running. Turn off all fans first."
+
+[step:10]
+msg=Check continuity between L2 and C5
+waitTime:60
+image=./pdu/ch10.png
+onPass="L2 and C5 connection are ok"
+onFail="Some fans are still running. Turn off all fans first."
