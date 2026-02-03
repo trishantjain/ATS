@@ -1,5 +1,5 @@
 name="Fan Tray Test"
-msg="Testing 
+msg="Fan Tray Testing" 
 pass="Fan Tray test successfully completed"
 fail="Fan Tray test failed"
 retryCount=0
