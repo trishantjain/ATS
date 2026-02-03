@@ -45,7 +45,7 @@ function DashboardView() {
   const notificationTimeoutRef = useRef(null);  // Track notification auto-dismiss timeout
 
   const [selectedTests, setSelectedTests] = useState([]);
-  const [testList, setTestList] = useState([]);
+  const [fetchedTestList, setFetchedTestList] = useState([]);
   const [selectedProduct, setSelectedProduct] = useState("");
 
   const [awaitingCommand, setAwaitingCommand] = useState(false);
@@ -285,9 +285,9 @@ function DashboardView() {
   //   try {
   //     // First, get the list of tests
   //     const listResponse = await fetch(`${process.env.REACT_APP_API_URL}/api/tests/list`);
-  //     const testList = await listResponse.json();
+  //     const fetchedTestList = await listResponse.json();
 
-  //     for (const testFile of testList.availableTests) {
+  //     for (const testFile of fetchedTestList.availableTests) {
   //       setCurrentTest(testFile);
   //       setTestStatus(`Running: ${testFile}`);
 
@@ -607,12 +607,15 @@ function DashboardView() {
     setSelectedProduct(e.target.value);
   }
 
+  // FETCHING TEST LIST BASED ON SELECTED PRODUCT
   useEffect(() => {
     const fetchTests = async () => {
       try {
         const res = await fetch(`${process.env.REACT_APP_API_URL}/api/tests/${selectedProduct}`);
         const tests = await res.json();
-        setTestList(tests);
+        setFetchedTestList(tests);
+        // Auto-select all tests when fetched
+        setSelectedTests(tests);
       } catch (err) {
         console.error('Error fetching tests:', err);
       }
@@ -623,28 +626,31 @@ function DashboardView() {
     }
   }, [selectedProduct]);
 
+  // IMONI TEST FUNCTION
   async function iMoni_test() {
     setAwaitingCommand(true); // Shows 'Running...' state
     const frontendResults = []; // Stores Visual & Burn-in results
+    console.log("Fetched Test List Length: ", fetchedTestList.length);
+    console.log("Selected Tests Length: ", selectedTests.length);
 
-    if (selectedTests.length === testList.length) {
+    if (fetchedTestList.length === selectedTests.length) {
 
       // 1. Visual Test (frontend dialog)
-      // const v = await swal.fire({
-      //   title: 'Visual Test',
-      //   text: 'Is Visual inspection passed?',
-      //   showCancelButton: true,
-      //   confirmButtonText: 'Pass',
-      //   cancelButtonText: 'Fail'
-      // });
-
-      const v = confirmDialogBox({
+      const v = await swal.fire({
         title: 'Visual Test',
         text: 'Is Visual inspection passed?',
         showCancelButton: true,
         confirmButtonText: 'Pass',
-        cancelButtonText: "Fail"
-      })
+        cancelButtonText: 'Fail'
+      });
+
+      // const v = await confirmDialogBox({
+      //   title: 'Visual Test',
+      //   text: 'Is Visual inspection passed?',
+      //   showCancelButton: true,
+      //   confirmButtonText: 'Pass',
+      //   cancelButtonText: "Fail"
+      // })
 
       frontendResults.push({
         name: 'Visual Test',
@@ -666,8 +672,11 @@ function DashboardView() {
         passed: b.isConfirmed
       });
 
+      console.log("Frontend Results: ", frontendResults);
       // 3. Runs API '/tests/run-all/'
       try {
+        // if()
+
         const resp = await fetch(`${process.env.REACT_APP_API_URL}/api/tests/run-all`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -696,6 +705,7 @@ function DashboardView() {
     setAwaitingCommand(false);
   }
 
+  // FAN TEST FUNCTION
   async function fan_test() {
     setFanTestStatus(true);
 
@@ -717,6 +727,7 @@ function DashboardView() {
     setFanTestStatus(false);
   }
 
+  // PDU TEST FUNCTION
   async function pdu_test() {
     console.log("PDU Test function called");
   };
@@ -836,7 +847,7 @@ function DashboardView() {
               <button
                 className="btn-test"
                 onClick={fan_test}
-                disabled={awaitingCommand}
+                disabled={fanTestStatus}
               >
                 {fanTestStatus ? "Running Fan Test..." : "Run Fan Test"}
               </button> : selectedProduct === "pdu" ?
@@ -851,10 +862,8 @@ function DashboardView() {
           }
 
 
-
-
-          {/* CANCEL ATS TEST BUTTON */}
-          {awaitingCommand && (
+          {/* STOP TEST BUTTON */}
+          {(awaitingCommand || fanTestStatus) && (
             <button
               className="btn-test-stop"
               onClick={async () => {
@@ -863,15 +872,20 @@ function DashboardView() {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' }
                   });
-                  setAwaitingCommand(false);
                   setTestStatus('🛑 Tests stopped by user');
                   setNotification({
                     title: 'Tests Stopped',
                     message: 'Testing process was stopped by user',
                     type: 'error'
                   });
+                  // Set states to false AFTER the API call completes
+                  setAwaitingCommand(false);
+                  setFanTestStatus(false);
                 } catch (err) {
                   console.error('Failed to stop tests:', err);
+                  // Still reset states even on error
+                  setAwaitingCommand(false);
+                  setFanTestStatus(false);
                 }
               }}
               style={{
@@ -890,7 +904,7 @@ function DashboardView() {
           )}
 
           {/* CANCEL FAN TEST BUTTON */}
-          {fanTestStatus && (
+          {/* {fanTestStatus && (
             <button
               className="btn-test-stop"
               onClick={async () => {
@@ -923,7 +937,7 @@ function DashboardView() {
             >
               🛑 Stop Test
             </button>
-          )}
+          )} */}
 
           {/* <button
             className="btn-test-secondary"
@@ -1029,9 +1043,20 @@ function DashboardView() {
           </div>
         )}
 
-        {testList.length > 0 ? testList.map((test) => (
-          <label style={{ display: "block" }}>
-            <input type="checkbox" defaultChecked />
+        {fetchedTestList.length > 0 ? fetchedTestList.map((test) => (
+          <label key={test} style={{ display: "block" }}>
+            <input 
+              type="checkbox" 
+              value={test}
+              checked={selectedTests.includes(test)}
+              onChange={(e) => {
+                if (e.target.checked) {
+                  setSelectedTests([...selectedTests, test]);
+                } else {
+                  setSelectedTests(selectedTests.filter(t => t !== test));
+                }
+              }}
+            />
             {test}
           </label>
         )) : <p>No Tests found</p>}
