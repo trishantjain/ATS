@@ -459,49 +459,55 @@ app.get("/api/tests/list", async (req, res) => {
 });
 
 // ✅ Run a single test file (COMMENTED OUT - uncomment if needed in future)
-app.post("/api/test/run", async (req, res) => {
-  console.log("▶️ /api/test/run endpoint called");
-  const { testFile } = req.body;
+app.post("/api/tests/run", async (req, res) => {
+  console.log("▶️ /api/tests/run endpoint called");
+  const { selectedTests } = req.body;
+  console.log("Requested test file:", selectedTests);
 
-  if (!testFile) {
-    return res.status(400).json({ error: "testFile is required" });
+  if (!selectedTests || selectedTests.length === 0) {
+    return res.status(400).json({ error: "selectedTests is required" });
   }
 
-  console.log("Test File passed: ", testFile);
+  console.log("Test File passed: ", selectedTests);
 
-  const testPath = path.join(__dirname, "test", testFile);
-  const baseDir = path.join(__dirname, "test");
-
-  // Prevent path traversal
-  if (!path.normalize(testPath).startsWith(baseDir)) {
-    return res.status(400).json({ error: "Invalid test file path" });
+  // Normalize to array
+  if (!Array.isArray(selectedTests)) {
+    selectedTests = [selectedTests];
   }
 
-  // Sort files numerically (1_criticalload.srv, 2_nexttest.srv, etc.)
-  let testFiles = files
-    .filter(file => {
-      const ext = path.extname(file).toLowerCase();
-      return ['.srv'].includes(ext);
-    })
-    .sort((a, b) => {
-      // Extract numbers from filenames for sorting
-      const numA = parseInt(a.split('_')[0]) || 0;
-      const numB = parseInt(b.split('_')[0]) || 0;
-      return numA - numB;
-    });
+  // const testPath = path.join(__dirname, "tests/iMoni", selectedTests);
+  const baseDir = path.join(__dirname, "tests/iMoni");
 
-  console.log(`Found ${testFiles.length} test file(s):`, testFiles);
+  // // Prevent path traversal
+  // if (!path.normalize(testPath).startsWith(baseDir)) {
+  //   return res.status(400).json({ error: "Invalid test file path" });
+  // }
 
-  if (testFiles.length === 0) {
-    return res.status(400).json({
-      error: "No test files found in test directory",
-      timestamp: getFormattedDateTime()
-    });
+  // // Check if file exists
+  // if (!fs.existsSync(testPath)) {
+  //   return res.status(404).json({
+  //     error: "Test file not found",
+  //     path: testPath,
+  //     timestamp: getFormattedDateTime()
+  //   });
+  // }
+
+  // console.log(`Running test file: ${testPath}`);
+
+  // Validate filenames only
+  for (const testFile of selectedTests) {
+    const resolvedPath = path.join(baseDir, testFile);
+    if (!resolvedPath.startsWith(baseDir)) {
+      return res.status(400).json({ error: "Invalid test file path" });
+    }
+    if (!fs.existsSync(resolvedPath)) {
+      return res.status(404).json({ error: `Test file not found: ${testFile}` });
+    }
   }
 
   try {
     const testResult = await runTests({
-      testFiles: [testPath],
+      testFiles: selectedTests,
       onStatus: broadcastTestStatus
     });
 
@@ -510,14 +516,14 @@ app.post("/api/test/run", async (req, res) => {
       ...testResult
     });
   } catch (err) {
-    console.error("❌ Error running test:", err.message);
+    console.error("❌ Error running tests:", err.message);
     if (err.code === "ENOENT") {
       return res.status(404).json({ error: "Test file not found" });
     }
     if (err.code === "EISDIR") {
       return res.status(400).json({ error: "Path is a directory" });
     }
-    res.status(500).json({ error: `Failed to run test: ${err.message}` });
+    res.status(500).json({ error: `Failed to run tests: ${err.message}` });
   }
 });
 
