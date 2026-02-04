@@ -2110,24 +2110,45 @@ app.post('/api/tests/fan-test', async (req, res) => {
             testResult.passed = allStepsPassed;
             testResult.status = allStepsPassed ? 'passed' : 'failed';
 
-            let reportBlock = `Test: ${testResult.name} \nStatus: ${testResult.status} \nSteps Results:\n`;
 
-            for (const step of stepResults) {
-              reportBlock +=
-                `Step ${step.step}: ` +
-                `${step.status.toUpperCase()} | ` +
-                `Message: ${step.message} \n `
-            }
-
-            testResult.output = allStepsPassed
-              ? (testConfig.pass || `✅ All ${testConfig.steps.length} steps passed`)
-              : (testConfig.fail || `❌ Test failed at step ${stepResults.length}`);
-            testResult.stepResults = stepResults;
-
-
-            // const reportContent = `Test: ${testResult.name} , Status: ${testResult.status} , Steps: ${stepResults.length}/${testConfig.steps.length}`;
             try {
-              await fs.promises.appendFile(testReportFilePath, `${reportBlock}\n`);
+              // 1️⃣ Write human-readable test header
+              await fs.promises.appendFile(
+                testReportFilePath,
+                `Test: ${testResult.name}\nStatus: ${testResult.status}\n\n`
+              );
+
+              // 2️⃣ Write CSV header ONCE
+              await fs.promises.appendFile(
+                testReportFilePath,
+                'Step,StepStatus,Message\n'
+              );
+
+              for (const step of stepResults) {
+                const line =
+                  `${step.step},` +
+                  `${step.status.toUpperCase()},` +
+                  `"${step.message.replace(/"/g, '""')}"\n`;
+
+                await fs.promises.appendFile(testReportFilePath, line);
+              }
+
+              // Blank line after each test (important for readability)
+              await fs.promises.appendFile(testReportFilePath, '\n');
+
+
+              testResult.output = allStepsPassed
+                ? (testConfig.pass || `✅ All ${testConfig.steps.length} steps passed`)
+                : (testConfig.fail || `❌ Test failed at step ${stepResults.length}`);
+              testResult.stepResults = stepResults;
+
+              await fs.promises.appendFile(
+                testReportFilePath,
+                '=== TEST END ===\n\n'
+              );
+
+              // const reportContent = `Test: ${testResult.name} , Status: ${testResult.status} , Steps: ${stepResults.length}/${testConfig.steps.length}`;
+              // await fs.promises.appendFile(testReportFilePath, `${reportBlock}\n`);
               console.log(`✅ Test report appended to: ${testReportFileName}`);
             } catch (err) {
               console.log(`🔴 Error writing test report: ${err} 🔴`);
