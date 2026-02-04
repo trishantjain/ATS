@@ -1,17 +1,27 @@
-const runTests = async ({ testFiles, mac, onStatus }) => {
-    console.log(`\n=== 🚀 Starting ATS Test Run: ${testFiles.length} test(s) ===`);
+const path = require("path");
+const fs = require("fs");
+const atsRuntime = require("./atsRuntime");
+const { getFormattedDateTime } = require("../utils/time");
+
+const runTests = async ({ testFiles, mac, onStatus, frontendResults = [] }) => {
+    console.log(`\n=========== 🚀 Starting ATS Test Run: ${testFiles.length} test(s) ===========`);
     const results = [];
 
     // Run test files one by one
+    console.log("Test files in atsRunner:", testFiles);
     for (const testFile of testFiles) {
         // Check if stop was requested before starting next test
-        if (testStopRequested) {
+        if (atsRuntime.testStopRequested) {
             console.log('    🛑 Test execution stopped by user - skipping remaining tests');
             break;
         }
 
-        const testFilePath = path.join(testDir, testFile);
+
         console.log(`🔬 Processing test file: ${testFile}`);
+
+        const testDir = path.join(__dirname, "../tests/iMoni");
+        const testFilePath = path.join(testDir, testFile);
+        console.log(`Path resolved for test file in atsRunner: ${testFilePath}`);
 
         try {
             let testResult = {
@@ -73,6 +83,7 @@ const runTests = async ({ testFiles, mac, onStatus }) => {
                         continue;
                     }
 
+                    console.log(`   🔍 Evaluating lines: ${line}`);
                     // PROPERTIES INSIDE THE STEPS
                     if (currentStep) {
                         if (line.startsWith('msg=')) {
@@ -131,8 +142,10 @@ const runTests = async ({ testFiles, mac, onStatus }) => {
                 console.log(`    🎯 Expected Outcome: ${testResult.expectedOutcome}`);
                 console.log(`    📋 Steps defined: ${testConfig.steps.length}`);
 
+                console.log("   📂 Sending Test Started Broadcast");
+
                 // Send TEST STARTING status to WebSocket clients
-                broadcastTestStatus({
+                onStatus?.({
                     type: 'TEST_STARTED',
                     testFile: testFile,
                     name: testResult.name,
@@ -143,25 +156,29 @@ const runTests = async ({ testFiles, mac, onStatus }) => {
                     timestamp: getFormattedDateTime()
                 });
 
+                console.log(`    📡 Connected devices: ${atsRuntime.connectedDevices.length}`);
+
                 // Get the first connected device MAC to wait for
-                const connectedMACs = Array.from(connectedDevices.keys());
+                const connectedMACs = Array.from(atsRuntime.connectedDevices.keys());
 
                 if (connectedMACs.length === 0) {
                     testResult.output = "❌ Test FAILED: No connected devices available";
                     testResult.status = "failed";
                     testResult.passed = false;
                 }
+                // ========== SENSOR TEST TYPE HANDLING ==========
                 else if (testConfig.type === 'sensor') {
-                    console.log(`   🔄Running sensor code part`)
+                    console.log(`           📟 Sensor test detected in test type`);
+                    console.log(`           🔄 Running sensor code part`);
                     const testDeviceMAC = connectedMACs[0];
                     let allStepsPassed = true;
                     const stepResults = [];
 
-                    console.log(`   🔄 Running step-based test with ${testConfig.steps.length} steps`);
+                    console.log(`           🔄 Running step-based test with ${testConfig.steps.length} steps`);
 
                     for (let i = 0; i < testConfig.steps.length; i++) {
                         // Check if stop was requested
-                        if (testStopRequested) {
+                        if (atsRuntime.testStopRequested) {
                             console.log('    🛑 Test stopped by user request');
                             testResult.status = 'stopped';
                             testResult.output = 'Test stopped by user';
@@ -176,7 +193,7 @@ const runTests = async ({ testFiles, mac, onStatus }) => {
                         console.log(`    Timeout: ${step.waitTime}s`);
 
                         // Broadcast step started (same for all step types)
-                        broadcastTestStatus({
+                        onStatus?.({
                             type: 'STEP_STARTED',
                             testFile: testFile,
                             name: testResult.name,
@@ -195,10 +212,10 @@ const runTests = async ({ testFiles, mac, onStatus }) => {
                             const requiredIncrease = step.increasedBy || 0;
 
                             const timeout = setTimeout(() => {
-                                clearTestWaitForMAC();
+                                atsRuntime.clearTestWaitForMAC();
                                 if (currentStepHandler) {
-                                    const idx = deviceCommandWaiters.indexOf(currentStepHandler);
-                                    if (idx > -1) deviceCommandWaiters.splice(idx, 1);
+                                    const idx = atsRuntime.deviceCommandWaiters.indexOf(currentStepHandler);
+                                    if (idx > -1) atsRuntime.deviceCommandWaiters.splice(idx, 1);
                                 }
                                 resolve({
                                     success: false,
@@ -207,7 +224,7 @@ const runTests = async ({ testFiles, mac, onStatus }) => {
                                 });
                             }, (step.waitTime || 20) * 1000);
 
-                            setTestWaitForMAC(testDeviceMAC);
+                            atsRuntime.setTestWaitForMAC(testDeviceMAC);
 
                             let currentStepHandler = null;
 
@@ -238,9 +255,9 @@ const runTests = async ({ testFiles, mac, onStatus }) => {
                                 // Check if value has increased by required amount
                                 if (currentIncrease >= requiredIncrease) {
                                     clearTimeout(timeout);
-                                    clearTestWaitForMAC();
-                                    const idx = deviceCommandWaiters.indexOf(stepHandler);
-                                    if (idx > -1) deviceCommandWaiters.splice(idx, 1);
+                                    atsRuntime.clearTestWaitForMAC();
+                                    const idx = atsRuntime.deviceCommandWaiters.indexOf(stepHandler);
+                                    if (idx > -1) atsRuntime.deviceCommandWaiters.splice(idx, 1);
                                     resolve({
                                         success: true,
                                         received: `${currentValue} (increased by ${currentIncrease.toFixed(2)} from ${initialSensorValue})`
@@ -252,7 +269,7 @@ const runTests = async ({ testFiles, mac, onStatus }) => {
                             };
 
                             currentStepHandler = stepHandler;
-                            deviceCommandWaiters.push(stepHandler);
+                            atsRuntime.deviceCommandWaiters.push(stepHandler);
                         });
 
                         // Process step result
@@ -266,7 +283,7 @@ const runTests = async ({ testFiles, mac, onStatus }) => {
                             });
 
                             // sending message to UI after test completion
-                            broadcastTestStatus({
+                            onStatus?.({
                                 type: 'STEP_COMPLETED',
                                 testFile: testFile,
                                 name: testResult.name,
@@ -286,7 +303,7 @@ const runTests = async ({ testFiles, mac, onStatus }) => {
                                 received: stepResult.received
                             });
 
-                            broadcastTestStatus({
+                            onStatus?.({
                                 type: 'STEP_COMPLETED',
                                 testFile: testFile,
                                 name: testResult.name,
@@ -315,9 +332,10 @@ const runTests = async ({ testFiles, mac, onStatus }) => {
                         await fs.promises.appendFile(testReportFilePath, `${reportContent}\n`);
                         console.log(`✅ Test report appended to: ${testReportFileName}`);
                     } catch (err) {
-                        console.log(`🔴 Error writing test report: ${err} 🔴`);
+                        console.log(`🔴 Error writing test report: ${err.stack} 🔴`);
                     }
                 }
+                // ========== CAMERA TEST TYPE HANDLING ==========
                 else if (testConfig.type === 'camera') {
                     console.log(`    📷 Running camera test`);
                     const stepResults = [];
@@ -325,7 +343,7 @@ const runTests = async ({ testFiles, mac, onStatus }) => {
 
                     for (let i = 0; i < testConfig.steps.length; i++) {
                         // Check if stop was requested
-                        if (testStopRequested) {
+                        if (atsRuntime.testStopRequested) {
                             console.log('    🛑 Test stopped by user request');
                             testResult.status = 'stopped';
                             testResult.output = 'Test stopped by user';
@@ -338,7 +356,7 @@ const runTests = async ({ testFiles, mac, onStatus }) => {
                         console.log(` \n📍 Step ${stepNumber}: ${step.msg}`);
 
                         // Broadcast step started
-                        broadcastTestStatus({
+                        onStatus?.({
                             type: 'STEP_STARTED',
                             testFile: testFile,
                             name: testResult.name,
@@ -410,7 +428,7 @@ const runTests = async ({ testFiles, mac, onStatus }) => {
                                 console.log(`   📤 Broadcasting CAMERA_IMAGE_CAPTURED to ${wsClients.size} clients`);
 
                                 // Broadcast image captured - send to frontend for display
-                                broadcastTestStatus({
+                                onStatus?.({
                                     type: 'CAMERA_IMAGE_CAPTURED',
                                     testFile: testFile,
                                     name: testResult.name,
@@ -438,7 +456,7 @@ const runTests = async ({ testFiles, mac, onStatus }) => {
                                         received: `Image: ${fileName}`
                                     });
 
-                                    broadcastTestStatus({
+                                    onStatus?.({
                                         type: 'STEP_COMPLETED',
                                         testFile: testFile,
                                         name: testResult.name,
@@ -458,7 +476,7 @@ const runTests = async ({ testFiles, mac, onStatus }) => {
                                         received: `Image: ${fileName}`
                                     });
 
-                                    broadcastTestStatus({
+                                    onStatus?.({
                                         type: 'STEP_COMPLETED',
                                         testFile: testFile,
                                         name: testResult.name,
@@ -473,7 +491,7 @@ const runTests = async ({ testFiles, mac, onStatus }) => {
                                 }
 
                             } catch (err) {
-                                console.log(`   ❌ Step ${stepNumber} FAILED: Camera error - ${err.message}`);
+                                console.log(`   ❌ Step ${stepNumber} FAILED: Camera error - ${err.message} \n${err.stack}`);
                                 allStepsPassed = false;
                                 stepResults.push({
                                     step: stepNumber,
@@ -482,7 +500,7 @@ const runTests = async ({ testFiles, mac, onStatus }) => {
                                     received: null
                                 });
 
-                                broadcastTestStatus({
+                                onStatus?.({
                                     type: 'STEP_COMPLETED',
                                     testFile: testFile,
                                     name: testResult.name,
@@ -511,7 +529,7 @@ const runTests = async ({ testFiles, mac, onStatus }) => {
                         await fs.promises.appendFile(testReportFilePath, `${reportContent}\n`);
                         console.log(`✅ Test report appended to: ${testReportFileName}`);
                     } catch (err) {
-                        console.log(`🔴 Error writing test report: ${err} 🔴`);
+                        console.log(`🔴 Error writing test report: ${err.stack} 🔴`);
                     }
                 }
                 // ========== STEP-BASED TEST EXECUTION ==========
@@ -524,7 +542,7 @@ const runTests = async ({ testFiles, mac, onStatus }) => {
 
                     for (let i = 0; i < testConfig.steps.length; i++) {
                         // Check if stop was requested
-                        if (testStopRequested) {
+                        if (atsRuntime.testStopRequested) {
                             console.log('    🛑 Test stopped by user request');
                             testResult.status = 'stopped';
                             testResult.output = 'Test stopped by user';
@@ -539,7 +557,7 @@ const runTests = async ({ testFiles, mac, onStatus }) => {
                         console.log(`    Timeout: ${step.waitTime}s`);
 
                         // Broadcast step started (same for all step types)
-                        broadcastTestStatus({
+                        onStatus?.({
                             type: 'STEP_STARTED',
                             testFile: testFile,
                             name: testResult.name,
@@ -578,7 +596,7 @@ const runTests = async ({ testFiles, mac, onStatus }) => {
                         //       received: 'dialog:confirmed'
                         //     });
 
-                        //     broadcastTestStatus({
+                        //     onStatus?.({
                         //       type: 'STEP_COMPLETED',
                         //       testFile: testFile,
                         //       name: testResult.name,
@@ -598,7 +616,7 @@ const runTests = async ({ testFiles, mac, onStatus }) => {
                         //       received: 'dialog:cancelled'
                         //     });
 
-                        //     broadcastTestStatus({
+                        //     onStatus?.({
                         //       type: 'STEP_COMPLETED',
                         //       testFile: testFile,
                         //       name: testResult.name,
@@ -619,15 +637,15 @@ const runTests = async ({ testFiles, mac, onStatus }) => {
                         // Wait for the expected value (device readings)
                         const stepResult = await new Promise((resolve) => {
                             const timeout = setTimeout(() => {
-                                clearTestWaitForMAC();
+                                atsRuntime.clearTestWaitForMAC();
                                 if (currentStepHandler) {
-                                    const idx = deviceCommandWaiters.indexOf(currentStepHandler);
-                                    if (idx > -1) deviceCommandWaiters.splice(idx, 1);
+                                    const idx = atsRuntime.deviceCommandWaiters.indexOf(currentStepHandler);
+                                    if (idx > -1) atsRuntime.deviceCommandWaiters.splice(idx, 1);
                                 }
                                 resolve({ success: false, reason: 'TIMEOUT', received: null });
                             }, (step.waitTime || 20) * 1000);
 
-                            setTestWaitForMAC(testDeviceMAC);  //Setting device for testing so it can wait for device readings 
+                            atsRuntime.setTestWaitForMAC(testDeviceMAC);  //Setting device for testing so it can wait for device readings 
 
                             let currentStepHandler = null;
 
@@ -663,9 +681,9 @@ const runTests = async ({ testFiles, mac, onStatus }) => {
 
                                     if (allMatch) {
                                         clearTimeout(timeout);
-                                        clearTestWaitForMAC();
-                                        const idx = deviceCommandWaiters.indexOf(stepHandler);
-                                        if (idx > -1) deviceCommandWaiters.splice(idx, 1);
+                                        atsRuntime.clearTestWaitForMAC();
+                                        const idx = atsRuntime.deviceCommandWaiters.indexOf(stepHandler);
+                                        if (idx > -1) atsRuntime.deviceCommandWaiters.splice(idx, 1);
                                         resolve({ success: true, received: 'All properties matched' });
                                         return true;
                                     }
@@ -683,9 +701,9 @@ const runTests = async ({ testFiles, mac, onStatus }) => {
                                     // Checking expected Value
                                     if (normalizedReceived === normalizedExpected) {
                                         clearTimeout(timeout);
-                                        clearTestWaitForMAC();
-                                        const idx = deviceCommandWaiters.indexOf(stepHandler);
-                                        if (idx > -1) deviceCommandWaiters.splice(idx, 1);
+                                        atsRuntime.clearTestWaitForMAC();
+                                        const idx = atsRuntime.deviceCommandWaiters.indexOf(stepHandler);
+                                        if (idx > -1) atsRuntime.deviceCommandWaiters.splice(idx, 1);
                                         resolve({ success: true, received: receivedValue });
                                         return true;
                                     }
@@ -695,7 +713,7 @@ const runTests = async ({ testFiles, mac, onStatus }) => {
                             };
 
                             currentStepHandler = stepHandler;
-                            deviceCommandWaiters.push(stepHandler);
+                            atsRuntime.deviceCommandWaiters.push(stepHandler);
                         });
 
                         // Process step result
@@ -709,7 +727,7 @@ const runTests = async ({ testFiles, mac, onStatus }) => {
                             });
 
                             // sending message to UI after test completion
-                            broadcastTestStatus({
+                            onStatus?.({
                                 type: 'STEP_COMPLETED',
                                 testFile: testFile,
                                 name: testResult.name,
@@ -729,7 +747,7 @@ const runTests = async ({ testFiles, mac, onStatus }) => {
                                 received: stepResult.received
                             });
 
-                            broadcastTestStatus({
+                            onStatus?.({
                                 type: 'STEP_COMPLETED',
                                 testFile: testFile,
                                 name: testResult.name,
@@ -758,7 +776,7 @@ const runTests = async ({ testFiles, mac, onStatus }) => {
                         await fs.promises.appendFile(testReportFilePath, `${reportContent}\n`);
                         console.log(`✅ Test report appended to: ${testReportFileName}`);
                     } catch (err) {
-                        console.log(`🔴 Error writing test report: ${err} 🔴`);
+                        console.log(`🔴 Error writing test report: ${err.stack} 🔴`);
                     }
                 }
                 // ========== EO-BASED TEST EXECUTION (Original Logic) ==========
@@ -790,17 +808,17 @@ const runTests = async ({ testFiles, mac, onStatus }) => {
                     // Create a promise that resolves only when the expected condition is met
                     const waitForResponse = new Promise((resolve) => {
                         const timeout = setTimeout(() => {
-                            clearTestWaitForMAC();
+                            atsRuntime.clearTestWaitForMAC();
                             // Cleanup handler on timeout
                             if (currentHandler) {
-                                const idx = deviceCommandWaiters.indexOf(currentHandler);
-                                if (idx > -1) deviceCommandWaiters.splice(idx, 1);
+                                const idx = atsRuntime.deviceCommandWaiters.indexOf(currentHandler);
+                                if (idx > -1) atsRuntime.deviceCommandWaiters.splice(idx, 1);
                             }
                             resolve("TIMEOUT");
                         }, 20000); // 20 second timeout
 
                         // Set this MAC as the one we're waiting for
-                        setTestWaitForMAC(testDeviceMAC);
+                        atsRuntime.setTestWaitForMAC(testDeviceMAC);
 
                         // Listen for device readings; resolve only on match
                         const responseHandler = (reading) => {
@@ -834,10 +852,10 @@ const runTests = async ({ testFiles, mac, onStatus }) => {
                                     testPassed = true;
                                     console.log(`✅ ALL properties matched!`);
                                     clearTimeout(timeout);
-                                    clearTestWaitForMAC();
+                                    atsRuntime.clearTestWaitForMAC();
                                     // Cleanup handler on success
-                                    const idx = deviceCommandWaiters.indexOf(responseHandler);
-                                    if (idx > -1) deviceCommandWaiters.splice(idx, 1);
+                                    const idx = atsRuntime.deviceCommandWaiters.indexOf(responseHandler);
+                                    if (idx > -1) atsRuntime.deviceCommandWaiters.splice(idx, 1);
                                     resolve(reading);
                                     return true;
                                 }
@@ -861,10 +879,10 @@ const runTests = async ({ testFiles, mac, onStatus }) => {
                                     if (normalizedReceived === normalizedExpected) {
                                         testPassed = true;
                                         clearTimeout(timeout);
-                                        clearTestWaitForMAC();
+                                        atsRuntime.clearTestWaitForMAC();
                                         // Cleanup handler on success
-                                        const idx = deviceCommandWaiters.indexOf(responseHandler);
-                                        if (idx > -1) deviceCommandWaiters.splice(idx, 1);
+                                        const idx = atsRuntime.deviceCommandWaiters.indexOf(responseHandler);
+                                        if (idx > -1) atsRuntime.deviceCommandWaiters.splice(idx, 1);
                                         resolve(reading);
                                         return true;
                                     }
@@ -874,10 +892,10 @@ const runTests = async ({ testFiles, mac, onStatus }) => {
 
                             // Fallback: any object response resolves for numeric EO cases
                             clearTimeout(timeout);
-                            clearTestWaitForMAC();
+                            atsRuntime.clearTestWaitForMAC();
                             // Cleanup handler on fallback
-                            const idx = deviceCommandWaiters.indexOf(responseHandler);
-                            if (idx > -1) deviceCommandWaiters.splice(idx, 1);
+                            const idx = atsRuntime.deviceCommandWaiters.indexOf(responseHandler);
+                            if (idx > -1) atsRuntime.deviceCommandWaiters.splice(idx, 1);
                             resolve(reading);
                             return true;
                         };
@@ -885,7 +903,7 @@ const runTests = async ({ testFiles, mac, onStatus }) => {
                         // Store reference for timeout cleanup
                         currentHandler = responseHandler;
                         // Store the handler to be called when this device responds
-                        deviceCommandWaiters.push(responseHandler);
+                        atsRuntime.deviceCommandWaiters.push(responseHandler);
                     });
 
                     deviceResponse = await waitForResponse;
@@ -973,12 +991,12 @@ const runTests = async ({ testFiles, mac, onStatus }) => {
                         await fs.promises.appendFile(testReportFilePath, `${reportContent}\n`);
                         console.log(`✅ Test report appended to: ${testReportFileName}`);
                     } catch (err) {
-                        console.log(`🔴 Error writing test report: ${err} 🔴`);
+                        console.log(`🔴 Error writing test report: ${err.stack} 🔴`);
                     }
                 } // End of EO-based test execution
 
                 // Send test completion status
-                broadcastTestStatus({
+                onStatus?.({
                     type: 'TEST_COMPLETED',
                     testFile: testFile,
                     name: testResult.name,
@@ -988,7 +1006,7 @@ const runTests = async ({ testFiles, mac, onStatus }) => {
                 });
 
             } catch (err) {
-                console.error(`Error parsing test file ${testFile}:`, err);
+                console.error(`Error parsing test file ${testFile}:`, err.stack);
                 testResult.status = "failed";
                 testResult.output = `Test file parsing error: ${err.message}`;
                 testResult.passed = false;
@@ -999,7 +1017,7 @@ const runTests = async ({ testFiles, mac, onStatus }) => {
             console.log(`✅ Test completed: ${testFile} - ${testResult.status}`);
 
         } catch (err) {
-            console.error(`Error processing ${testFile}:`, err);
+            console.error(`Error processing ${testFile}:`, err.stack);
             results.push({
                 testFile,
                 status: "failed",

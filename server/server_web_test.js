@@ -15,6 +15,8 @@ const axios = require('axios');
 const { spawn } = require('child_process');
 const WebSocket = require('ws');
 
+const atsRuntime = require("./ATS/atsRuntime");
+
 const app = express();
 const connectedDevices = new Map();
 // In-memory latest readings cache (global)
@@ -322,6 +324,7 @@ app.post("/command", (req, res) => {
 
   if (!deviceSocket || deviceSocket.destroyed) {
     connectedDevices.delete(normalizedMac);
+    atsRuntime.connectedDevices.delete(socket.deviceId);
     return res.status(404).json({ message: `Device ${normalizedMac} not connected` });
   }
 
@@ -497,6 +500,7 @@ app.post("/api/tests/run", async (req, res) => {
   // Validate filenames only
   for (const testFile of selectedTests) {
     const resolvedPath = path.join(baseDir, testFile);
+    console.log("Resolved Path: ", resolvedPath);
     if (!resolvedPath.startsWith(baseDir)) {
       return res.status(400).json({ error: "Invalid test file path" });
     }
@@ -506,11 +510,13 @@ app.post("/api/tests/run", async (req, res) => {
   }
 
   try {
+    console.log("Starting test execution... \nIn runTests function");
     const testResult = await runTests({
       testFiles: selectedTests,
       onStatus: broadcastTestStatus
     });
 
+    console.log("Test execution completed.");
     res.json({
       timestamp: getFormattedDateTime(),
       ...testResult
@@ -2939,6 +2945,12 @@ const tcpServer = net.createServer((socket) => {
 
         socket.deviceId = mac;
         connectedDevices.set(mac, socket);
+        atsRuntime.connectedDevices.set(mac, {
+          mac,
+          socket,
+          lastSeen: Date.now()
+        });
+
         // Build a lightweight reading object and broadcast to web clients
         const reading = {
           mac,
@@ -2978,6 +2990,11 @@ const tcpServer = net.createServer((socket) => {
           // Set timestamp to IST
           timestamp: packetTimestamp
         };
+
+        if (atsRuntime.connectedDevices.has(mac)) {
+          atsRuntime.connectedDevices.get(mac).lastSeen = Date.now();
+        }
+
 
         // Track connected device socket and broadcast to any connected frontend clients
         connectedDevices.set(mac, socket);
@@ -3019,6 +3036,7 @@ const tcpServer = net.createServer((socket) => {
     for (const [mac, sock] of connectedDevices.entries()) {
       if (sock === socket) {
         connectedDevices.delete(socket.deviceId);
+        atsRuntime.connectedDevices.delete(socket.deviceId);
         console.log(`Device ${mac} disconnected`);
       }
     }
