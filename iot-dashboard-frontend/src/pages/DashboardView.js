@@ -694,7 +694,8 @@ function DashboardView() {
         setTestStatus(`Error: ${err.message}`);
       }
     } else {
-      console.log("Selected Test code runs ...");
+      console.log("Selected Test code runs ...",selectedTests);
+
 
       try {
         const resp = await fetch(`${process.env.REACT_APP_API_URL}/api/tests/run`, {
@@ -1119,8 +1120,8 @@ function DashboardView() {
 
         {fetchedTestList.length > 0 ? fetchedTestList.map((test) => (
           <label key={test} style={{ display: "block" }}>
-            <input 
-              type="checkbox" 
+            <input
+              type="checkbox"
               value={test}
               checked={selectedTests.includes(test)}
               onChange={(e) => {
@@ -1258,7 +1259,6 @@ function DashboardView() {
               >
                 Status
               </button>
-              <span>SysId: {selectedMac.slice(9, 17)}</span>
               <span>SysId: {selectedMac.slice(8)}</span>
               {"status" && (
                 <div className="alarm-group">

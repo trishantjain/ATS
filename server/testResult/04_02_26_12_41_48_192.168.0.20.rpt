@@ -1,0 +1,131 @@
+ATS Test Run - 04/02/26 12:41:48
+Device: 192.168.0.20
+Total Tests: 15
+
+Test: Visual Test , Status: passed
+Test: Burn-In Test , Status: passed
+Test: Fan Test , Status: failed , Steps: 2/9
+
+================ SUMMARY ================
+
+
+
+================ DETAILS ================
+
+Test: Limit Switch Test , Status: failed , Steps: 1/3
+
+================ SUMMARY ================
+
+
+
+================ DETAILS ================
+
+Test: Fire Test , Status: failed , Steps: 1/3
+
+================ SUMMARY ================
+
+
+
+================ DETAILS ================
+
+Test: Water Leakage Test , Status: failed , Steps: 1/3
+
+================ SUMMARY ================
+
+
+
+================ DETAILS ================
+
+Test: EM Lock through Keypad , Status: failed , Steps: 2/3
+
+================ SUMMARY ================
+
+
+
+================ DETAILS ================
+
+Test: EM Lock through eMS , Status: passed , Steps: 3/3
+
+================ SUMMARY ================
+
+
+
+================ DETAILS ================
+
+Test: Water Logging Test , Status: failed , Steps: 1/3
+
+================ SUMMARY ================
+
+
+
+================ DETAILS ================
+
+Test: Humidity Test
+Status: failed
+
+Step,StepStatus,Message
+1,FAILED,"Humidity alarm not turned on"
+
+=== TEST END ===
+
+
+================ SUMMARY ================
+
+
+
+================ DETAILS ================
+
+Test: Inside Temperature Test
+Status: failed
+
+Step,StepStatus,Message
+1,FAILED,"Inside Temperature alarm not turned on"
+
+=== TEST END ===
+
+
+================ SUMMARY ================
+
+
+
+================ DETAILS ================
+
+Test: Outside Temperature Test
+Status: failed
+
+Step,StepStatus,Message
+1,FAILED,"Outside Temperature alarm not turned on"
+
+=== TEST END ===
+
+
+================ SUMMARY ================
+
+
+
+================ DETAILS ================
+
+Test: Non - Critical Load Test , Status: failed , Steps: 1/3
+
+================ SUMMARY ================
+
+
+
+================ DETAILS ================
+
+Test: Camera Test , Status: passed , Steps: 1/1
+
+================ SUMMARY ================
+
+
+
+================ DETAILS ================
+
+Test: Fan-Fail Test Test , Status: failed , Steps: 1/2
+
+================ SUMMARY ================
+
+
+
+================ DETAILS ================
+

@@ -1,0 +1,21 @@
+FAN Test Run - 04/02/26 11:58:51
+Device: 192.168.0.20
+Total Tests: 1
+
+Step,StepStatus,Message
+Test: Fan Tray Test
+Status: passed
+
+Steps Results:
+1,PASSED,"All fans are off, | Ready to test |"
+2,PASSED,"Fan 1 turned on successfully"
+3,PASSED,"Fan 1 turned off successfully"
+4,PASSED,"Fan 2 turned on successfull"
+5,PASSED,"Fan 2 turned off successfully"
+6,PASSED,"Fan 3 turned on successfully"
+7,PASSED,"Fan 3 turned off successfully"
+8,PASSED,"Fan 4 turned off successfully"
+9,PASSED,"Fan 4 turned off successfully"
+
+=== TEST END ===
+
