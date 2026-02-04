@@ -25,6 +25,7 @@ app.use(bodyParser.json());
 const cors = require("cors");
 const { isDeepStrictEqual } = require("util");
 const { runTests } = require("./ATS/atsRunner");
+const { reportWriter } = require("./ATS/reportWriter");
 app.use(cors());
 
 // WebSocket Server
@@ -464,7 +465,7 @@ app.get("/api/tests/list", async (req, res) => {
 // ✅ Run a single test file (COMMENTED OUT - uncomment if needed in future)
 app.post("/api/tests/run", async (req, res) => {
   console.log("▶️ /api/tests/run endpoint called");
-  const { selectedTests } = req.body;
+  let { selectedTests } = req.body;
   console.log("Requested test file:", selectedTests);
 
   if (!selectedTests || selectedTests.length === 0) {
@@ -517,19 +518,32 @@ app.post("/api/tests/run", async (req, res) => {
     });
 
     console.log("Test execution completed.");
+
+    // const runResult = {
+    //   testResult,
+    //   destination: "iMoni",
+    //   mac
+    // };
+
+    await reportWriter({
+      testResult,
+      destination: "iMoni",
+      mac
+    });
+
     res.json({
       timestamp: getFormattedDateTime(),
       ...testResult
     });
   } catch (err) {
-    console.error("❌ Error running tests:", err.message);
+    console.error("❌ Error running tests:", err.message, err.stack);
     if (err.code === "ENOENT") {
       return res.status(404).json({ error: "Test file not found" });
     }
     if (err.code === "EISDIR") {
       return res.status(400).json({ error: "Path is a directory" });
     }
-    res.status(500).json({ error: `Failed to run tests: ${err.message}` });
+    res.status(500).json({ error: `Failed to run tests: ${err.message} \n${err.stack}` });
   }
 });
 
@@ -1966,9 +1980,9 @@ app.post('/api/tests/fan-test', async (req, res) => {
 
               // WAITING FOR EXPECTED VALUE (device readings)
               const stepResult = await new Promise((resolve) => {
+                // Tracking matching state
                 let isCurrentlyMatching = false;
                 let lastReceivedValue = null;
-
 
                 const timeout = setTimeout(() => {
                   clearTestWaitForMAC();

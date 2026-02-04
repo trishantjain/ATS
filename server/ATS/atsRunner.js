@@ -34,7 +34,8 @@ const runTests = async ({ testFiles, mac, onStatus, frontendResults = [] }) => {
                 expectedOutcome: null,
                 receivedOutcome: null,
                 passed: false,
-                commands: []
+                commands: [],
+                stepResults: []
             };
 
             const startTime = Date.now();
@@ -88,6 +89,8 @@ const runTests = async ({ testFiles, mac, onStatus, frontendResults = [] }) => {
                     if (currentStep) {
                         if (line.startsWith('msg=')) {
                             currentStep.msg = line.substring(4).replace(/["\']/g, '');
+                        } else if (line.startsWith('action=')) {
+                            currentStep.action = line.substring(7).replace(/["\']/g, '') + getFormattedDateTime() + "$";
                         } else if (line.startsWith('waitFor=')) {
                             currentStep.waitFor = line.substring(8).replace(/["\']/g, '');
                         } else if (line.startsWith('waitTime=')) {
@@ -142,8 +145,6 @@ const runTests = async ({ testFiles, mac, onStatus, frontendResults = [] }) => {
                 console.log(`    🎯 Expected Outcome: ${testResult.expectedOutcome}`);
                 console.log(`    📋 Steps defined: ${testConfig.steps.length}`);
 
-                console.log("   📂 Sending Test Started Broadcast");
-
                 // Send TEST STARTING status to WebSocket clients
                 onStatus?.({
                     type: 'TEST_STARTED',
@@ -155,8 +156,6 @@ const runTests = async ({ testFiles, mac, onStatus, frontendResults = [] }) => {
                     totalSteps: testConfig.steps.length,
                     timestamp: getFormattedDateTime()
                 });
-
-                console.log(`    📡 Connected devices: ${atsRuntime.connectedDevices.length}`);
 
                 // Get the first connected device MAC to wait for
                 const connectedMACs = Array.from(atsRuntime.connectedDevices.keys());
@@ -315,7 +314,9 @@ const runTests = async ({ testFiles, mac, onStatus, frontendResults = [] }) => {
                             });
 
                             // Stop on first failure (or continue based on config)
-                            break;
+                            // break;
+
+                            continue;
                         }
                     }
 
@@ -511,7 +512,9 @@ const runTests = async ({ testFiles, mac, onStatus, frontendResults = [] }) => {
                                     timestamp: getFormattedDateTime()
                                 });
 
-                                break; // Stop on failure
+                                // break; // Stop on failure
+
+                                continue;
                             }
                         }
                     }
@@ -555,7 +558,9 @@ const runTests = async ({ testFiles, mac, onStatus, frontendResults = [] }) => {
                         console.log(` \n📍 Step ${stepNumber}: ${step.msg}`);
                         console.log(`    Waiting for: ${step.waitFor} = ${step.expectedValue}`);
                         console.log(`    Timeout: ${step.waitTime}s`);
+                        console.log(`    Action: ${step.action}`)
 
+                        console.log(`\n🟦 STEP ${stepNumber} STARTED`);
                         // Broadcast step started (same for all step types)
                         onStatus?.({
                             type: 'STEP_STARTED',
@@ -636,14 +641,41 @@ const runTests = async ({ testFiles, mac, onStatus, frontendResults = [] }) => {
 
                         // Wait for the expected value (device readings)
                         const stepResult = await new Promise((resolve) => {
+                            let isCurrentlyMatching = false;
+                            let lastReceivedValue = null;
+
                             const timeout = setTimeout(() => {
-                                atsRuntime.clearTestWaitForMAC();
+                                clearTestWaitForMAC();
                                 if (currentStepHandler) {
-                                    const idx = atsRuntime.deviceCommandWaiters.indexOf(currentStepHandler);
-                                    if (idx > -1) atsRuntime.deviceCommandWaiters.splice(idx, 1);
+                                    const idx = deviceCommandWaiters.indexOf(currentStepHandler);
+                                    if (idx > -1) deviceCommandWaiters.splice(idx, 1);
                                 }
-                                resolve({ success: false, reason: 'TIMEOUT', received: null });
+                                if (isCurrentlyMatching) {
+                                    console.log("✅ Step passed after full waitTime");
+
+                                    resolve({
+                                        success: true,
+                                        received: lastReceivedValue
+                                    });
+                                } else {
+                                    console.log("❌ Step failed after full waitTime");
+
+                                    resolve({
+                                        success: false,
+                                        reason: 'VALUE_NOT_MATCHING_AT_END',
+                                        received: lastReceivedValue
+                                    });
+                                }
                             }, (step.waitTime || 20) * 1000);
+
+                            // const timeout = setTimeout(() => {
+                            //     atsRuntime.clearTestWaitForMAC();
+                            //     if (currentStepHandler) {
+                            //         const idx = atsRuntime.deviceCommandWaiters.indexOf(currentStepHandler);
+                            //         if (idx > -1) atsRuntime.deviceCommandWaiters.splice(idx, 1);
+                            //     }
+                            //     resolve({ success: false, reason: 'TIMEOUT', received: null });
+                            // }, (step.waitTime || 20) * 1000);
 
                             atsRuntime.setTestWaitForMAC(testDeviceMAC);  //Setting device for testing so it can wait for device readings 
 
@@ -674,39 +706,50 @@ const runTests = async ({ testFiles, mac, onStatus, frontendResults = [] }) => {
 
                                         console.log(`   🔍 Checking: ${prop} = "${reading[prop]}" (expected: "${expectedVal}")`);
 
-                                        if (receivedVal !== normalizedExpected) {
-                                            allMatch = false;
-                                        }
+                                        // if (receivedVal !== normalizedExpected) {
+                                        //     allMatch = false;
+                                        // }
+
+                                        isCurrentlyMatching = properties.every((prop, i) => {
+                                            const expected = (expectedValues[i] || expectedValues[0]).toUpperCase().trim();
+                                            const received = String(reading[prop]).toUpperCase().trim();
+                                            return received === expected;
+                                        });
+
+                                        lastReceivedValue = reading;
                                     }
 
-                                    if (allMatch) {
-                                        clearTimeout(timeout);
-                                        atsRuntime.clearTestWaitForMAC();
-                                        const idx = atsRuntime.deviceCommandWaiters.indexOf(stepHandler);
-                                        if (idx > -1) atsRuntime.deviceCommandWaiters.splice(idx, 1);
-                                        resolve({ success: true, received: 'All properties matched' });
-                                        return true;
-                                    }
+                                    // if (allMatch) {
+                                    //     clearTimeout(timeout);
+                                    //     atsRuntime.clearTestWaitForMAC();
+                                    //     const idx = atsRuntime.deviceCommandWaiters.indexOf(stepHandler);
+                                    //     if (idx > -1) atsRuntime.deviceCommandWaiters.splice(idx, 1);
+                                    //     resolve({ success: true, received: 'All properties matched' });
+                                    //     return true;
+                                    // }
 
                                     console.log(`⏳ Not all properties matched yet, continuing to wait...`);
                                     return false;
                                 } else {
                                     // Single property check
                                     const receivedValue = reading[step.waitFor];
+                                    lastReceivedValue = receivedValue;
+
                                     const normalizedReceived = String(receivedValue).toUpperCase().trim();
                                     const normalizedExpected = String(step.expectedValue).toUpperCase().trim();
 
                                     console.log(`   🔍 Checking: ${step.waitFor} = "${receivedValue}" (expected: "${step.expectedValue}")`);
 
+                                    isCurrentlyMatching = (normalizedReceived === normalizedExpected);
                                     // Checking expected Value
-                                    if (normalizedReceived === normalizedExpected) {
-                                        clearTimeout(timeout);
-                                        atsRuntime.clearTestWaitForMAC();
-                                        const idx = atsRuntime.deviceCommandWaiters.indexOf(stepHandler);
-                                        if (idx > -1) atsRuntime.deviceCommandWaiters.splice(idx, 1);
-                                        resolve({ success: true, received: receivedValue });
-                                        return true;
-                                    }
+                                    // if (normalizedReceived === normalizedExpected) {
+                                    //     clearTimeout(timeout);
+                                    //     atsRuntime.clearTestWaitForMAC();
+                                    //     const idx = atsRuntime.deviceCommandWaiters.indexOf(stepHandler);    
+                                    //     if (idx > -1) atsRuntime.deviceCommandWaiters.splice(idx, 1);
+                                    //     resolve({ success: true, received: receivedValue });
+                                    //     return true;
+                                    // }
 
                                     return false; // Keep waiting
                                 }
@@ -714,6 +757,19 @@ const runTests = async ({ testFiles, mac, onStatus, frontendResults = [] }) => {
 
                             currentStepHandler = stepHandler;
                             atsRuntime.deviceCommandWaiters.push(stepHandler);
+
+
+                            if (step.action) {
+                                console.log("🚀 Sending command:", step.action);
+
+                                testResult.commands.push(step.action);
+                                
+                                fetch("http://localhost:5000/command", {
+                                    method: "POST",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify({ mac: connectedMACs, command: step.action }),
+                                });
+                            }
                         });
 
                         // Process step result
@@ -737,7 +793,9 @@ const runTests = async ({ testFiles, mac, onStatus, frontendResults = [] }) => {
                                 message: step.onPass || 'Step passed',
                                 timestamp: getFormattedDateTime()
                             });
-                        } else {
+                        }
+                        // ELSE FOR (Single Step Failed)
+                        else {
                             console.log(`   ❌ Step ${stepNumber} FAILED: ${step.onFail || stepResult.reason}`);
                             allStepsPassed = false;
                             stepResults.push({
@@ -747,6 +805,8 @@ const runTests = async ({ testFiles, mac, onStatus, frontendResults = [] }) => {
                                 received: stepResult.received
                             });
 
+                            // BROADCASTING MESSAGE
+                            // FOR: STEP COMPLETED RESULT 
                             onStatus?.({
                                 type: 'STEP_COMPLETED',
                                 testFile: testFile,
@@ -759,13 +819,17 @@ const runTests = async ({ testFiles, mac, onStatus, frontendResults = [] }) => {
                             });
 
                             // Stop on first failure (or continue based on config)
-                            break;
+                            // break;
+
+                            continue;
                         }
                     }
 
                     // Set overall test result
                     testResult.passed = allStepsPassed;
                     testResult.status = allStepsPassed ? 'passed' : 'failed';
+                    
+
                     testResult.output = allStepsPassed
                         ? (testConfig.pass || `✅ All ${testConfig.steps.length} steps passed`)
                         : (testConfig.fail || `❌ Test failed at step ${stepResults.length}`);
