@@ -545,6 +545,8 @@ app.post("/api/tests/run-all", async (req, res) => {
     const { mac, skipFrontendTests, frontendResults } = req.body;
     const testDir = path.join(__dirname, "tests/iMoni");
 
+    const summaryLines = [];
+
     // Create test directory if it doesn't exist
     if (!fs.existsSync(testDir)) {
       res.json({ msg: "Test Folder not found" });
@@ -576,7 +578,7 @@ app.post("/api/tests/run-all", async (req, res) => {
     }
 
     // Prepare a single report file for this run
-    const testResultDir = path.join(__dirname, "testResult");
+    const testResultDir = path.join(__dirname, "testResult/iMoni");
     if (!fs.existsSync(testResultDir)) {
       fs.mkdirSync(testResultDir, { recursive: true });
     }
@@ -911,12 +913,41 @@ app.post("/api/tests/run-all", async (req, res) => {
             // Set overall test result
             testResult.passed = allStepsPassed;
             testResult.status = allStepsPassed ? 'passed' : 'failed';
+
+            // 1️⃣ Write human-readable test header
+            await fs.promises.appendFile(
+              testReportFilePath,
+              `Test: ${testResult.name}\nStatus: ${testResult.status}\n\n`
+            );
+
+            // 2️⃣ Write CSV header ONCE
+            await fs.promises.appendFile(
+              testReportFilePath,
+              'Step,StepStatus,Message\n'
+            );
+
+            for (const step of stepResults) {
+              const line =
+                `${step.step},` +
+                `${step.status.toUpperCase()},` +
+                `"${step.message.replace(/"/g, '""')}"\n`;
+
+              await fs.promises.appendFile(testReportFilePath, line);
+            }
+
+            // Blank line after each test (important for readability)
+            await fs.promises.appendFile(testReportFilePath, '\n');
+
             testResult.output = allStepsPassed
               ? (testConfig.pass || `✅ All ${testConfig.steps.length} steps passed`)
               : (testConfig.fail || `❌ Test failed at step ${stepResults.length}`);
             testResult.stepResults = stepResults;
 
-            const reportContent = `Test: ${testResult.name} , Status: ${testResult.status} , Steps: ${stepResults.length}/${testConfig.steps.length}`;
+            await fs.promises.appendFile(
+              testReportFilePath,
+              '=== TEST END ===\n\n'
+            );
+
             try {
               await fs.promises.appendFile(testReportFilePath, `${reportContent}\n`);
               console.log(`✅ Test report appended to: ${testReportFileName}`);
@@ -1570,17 +1601,21 @@ app.post("/api/tests/run-all", async (req, res) => {
                 testPassed = false;
               }
 
+              summaryLines.push(
+                `Test: ${testResult.name} | ${testResult.status.toUpperCase()}`
+              );
+
               testResult.status = testPassed ? "passed" : "failed";
               testResult.passed = testPassed;
             }
 
             const reportContent = `Test: ${testResult.name} , Status: ${testResult.status}`;
-            try {
-              await fs.promises.appendFile(testReportFilePath, `${reportContent}\n`);
-              console.log(`✅ Test report appended to: ${testReportFileName}`);
-            } catch (err) {
-              console.log(`🔴 Error writing test report: ${err} 🔴`);
-            }
+            // try {
+            //   await fs.promises.appendFile(testReportFilePath, `${reportContent}\n`);
+            //   console.log(`✅ Test report appended to: ${testReportFileName}`);
+            // } catch (err) {
+            //   console.log(`🔴 Error writing test report: ${err} 🔴`);
+            // }
           } // End of EO-based test execution
 
           // Send test completion status
@@ -1599,6 +1634,14 @@ app.post("/api/tests/run-all", async (req, res) => {
           testResult.output = `Test file parsing error: ${err.message}`;
           testResult.passed = false;
         }
+
+        await fs.promises.appendFile(
+          testReportFilePath,
+          `\n================ SUMMARY ================\n\n` +
+          summaryLines.join('\n') +
+          `\n\n================ DETAILS ================\n\n`
+        );
+
 
         testResult.duration = Date.now() - startTime;
         results.push(testResult);
