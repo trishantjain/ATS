@@ -1,0 +1,14 @@
+ATS Test Run
+Type: iMoni
+Device: 192.168.0.0
+Timestamp: 06/02/26 01:55:03
+Total Tests: 1
+
+Test: Inside Temperature Test
+Status: failed
+
+Step,StepStatus,Message
+1,FAILED,"Inside Temperature not increased by 5°C"
+
+=== TEST END ===
+

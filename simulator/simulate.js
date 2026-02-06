@@ -271,8 +271,10 @@ function startDevice(mac, index) {
           // SENSOR DATA GENERATION
           // Gauge
           const humidity = triggerAlarm ? 85 + Math.random() * 10 : 55 + Math.random() * 5;
-          const insideTemp = triggerAlarm ? 55 + Math.random() * 5 : 35 + Math.random() * 3;
-          const outsideTemp = triggerAlarm ? 65 + Math.random() * 5 : 40 + Math.random() * 3;
+          // const insideTemp = triggerAlarm ? 55 + Math.random() * 5 : 35 + Math.random() * 3;
+          const insideTemp = 50;
+          // const outsideTemp = triggerAlarm ? 65 + Math.random() * 5 : 40 + Math.random() * 3;
+          const outsideTemp = 61;
           const outputVoltage = triggerAlarm ? 2.5 + Math.random() * 10 : 3.3 + Math.random() * 10;
           const inputVoltage = triggerAlarm ? 2.5 + Math.random() * 10 : 3.3 + Math.random() * 10;
           const batteryBackup = triggerAlarm ? 12 + Math.random() * 2 : 20 + Math.random() * 3;
@@ -306,6 +308,8 @@ function startDevice(mac, index) {
             // fanStatuses[i] = rand < 0.4 ? 0 : rand < 0.9 ? 1 : 2;
           }
 
+          console.log("Fan Status: ", fanStatuses);
+
           let fanStatusBits = 0;
           for (let i = 0; i < 6; i++) {
             fanStatusBits |= (fanStatuses[i] << (i * 2));
@@ -337,7 +341,7 @@ function startDevice(mac, index) {
           const packet = Buffer.concat([
             // Buffer.from(mac.padEnd(17, ' '), 'utf-8'), //0-16
             ipStringToAsciiHexBuffer(mac),
-            Buffer.alloc(13, 0x00),   // 13 bytes ZERO padding
+            Buffer.alloc(9, 0x00),   // 13 bytes ZERO padding
             toFloatLE(humidity),  //17-20
             toFloatLE(insideTemp), //21-24
             toFloatLE(outsideTemp), //25-28

@@ -18,7 +18,7 @@ const WebSocket = require('ws');
 const atsRuntime = require("./ATS/atsRuntime");
 
 const app = express();
-const connectedDevices = new Map();
+// const connectedDevices = new Map();
 // In-memory latest readings cache (global)
 let latestReadings = [];
 app.use(bodyParser.json());
@@ -32,7 +32,7 @@ app.use(cors());
 const WS_PORT = process.env.WS_PORT || 8080;
 const wss = new WebSocket.Server({ port: WS_PORT });
 const wsClients = new Set();
-let pendingDialogResolver = null;  // Resolves when frontend responds to dialog
+// let pendingDialogResolver = null;  // Resolves when frontend responds to dialog
 
 // WebSocket connection handling with improved logging
 wss.on('connection', (ws, req) => {
@@ -51,7 +51,7 @@ wss.on('connection', (ws, req) => {
   ws.send(JSON.stringify({
     type: 'DEVICES_STATUS',
     data: {
-      connectedDevices: Array.from(connectedDevices.keys()),
+      connectedDevices: Array.from(atsRuntime.connectedDevices.keys()),
       timestamp: getFormattedDateTime()
     }
   }));
@@ -65,12 +65,7 @@ wss.on('connection', (ws, req) => {
       if (message.type === 'DIALOG_RESPONSE') {
         if (typeof message.confirmed === 'boolean') {
           console.log(`📝 Dialog response: ${message.confirmed ? 'OK' : 'Cancel'}`);
-          if (pendingDialogResolver) {
-            pendingDialogResolver(message.confirmed);
-            pendingDialogResolver = null;
-          }
-        } else {
-          console.error('❌ Invalid DIALOG_RESPONSE: Missing or invalid "confirmed" property');
+          atsRuntime.resolveDialog(message.confirmed);
         }
       }
     } catch (err) {
@@ -180,7 +175,7 @@ const debug = {
       errors: debug.errorCount,
       lastPacket: debug.lastPacketTime ? `${Math.floor((now - debug.lastPacketTime) / 1000)}s ago` : 'Never',
       bufferStats: debug.bufferStats,
-      connectedDevices: connectedDevices.size,
+      connectedDevices: atsRuntime.connectedDevices.size,
       latestReadingsCount: latestReadings ? latestReadings.length : 0,
       websocketClients: wsClients.size,
       dateFunction: "getFormattedDateTime() working ✅"
@@ -321,10 +316,10 @@ app.post("/command", (req, res) => {
   const { mac, command } = req.body;
   if (!mac || !command) return res.status(400).json({ message: 'mac and command required' });
   const normalizedMac = String(mac).toLowerCase();
-  const deviceSocket = connectedDevices.get(normalizedMac);
+  const device = atsRuntime.connectedDevices.get(normalizedMac);
 
-  if (!deviceSocket || deviceSocket.destroyed) {
-    connectedDevices.delete(normalizedMac);
+  if (!device || device.destroyed) {
+    atsRuntime.connectedDevices.delete(normalizedMac);
     atsRuntime.connectedDevices.delete(socket.deviceId);
     return res.status(404).json({ message: `Device ${normalizedMac} not connected` });
   }
@@ -343,7 +338,7 @@ app.post("/command", (req, res) => {
 // ✅ Get connected MACs
 app.get("/api/devices", (req, res) => {
   try {
-    res.json(Array.from(connectedDevices.keys()).map((m) => String(m).toLowerCase()));
+    res.json(Array.from(atsRuntime.connectedDevices.keys()).map((m) => String(m).toLowerCase()));
   } catch (err) {
     res.status(500).json({ error: 'Failed to list connected devices' });
   }
@@ -512,12 +507,13 @@ app.post("/api/tests/run", async (req, res) => {
 
   try {
     console.log("Starting test execution... \nIn runTests function");
+    atsRuntime.resetStop();
     const testResult = await runTests({
       testFiles: selectedTests,
       onStatus: broadcastTestStatus
     });
 
-    console.log("Test execution completed.");
+    console.log("Test execution completed.", testResult);
 
     // const runResult = {
     //   testResult,
@@ -525,11 +521,14 @@ app.post("/api/tests/run", async (req, res) => {
     //   mac
     // };
 
+    const firstMac = Array.from(atsRuntime.connectedDevices.keys())[0] || 'unknown-device';
+
     await reportWriter({
-      testResult,
+      runResult: testResult,
       destination: "iMoni",
-      mac
+      mac: firstMac
     });
+
 
     res.json({
       timestamp: getFormattedDateTime(),
@@ -550,7 +549,7 @@ app.post("/api/tests/run", async (req, res) => {
 // ✅ STOP TEST EXECUTION
 app.post("/api/tests/stop", (req, res) => {
   console.log("🛑 /api/tests/stop endpoint called");
-  requestTestStop();
+  atsRuntime.requestStop();
 
   // Broadcast stop message to all WebSocket clients
   broadcastTestStatus({
@@ -565,7 +564,7 @@ app.post("/api/tests/stop", (req, res) => {
 // ✅ Run all tests sequentially (one by one)
 app.post("/api/tests/run-all", async (req, res) => {
   console.log("📋 /api/tests/run-all endpoint called - ATS Mode");
-  resetTestStopFlag();  // Reset stop flag when starting new test
+  atsRuntime.resetStop();  // Reset stop flag when starting new test
 
   try {
     const { mac, skipFrontendTests, frontendResults } = req.body;
@@ -639,7 +638,7 @@ app.post("/api/tests/run-all", async (req, res) => {
     // Run test files one by one
     for (const testFile of testFiles) {
       // Check if stop was requested before starting next test
-      if (testStopRequested) {
+      if (atsRuntime.testStopRequested) {
         console.log('    🛑 Test execution stopped by user - skipping remaining tests');
         break;
       }
@@ -778,7 +777,7 @@ app.post("/api/tests/run-all", async (req, res) => {
           });
 
           // Get the first connected device MAC to wait for
-          const connectedMACs = Array.from(connectedDevices.keys());
+          const connectedMACs = Array.from(atsRuntime.connectedDevices.keys());
 
           if (connectedMACs.length === 0) {
             testResult.output = "❌ Test FAILED: No connected devices available";
@@ -795,7 +794,7 @@ app.post("/api/tests/run-all", async (req, res) => {
 
             for (let i = 0; i < testConfig.steps.length; i++) {
               // Check if stop was requested
-              if (testStopRequested) {
+              if (atsRuntime.testStopRequested) {
                 console.log('    🛑 Test stopped by user request');
                 testResult.status = 'stopped';
                 testResult.output = 'Test stopped by user';
@@ -829,10 +828,10 @@ app.post("/api/tests/run-all", async (req, res) => {
                 const requiredIncrease = step.increasedBy || 0;
 
                 const timeout = setTimeout(() => {
-                  clearTestWaitForMAC();
+                  atsRuntime.clearTestWaitForMAC();
                   if (currentStepHandler) {
-                    const idx = deviceCommandWaiters.indexOf(currentStepHandler);
-                    if (idx > -1) deviceCommandWaiters.splice(idx, 1);
+                    const idx = atsRuntime.deviceCommandWaiters.indexOf(currentStepHandler);
+                    if (idx > -1) atsRuntime.deviceCommandWaiters.splice(idx, 1);
                   }
                   resolve({
                     success: false,
@@ -841,7 +840,7 @@ app.post("/api/tests/run-all", async (req, res) => {
                   });
                 }, (step.waitTime || 20) * 1000);
 
-                setTestWaitForMAC(testDeviceMAC);
+                atsRuntime.setTestWaitForMAC(testDeviceMAC);
 
                 let currentStepHandler = null;
 
@@ -872,9 +871,9 @@ app.post("/api/tests/run-all", async (req, res) => {
                   // Check if value has increased by required amount
                   if (currentIncrease >= requiredIncrease) {
                     clearTimeout(timeout);
-                    clearTestWaitForMAC();
-                    const idx = deviceCommandWaiters.indexOf(stepHandler);
-                    if (idx > -1) deviceCommandWaiters.splice(idx, 1);
+                    atsRuntime.clearTestWaitForMAC();
+                    const idx = atsRuntime.deviceCommandWaiters.indexOf(stepHandler);
+                    if (idx > -1) atsRuntime.deviceCommandWaiters.splice(idx, 1);
                     resolve({
                       success: true,
                       received: `${currentValue} (increased by ${currentIncrease.toFixed(2)} from ${initialSensorValue})`
@@ -886,7 +885,7 @@ app.post("/api/tests/run-all", async (req, res) => {
                 };
 
                 currentStepHandler = stepHandler;
-                deviceCommandWaiters.push(stepHandler);
+                atsRuntime.deviceCommandWaiters.push(stepHandler);
               });
 
               // Process step result
@@ -988,7 +987,7 @@ app.post("/api/tests/run-all", async (req, res) => {
 
             for (let i = 0; i < testConfig.steps.length; i++) {
               // Check if stop was requested
-              if (testStopRequested) {
+              if (atsRuntime.testStopRequested) {
                 console.log('    🛑 Test stopped by user request');
                 testResult.status = 'stopped';
                 testResult.output = 'Test stopped by user';
@@ -1057,16 +1056,15 @@ app.post("/api/tests/run-all", async (req, res) => {
                   const dialogPromise = new Promise((resolve) => {
                     const timeout = setTimeout(() => {
                       console.log(`    ⏰ Dialog timeout after ${step.waitTime || 60}s`);
-                      pendingDialogResolver = null;
+                      // atsRuntime.setDialogResolver = null;
                       resolve({ confirmed: false, reason: 'TIMEOUT' });
                     }, (step.waitTime || 60) * 1000);
 
-                    pendingDialogResolver = (confirmed) => {
+                    atsRuntime.setDialogResolver((confirmed) => {
                       console.log(`    📨 Dialog response received: ${confirmed}`);
                       clearTimeout(timeout);
-                      pendingDialogResolver = null;
                       resolve({ confirmed, reason: confirmed ? 'USER_CONFIRMED' : 'USER_CANCELLED' });
-                    };
+                    });
                   });
 
                   // THEN: Broadcast to show dialog on frontend
@@ -1187,7 +1185,7 @@ app.post("/api/tests/run-all", async (req, res) => {
 
             for (let i = 0; i < testConfig.steps.length; i++) {
               // Check if stop was requested
-              if (testStopRequested) {
+              if (atsRuntime.testStopRequested) {
                 console.log('    🛑 Test stopped by user request');
                 testResult.status = 'stopped';
                 testResult.output = 'Test stopped by user';
@@ -1282,15 +1280,15 @@ app.post("/api/tests/run-all", async (req, res) => {
               // Wait for the expected value (device readings)
               const stepResult = await new Promise((resolve) => {
                 const timeout = setTimeout(() => {
-                  clearTestWaitForMAC();
+                  atsRuntime.clearTestWaitForMAC();
                   if (currentStepHandler) {
-                    const idx = deviceCommandWaiters.indexOf(currentStepHandler);
-                    if (idx > -1) deviceCommandWaiters.splice(idx, 1);
+                    const idx = atsRuntime.deviceCommandWaiters.indexOf(currentStepHandler);
+                    if (idx > -1) atsRuntime.deviceCommandWaiters.splice(idx, 1);
                   }
                   resolve({ success: false, reason: 'TIMEOUT', received: null });
                 }, (step.waitTime || 20) * 1000);
 
-                setTestWaitForMAC(testDeviceMAC);  //Setting device for testing so it can wait for device readings 
+                atsRuntime.setTestWaitForMAC(testDeviceMAC);  //Setting device for testing so it can wait for device readings 
 
                 let currentStepHandler = null;
 
@@ -1326,9 +1324,9 @@ app.post("/api/tests/run-all", async (req, res) => {
 
                     if (allMatch) {
                       clearTimeout(timeout);
-                      clearTestWaitForMAC();
-                      const idx = deviceCommandWaiters.indexOf(stepHandler);
-                      if (idx > -1) deviceCommandWaiters.splice(idx, 1);
+                      atsRuntime.clearTestWaitForMAC();
+                      const idx = atsRuntime.deviceCommandWaiters.indexOf(stepHandler);
+                      if (idx > -1) atsRuntime.deviceCommandWaiters.splice(idx, 1);
                       resolve({ success: true, received: 'All properties matched' });
                       return true;
                     }
@@ -1346,9 +1344,9 @@ app.post("/api/tests/run-all", async (req, res) => {
                     // Checking expected Value
                     if (normalizedReceived === normalizedExpected) {
                       clearTimeout(timeout);
-                      clearTestWaitForMAC();
-                      const idx = deviceCommandWaiters.indexOf(stepHandler);
-                      if (idx > -1) deviceCommandWaiters.splice(idx, 1);
+                      atsRuntime.clearTestWaitForMAC();
+                      const idx = atsRuntime.deviceCommandWaiters.indexOf(stepHandler);
+                      if (idx > -1) atsRuntime.deviceCommandWaiters.splice(idx, 1);
                       resolve({ success: true, received: receivedValue });
                       return true;
                     }
@@ -1358,7 +1356,7 @@ app.post("/api/tests/run-all", async (req, res) => {
                 };
 
                 currentStepHandler = stepHandler;
-                deviceCommandWaiters.push(stepHandler);
+                atsRuntime.deviceCommandWaiters.push(stepHandler);
               });
 
               // Process step result
@@ -1453,17 +1451,17 @@ app.post("/api/tests/run-all", async (req, res) => {
             // Create a promise that resolves only when the expected condition is met
             const waitForResponse = new Promise((resolve) => {
               const timeout = setTimeout(() => {
-                clearTestWaitForMAC();
+                atsRuntime.clearTestWaitForMAC();
                 // Cleanup handler on timeout
                 if (currentHandler) {
-                  const idx = deviceCommandWaiters.indexOf(currentHandler);
-                  if (idx > -1) deviceCommandWaiters.splice(idx, 1);
+                  const idx = atsRuntime.deviceCommandWaiters.indexOf(currentHandler);
+                  if (idx > -1) atsRuntime.deviceCommandWaiters.splice(idx, 1);
                 }
                 resolve("TIMEOUT");
               }, 20000); // 20 second timeout
 
               // Set this MAC as the one we're waiting for
-              setTestWaitForMAC(testDeviceMAC);
+              atsRuntime.setTestWaitForMAC(testDeviceMAC);
 
               // Listen for device readings; resolve only on match
               const responseHandler = (reading) => {
@@ -1497,10 +1495,10 @@ app.post("/api/tests/run-all", async (req, res) => {
                     testPassed = true;
                     console.log(`✅ ALL properties matched!`);
                     clearTimeout(timeout);
-                    clearTestWaitForMAC();
+                    atsRuntime.clearTestWaitForMAC();
                     // Cleanup handler on success
-                    const idx = deviceCommandWaiters.indexOf(responseHandler);
-                    if (idx > -1) deviceCommandWaiters.splice(idx, 1);
+                    const idx = atsRuntime.deviceCommandWaiters.indexOf(responseHandler);
+                    if (idx > -1) atsRuntime.deviceCommandWaiters.splice(idx, 1);
                     resolve(reading);
                     return true;
                   }
@@ -1524,10 +1522,10 @@ app.post("/api/tests/run-all", async (req, res) => {
                     if (normalizedReceived === normalizedExpected) {
                       testPassed = true;
                       clearTimeout(timeout);
-                      clearTestWaitForMAC();
+                      atsRuntime.clearTestWaitForMAC();
                       // Cleanup handler on success
-                      const idx = deviceCommandWaiters.indexOf(responseHandler);
-                      if (idx > -1) deviceCommandWaiters.splice(idx, 1);
+                      const idx = atsRuntime.deviceCommandWaiters.indexOf(responseHandler);
+                      if (idx > -1) atsRuntime.deviceCommandWaiters.splice(idx, 1);
                       resolve(reading);
                       return true;
                     }
@@ -1537,10 +1535,10 @@ app.post("/api/tests/run-all", async (req, res) => {
 
                 // Fallback: any object response resolves for numeric EO cases
                 clearTimeout(timeout);
-                clearTestWaitForMAC();
+                atsRuntime.clearTestWaitForMAC();
                 // Cleanup handler on fallback
-                const idx = deviceCommandWaiters.indexOf(responseHandler);
-                if (idx > -1) deviceCommandWaiters.splice(idx, 1);
+                const idx = atsRuntime.deviceCommandWaiters.indexOf(responseHandler);
+                if (idx > -1) atsRuntime.deviceCommandWaiters.splice(idx, 1);
                 resolve(reading);
                 return true;
               };
@@ -1548,7 +1546,7 @@ app.post("/api/tests/run-all", async (req, res) => {
               // Store reference for timeout cleanup
               currentHandler = responseHandler;
               // Store the handler to be called when this device responds
-              deviceCommandWaiters.push(responseHandler);
+              atsRuntime.deviceCommandWaiters.push(responseHandler);
             });
 
             deviceResponse = await waitForResponse;
@@ -1723,7 +1721,7 @@ app.post('/api/tests/fan-test', async (req, res) => {
   console.log("/api/tests/fan-test API called");
 
   // RESETING STOP TEST FLAG
-  resetTestStopFlag();
+  atsRuntime.resetStop();
 
   try {
     const { mac } = req.body;
@@ -1783,7 +1781,7 @@ app.post('/api/tests/fan-test', async (req, res) => {
     const results = [];
 
     for (const testFile of testFiles) {
-      if (testStopRequested) {
+      if (atsRuntime.testStopRequested) {
         console.log('    🛑 Test execution stopped by user - skipping remaining tests');
         break;
       }
@@ -1925,7 +1923,7 @@ app.post('/api/tests/fan-test', async (req, res) => {
           });
 
           // Get the first connected device MAC to wait for
-          const connectedMACs = Array.from(connectedDevices.keys());
+          const connectedMACs = Array.from(atsRuntime.connectedDevices.keys());
 
           console.log("Connected Device: ", connectedMACs);
           if (connectedMACs.length === 0) {
@@ -1944,7 +1942,7 @@ app.post('/api/tests/fan-test', async (req, res) => {
 
             for (let i = 0; i < testConfig.steps.length; i++) {
               // CHECKING IF STEP STOP IS REQUESTED
-              if (testStopRequested) {
+              if (atsRuntime.testStopRequested) {
                 console.log('    🛑 Test stopped by user request');
                 testResult.status = 'stopped';
                 testResult.output = 'Test stopped by user';
@@ -1985,10 +1983,10 @@ app.post('/api/tests/fan-test', async (req, res) => {
                 let lastReceivedValue = null;
 
                 const timeout = setTimeout(() => {
-                  clearTestWaitForMAC();
+                  atsRuntime.clearTestWaitForMAC();
                   if (currentStepHandler) {
-                    const idx = deviceCommandWaiters.indexOf(currentStepHandler);
-                    if (idx > -1) deviceCommandWaiters.splice(idx, 1);
+                    const idx = atsRuntime.deviceCommandWaiters.indexOf(currentStepHandler);
+                    if (idx > -1) atsRuntime.deviceCommandWaiters.splice(idx, 1);
                   }
                   if (isCurrentlyMatching) {
                     console.log("✅ Step passed after full waitTime");
@@ -2009,7 +2007,7 @@ app.post('/api/tests/fan-test', async (req, res) => {
                 }, (step.waitTime || 20) * 1000);
 
 
-                setTestWaitForMAC(testDeviceMAC);  //Setting device for testing so it can wait for device readings 
+                atsRuntime.setTestWaitForMAC(testDeviceMAC);  //Setting device for testing so it can wait for device readings 
                 console.log("🟨 Setting wait MAC:", testDeviceMAC);
 
 
@@ -2103,9 +2101,9 @@ app.post('/api/tests/fan-test', async (req, res) => {
                 };
 
                 currentStepHandler = stepHandler;
-                deviceCommandWaiters.push(stepHandler);
+                atsRuntime.deviceCommandWaiters.push(stepHandler);
 
-                console.log("🟩 Step handler registered. Total handlers:", deviceCommandWaiters.length);
+                console.log("🟩 Step handler registered. Total handlers:", atsRuntime.deviceCommandWaiters.length);
 
 
                 if (step.action) {
@@ -2295,7 +2293,7 @@ app.post('/api/tests/pdu-test', async (req, res) => {
   console.log("/api/tests/pdu-test API called");
 
   // RESETING STOP TEST FLAG
-  resetTestStopFlag();
+  atsRuntime.resetStop();
 
   try {
     const { mac, frontendPDUResults } = req.body;
@@ -2411,35 +2409,35 @@ const BULK_SAVE_LIMIT = 1000;
 let alreadyReplied = 0;
 
 // Device command waiter queue with MAC tracking
-const deviceCommandWaiters = [];
+// const deviceCommandWaiters = [];
 
 // Track which MAC addresses have pending test waits
-let testWaitingForMAC = null;
-let testStopRequested = false;  // Flag to stop ongoing test
+// let testWaitingForMAC = null;
+// let testStopRequested = false;  // Flag to stop ongoing test
 
-function setTestWaitForMAC(mac) {
-  testWaitingForMAC = mac;
-  console.log(`🔔 Test now waiting for response from MAC: ${mac}`);
-}
+// function setTestWaitForMAC(mac) {
+//   testWaitingForMAC = mac;
+//   console.log(`🔔 Test now waiting for response from MAC: ${mac}`);
+// }
 
-function clearTestWaitForMAC() {
-  testWaitingForMAC = null;
-}
+// function clearTestWaitForMAC() {
+//   testWaitingForMAC = null;
+// }
 
-function requestTestStop() {
-  testStopRequested = true;
-  clearTestWaitForMAC();
-  // Clear all pending waiters
-  while (deviceCommandWaiters.length > 0) {
-    const waiter = deviceCommandWaiters.shift();
-    waiter({ stopped: true });  // Resolve with stopped flag
-  }
-  console.log('🛑 Test stop requested - all waiters cleared');
-}
+// function requestTestStop() {
+//   testStopRequested = true;
+//   clearTestWaitForMAC();
+//   // Clear all pending waiters
+//   while (deviceCommandWaiters.length > 0) {
+//     const waiter = deviceCommandWaiters.shift();
+//     waiter({ stopped: true });  // Resolve with stopped flag
+//   }
+//   console.log('🛑 Test stop requested - all waiters cleared');
+// }
 
-function resetTestStopFlag() {
-  testStopRequested = false;
-}
+// function resetTestStopFlag() {
+//   testStopRequested = false;
+// }
 
 // Function to get formatted Date and Time
 /*
@@ -2958,7 +2956,7 @@ const tcpServer = net.createServer((socket) => {
         }
 
         socket.deviceId = mac;
-        connectedDevices.set(mac, socket);
+        // atsRuntime.connectedDevices.set(mac, socket);
         atsRuntime.connectedDevices.set(mac, {
           mac,
           socket,
@@ -3011,7 +3009,7 @@ const tcpServer = net.createServer((socket) => {
 
 
         // Track connected device socket and broadcast to any connected frontend clients
-        connectedDevices.set(mac, socket);
+        // atsRuntime.connectedDevices.set(mac, socket);
         try {
           broadcastToWebClients(reading);
         } catch (err) {
@@ -3023,13 +3021,13 @@ const tcpServer = net.createServer((socket) => {
         if (latestReadings.length > 400) latestReadings.shift();
 
         // Notify waiting test ASYNC - don't block reading flow
-        if (testWaitingForMAC && mac === testWaitingForMAC && deviceCommandWaiters.length > 0) {
+        if (atsRuntime.testWaitingForMAC && mac === atsRuntime.testWaitingForMAC && atsRuntime.deviceCommandWaiters.length > 0) {
           setImmediate(() => {
-            if (deviceCommandWaiters.length > 0) {
-              const waiter = deviceCommandWaiters[0];
+            if (atsRuntime.deviceCommandWaiters.length > 0) {
+              const waiter = atsRuntime.deviceCommandWaiters[0];
               const shouldResolve = waiter(reading);
               if (shouldResolve) {
-                deviceCommandWaiters.shift();
+                atsRuntime.deviceCommandWaiters.shift();
                 console.log(`✅ Test waiter resolved for MAC ${mac}`);
               }
             }
@@ -3047,10 +3045,10 @@ const tcpServer = net.createServer((socket) => {
   });
 
   socket.on("end", () => {
-    for (const [mac, sock] of connectedDevices.entries()) {
+    for (const [mac, sock] of atsRuntime.connectedDevices.entries()) {
       if (sock === socket) {
-        connectedDevices.delete(socket.deviceId);
         atsRuntime.connectedDevices.delete(socket.deviceId);
+        // atsRuntime.connectedDevices.delete(socket.deviceId);
         console.log(`Device ${mac} disconnected`);
       }
     }

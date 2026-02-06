@@ -1,5 +1,5 @@
 let testStopRequested = false;
-let waitForMAC = null;
+let testWaitingForMAC = null;
 let pendingDialogResolver = null;
 
 
@@ -26,19 +26,21 @@ module.exports = {
 
     resetStop() {
         testStopRequested = false;
+        testWaitingForMAC = null;
+        deviceCommandWaiters.length = 0;
     },
 
     // MAC handling
     setTestWaitForMAC(mac) {
-        waitForMAC = mac;
+        testWaitingForMAC = mac;
     },
 
     clearTestWaitForMAC() {
-        waitForMAC = null;
+        testWaitingForMAC = null;
     },
 
-    get waitForMAC() {
-        return waitForMAC;
+    get testWaitingForMAC() {
+        return testWaitingForMAC;
     },
 
     // dialog

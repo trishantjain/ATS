@@ -1,6 +1,6 @@
 name="Inside Temperature Test"
 type="sensor"
-pass="Inside Temperature successfully completed"
+pass="Inside Temperature test successfully completed"
 fail="Inside Temperature Test failed"
 retryCount=0
 
@@ -9,5 +9,5 @@ msg="Inside Temperature Sensor test started"
 waitFor="insideTemperature"
 waitTime=30
 increasedBy=5
-onPass="Inside Temperature alarm successfully"
-onFail="Inside Temperature alarm not turned on"
+onPass="Inside Temperature sensor successfully tested"
+onFail="Inside Temperature not increased by 5°C"

@@ -1,0 +1,14 @@
+ATS Test Run
+Type: iMoni
+Device: 192.168.0.0
+Timestamp: 06/02/26 02:09:04
+Total Tests: 1
+
+Test: Outside Temperature Test
+Status: failed
+
+Step,StepStatus,Message
+1,FAILED,"Outside Temperature alarm not turned on"
+
+=== TEST END ===
+

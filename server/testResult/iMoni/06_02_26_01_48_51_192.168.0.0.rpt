@@ -1,0 +1,14 @@
+ATS Test Run
+Type: iMoni
+Device: 192.168.0.0
+Timestamp: 06/02/26 01:48:51
+Total Tests: 1
+
+Test: Inside Temperature Test
+Status: passed
+
+Step,StepStatus,Message
+1,PASSED,"Inside Temperature alarm successfully"
+
+=== TEST END ===
+

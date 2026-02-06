@@ -209,6 +209,7 @@ const runTests = async ({ testFiles, mac, onStatus, frontendResults = [] }) => {
                         const stepResult = await new Promise((resolve) => {
                             let initialSensorValue = null;  // Capture initial value from first reading
                             const requiredIncrease = step.increasedBy || 0;
+                            console.log("    🎯 Required Increase in current sensor test: ", requiredIncrease);
 
                             const timeout = setTimeout(() => {
                                 atsRuntime.clearTestWaitForMAC();
@@ -223,6 +224,27 @@ const runTests = async ({ testFiles, mac, onStatus, frontendResults = [] }) => {
                                 });
                             }, (step.waitTime || 20) * 1000);
 
+                            const stopWatcher = setInterval(() => {
+                                if (atsRuntime.testStopRequested) {
+                                    clearTimeout(timeout);
+                                    clearInterval(stopWatcher);
+
+                                    atsRuntime.clearTestWaitForMAC();
+
+                                    if (currentStepHandler) {
+                                        const idx = atsRuntime.deviceCommandWaiters.indexOf(currentStepHandler);
+                                        if (idx > -1) atsRuntime.deviceCommandWaiters.splice(idx, 1);
+                                    }
+
+                                    resolve({
+                                        success: false,
+                                        reason: "STOP_REQUESTED",
+                                        received: initialSensorValue
+                                    });
+                                }
+                            }, 100);
+
+
                             atsRuntime.setTestWaitForMAC(testDeviceMAC);
 
                             let currentStepHandler = null;
@@ -233,7 +255,10 @@ const runTests = async ({ testFiles, mac, onStatus, frontendResults = [] }) => {
                                     return false;
                                 }
 
+                                console.log("🧾 FULL READING OBJECT:", Object.keys(reading));
+
                                 const currentValue = parseFloat(reading[step.waitFor]);
+                                console.log("   📥 Current sensor value for", step.waitFor, ": ", reading[step.waitFor]);
 
                                 if (isNaN(currentValue)) {
                                     console.log(`   ⚠️ Invalid sensor value for ${step.waitFor}: ${reading[step.waitFor]}`);
@@ -254,6 +279,7 @@ const runTests = async ({ testFiles, mac, onStatus, frontendResults = [] }) => {
                                 // Check if value has increased by required amount
                                 if (currentIncrease >= requiredIncrease) {
                                     clearTimeout(timeout);
+                                    clearInterval(stopWatcher);
                                     atsRuntime.clearTestWaitForMAC();
                                     const idx = atsRuntime.deviceCommandWaiters.indexOf(stepHandler);
                                     if (idx > -1) atsRuntime.deviceCommandWaiters.splice(idx, 1);
@@ -269,6 +295,12 @@ const runTests = async ({ testFiles, mac, onStatus, frontendResults = [] }) => {
 
                             currentStepHandler = stepHandler;
                             atsRuntime.deviceCommandWaiters.push(stepHandler);
+                            // atsRuntime.deviceCommandWaiters.push(stepHandler);
+                            console.log(
+                                "🧪 SENSOR HANDLER REGISTERED",
+                                atsRuntime.deviceCommandWaiters.length
+                            );
+
                         });
 
                         // Process step result
@@ -330,8 +362,8 @@ const runTests = async ({ testFiles, mac, onStatus, frontendResults = [] }) => {
 
                     const reportContent = `Test: ${testResult.name} , Status: ${testResult.status} , Steps: ${stepResults.length}/${testConfig.steps.length}`;
                     try {
-                        await fs.promises.appendFile(testReportFilePath, `${reportContent}\n`);
-                        console.log(`✅ Test report appended to: ${testReportFileName}`);
+                        // await fs.promises.appendFile(testReportFilePath, `${reportContent}\n`);
+                        // console.log(`✅ Test report appended to: ${testReportFileName}`);
                     } catch (err) {
                         console.log(`🔴 Error writing test report: ${err.stack} 🔴`);
                     }
@@ -529,7 +561,7 @@ const runTests = async ({ testFiles, mac, onStatus, frontendResults = [] }) => {
 
                     const reportContent = `Test: ${testResult.name} , Status: ${testResult.status} , Steps: ${stepResults.length}/${testConfig.steps.length}`;
                     try {
-                        await fs.promises.appendFile(testReportFilePath, `${reportContent}\n`);
+                        // await fs.promises.appendFile(testReportFilePath, `${reportContent}\n`);
                         console.log(`✅ Test report appended to: ${testReportFileName}`);
                     } catch (err) {
                         console.log(`🔴 Error writing test report: ${err.stack} 🔴`);
@@ -645,10 +677,10 @@ const runTests = async ({ testFiles, mac, onStatus, frontendResults = [] }) => {
                             let lastReceivedValue = null;
 
                             const timeout = setTimeout(() => {
-                                clearTestWaitForMAC();
+                                atsRuntime.clearTestWaitForMAC();
                                 if (currentStepHandler) {
-                                    const idx = deviceCommandWaiters.indexOf(currentStepHandler);
-                                    if (idx > -1) deviceCommandWaiters.splice(idx, 1);
+                                    const idx = atsRuntime.deviceCommandWaiters.indexOf(currentStepHandler);
+                                    if (idx > -1) atsRuntime.deviceCommandWaiters.splice(idx, 1);
                                 }
                                 if (isCurrentlyMatching) {
                                     console.log("✅ Step passed after full waitTime");
@@ -763,7 +795,7 @@ const runTests = async ({ testFiles, mac, onStatus, frontendResults = [] }) => {
                                 console.log("🚀 Sending command:", step.action);
 
                                 testResult.commands.push(step.action);
-                                
+
                                 fetch("http://localhost:5000/command", {
                                     method: "POST",
                                     headers: { "Content-Type": "application/json" },
@@ -828,7 +860,7 @@ const runTests = async ({ testFiles, mac, onStatus, frontendResults = [] }) => {
                     // Set overall test result
                     testResult.passed = allStepsPassed;
                     testResult.status = allStepsPassed ? 'passed' : 'failed';
-                    
+
 
                     testResult.output = allStepsPassed
                         ? (testConfig.pass || `✅ All ${testConfig.steps.length} steps passed`)
@@ -837,7 +869,7 @@ const runTests = async ({ testFiles, mac, onStatus, frontendResults = [] }) => {
 
                     const reportContent = `Test: ${testResult.name} , Status: ${testResult.status} , Steps: ${stepResults.length}/${testConfig.steps.length}`;
                     try {
-                        await fs.promises.appendFile(testReportFilePath, `${reportContent}\n`);
+                        // await fs.promises.appendFile(testReportFilePath, `${reportContent}\n`);
                         console.log(`✅ Test report appended to: ${testReportFileName}`);
                     } catch (err) {
                         console.log(`🔴 Error writing test report: ${err.stack} 🔴`);
@@ -1052,7 +1084,7 @@ const runTests = async ({ testFiles, mac, onStatus, frontendResults = [] }) => {
 
                     const reportContent = `Test: ${testResult.name} , Status: ${testResult.status}`;
                     try {
-                        await fs.promises.appendFile(testReportFilePath, `${reportContent}\n`);
+                        // await fs.promises.appendFile(testReportFilePath, `${reportContent}\n`);
                         console.log(`✅ Test report appended to: ${testReportFileName}`);
                     } catch (err) {
                         console.log(`🔴 Error writing test report: ${err.stack} 🔴`);

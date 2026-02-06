@@ -15,7 +15,6 @@ async function reportWriter({
     // outputDir,
     mac = "unknown-device"
 }) {
-const testName = test.name || test.testFile || "Unnamed Test";
     if (!DESTINATION_MAP[destination]) {
         throw new Error(`Invalid report destination: ${destination}`);
     }
@@ -29,6 +28,7 @@ const testName = test.name || test.testFile || "Unnamed Test";
     if (!fs.existsSync(baseDir)) {
         fs.mkdirSync(baseDir, { recursive: true });
     }
+    console.log("runResult: ", runResult);
 
     const safeMac = String(mac).replace(/:/g, "-");
     const fileName = `${getFormattedDateTime("file")}_${safeMac}.rpt`;
@@ -41,12 +41,14 @@ const testName = test.name || test.testFile || "Unnamed Test";
         `Type: ${destination}\n` +
         `Device: ${safeMac}\n` +
         `Timestamp: ${getFormattedDateTime()}\n` +
-        `Total Tests: ${runResult.results.length}\n\n`,
+        `Total Tests: ${runResult.summary.total}\n\n`,
         { flag: "w" }
     );
 
     // ===== PER TEST =====
     for (const test of runResult.results) {
+        const testName = test.name || test.testFile || "Unnamed Test";
+
         await fs.promises.appendFile(
             filePath,
             `Test: ${test.name}\nStatus: ${test.status}\n\n`

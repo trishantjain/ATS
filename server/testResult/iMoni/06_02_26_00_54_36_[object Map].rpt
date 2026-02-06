@@ -1,0 +1,14 @@
+ATS Test Run
+Type: iMoni
+Device: [object Map]
+Timestamp: 06/02/26 00:54:36
+Total Tests: 1
+
+Test: Inside Temperature Test
+Status: failed
+
+Step,StepStatus,Message
+1,FAILED,"Inside Temperature alarm not turned on"
+
+=== TEST END ===
+
