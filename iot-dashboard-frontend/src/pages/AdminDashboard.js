@@ -463,7 +463,7 @@ const RegisterDeviceTab = () => {
       <table className="device-table">
         <thead>
           <tr>
-            <th>MAC</th>
+            <th>IP</th>
             <th>Location ID</th>
             <th>Address</th>
             <th>Latitude</th>
