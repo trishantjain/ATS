@@ -1,6 +1,7 @@
 name="Non - Critical Load Test"
 pass="Non - Critical Load successfully completed"
 fail="Non - Critical Load failed"
+continueOnFail=1
 retryCount=0
 
 [step:1]

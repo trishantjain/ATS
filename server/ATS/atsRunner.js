@@ -55,6 +55,7 @@ const runTests = async ({ testFiles, mac, onStatus, frontendResults = [] }) => {
                     pass: "",
                     fail: "",
                     timeout: 20,
+                    continueOnFail: 0,
                     retryCount: 0,
                     type: "",
                     steps: []
@@ -121,6 +122,8 @@ const runTests = async ({ testFiles, mac, onStatus, frontendResults = [] }) => {
                             testConfig.fail = line.substring(5).replace(/["\']/g, '');
                         } else if (line.startsWith('type=')) {
                             testConfig.type = line.substring(5).replace(/["\']/g, '');
+                        } else if (line.startsWith('continueOnFail=')) {
+                            testConfig.continueOnFail = parseInt(line.substring('continueOnFail='.length).replace(/["\']/g, ''), 10) || 0;
                         } else if (line.startsWith('retryCount=')) {
                             testConfig.retryCount = parseInt(line.substring(11).replace(/["\']/g, '')) || 0;
                         } else if (line && !line.includes('=')) {
@@ -345,10 +348,12 @@ const runTests = async ({ testFiles, mac, onStatus, frontendResults = [] }) => {
                                 timestamp: getFormattedDateTime()
                             });
 
-                            // Stop on first failure (or continue based on config)
-                            // break;
 
-                            continue;
+                            // Stop on first failure (or continue based on config)
+                            if (testConfig.continueOnFail) {
+                                continue;   // next step
+                            }
+                            break;        // stop this test -> next test file
                         }
                     }
 
