@@ -55,8 +55,10 @@ function DashboardView() {
   const [fanTestStatus, setFanTestStatus] = useState(false); // Waiting for Fan Test Execution
   const [pduTestStatus, setPduTestStatus] = useState(false); // Waiting for PDU Test Execution
 
+  const isTestRunning = awaitingCommand || fanTestStatus || pduTestStatus;
+
   //Map and marker refs
-  const mapRef = useRef(null);
+  // const mapRef = useRef(null);
   const wsRef = useRef(null);
   // const markerRefs = useRef({});
 
@@ -898,7 +900,7 @@ function DashboardView() {
         <h2>🧪 ATS Test Controls</h2>
         <div className="test-buttons">
 
-          <div>
+          <div className="test-select">
             <select value={selectedProduct} onChange={handleProductChange}>
               <option defaultChecked>Select</option>
               <option value="iMoni">iMoni Tests</option>
@@ -1118,7 +1120,7 @@ function DashboardView() {
           </div>
         )}
 
-        {fetchedTestList.length > 0 ? fetchedTestList.map((test) => (
+        {!isTestRunning && fetchedTestList.length > 0 ? fetchedTestList.map((test) => (
           <label key={test} style={{ display: "block" }}>
             <input
               type="checkbox"
