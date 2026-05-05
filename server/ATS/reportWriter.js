@@ -1,7 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 const { getFormattedDateTime } = require("../utils/time");
-
+const {getNextReportNumber} = require("../ESP_Testing/reportCounter")
 
 const DESTINATION_MAP = {
     fan: "testResult/fan",
@@ -19,6 +19,8 @@ async function reportWriter({
         throw new Error(`Invalid report destination: ${destination}`);
     }
 
+    const reportNo = getNextReportNumber(destination);
+
     const baseDir = path.join(
         __dirname,
         "..",
@@ -31,13 +33,15 @@ async function reportWriter({
     console.log("runResult: ", runResult);
 
     const safeMac = String(mac).replace(/:/g, "-");
-    const fileName = `${getFormattedDateTime("file")}_${safeMac}.rpt`;
+    // const fileName = `${getFormattedDateTime("file")}_${safeMac}.rpt`;
+    const fileName = `${reportNo}_${getFormattedDateTime("file")}_${safeMac}.rpt`;
     const filePath = path.join(baseDir, fileName);
 
     // Header
     await fs.promises.writeFile(
         filePath,
         `ATS Test Run\n` +
+        `Report No: ${reportNo}\n` +
         `Type: ${destination}\n` +
         `Device: ${safeMac}\n` +
         `Timestamp: ${getFormattedDateTime()}\n` +

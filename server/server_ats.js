@@ -34,7 +34,7 @@ const wss = new WebSocket.Server({ port: WS_PORT });
 const wsClients = new Set();
 // let pendingDialogResolver = null;  // Resolves when frontend responds to dialog
 
-// WebSocket connection handling with improved logging
+// WEBSOCKET CONNECTION HANDLING
 wss.on('connection', (ws, req) => {
   console.log('🔌 WebSocket client connected from:', req.socket.remoteAddress);
   wsClients.add(ws);
@@ -88,7 +88,7 @@ wss.on('listening', () => {
   console.log(`✅ WebSocket server running on port ${WS_PORT}`);
 });
 
-// Improved WebSocket broadcast function
+// WEBSOCKET BROADCAST FUNCTION
 function broadcastToWebClients(reading) {
   const message = JSON.stringify({
     type: 'NEW_READING',
@@ -118,7 +118,7 @@ function broadcastToWebClients(reading) {
   }
 }
 
-// Broadcast test status/progress to web clients
+// BROADCAST TEST STATUS/PROGRESS TO WEB CLIENT
 function broadcastTestStatus(payload) {
   const message = JSON.stringify(payload);
 
@@ -320,12 +320,13 @@ app.post("/command", (req, res) => {
 
   if (!device || device.destroyed) {
     atsRuntime.connectedDevices.delete(normalizedMac);
-    atsRuntime.connectedDevices.delete(socket.deviceId);
+    // atsRuntime.connectedDevices.delete(socket.deviceId);
     return res.status(404).json({ message: `Device ${normalizedMac} not connected` });
   }
 
   const buffer = Buffer.from(command, "utf-8");
-  deviceSocket.write(buffer, (err) => {
+  // deviceSocket.write(buffer, (err) => {
+  device.socket.write(buffer, (err) => {
     if (err) {
       console.error(`Failed to send command to ${normalizedMac}:`, err.message);
       return res.status(500).json({ message: `Error sending command to ${normalizedMac}` });
@@ -2676,7 +2677,10 @@ const tcpServer = net.createServer((socket) => {
           fanStatus[i] = (fanStatusBits >> (i * 2)) & 0x03; // 0=off, 1=healthy, 2=faulty
         }
 
-        console.log("Fan Status: ", fanStatus);
+        console.log(fanStatus);
+        console.log(fanLevel1Running, fanLevel2Running, fanLevel3Running, fanLevel4Running);
+
+        // console.log("Fan Status: ", fanStatus);
 
         if (padding === 0x31 && !alreadyReplied) {
           sendX(socket);
@@ -2904,12 +2908,12 @@ const tcpServer = net.createServer((socket) => {
           console.log("Water Leakage Alarm")
         }
 
-        if (doorStatus) {
+        if (doorStatus == "OPEN") {
           activeAlarms.push("Door Alarm");
           console.log("Door Alarm")
         }
 
-        if (lockStatus) {
+        if (lockStatus == "OPEN" ) {
           activeAlarms.push("Lock Alarm");
           console.log("Lock Alarm")
         }
