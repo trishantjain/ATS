@@ -1,0 +1,20 @@
+ATS Test Run
+Report No: FAN-0016
+Type: fan
+Device: ESP32-JIG
+Timestamp: 05/05/26 18:03:44
+Total Tests: 6
+
+Test: Fan Tray Test
+Status: passed
+
+Step,StepStatus,Message
+1,PASSED,"Fan 1 RPM=84570"
+2,PASSED,"Fan 2 RPM=7260"
+3,PASSED,"Fan 3 RPM=3780"
+4,PASSED,"Fan 4 RPM=11550"
+5,PASSED,"Fan 5 RPM=4200"
+6,PASSED,"Fan 6 RPM=4110"
+
+=== TEST END ===
+
