@@ -686,7 +686,8 @@ function DashboardView() {
       frontendResults.push({
         name: 'Visual Test',
         status: v.isConfirmed ? 'passed' : 'failed',
-        passed: v.isConfirmed
+        passed: v.isConfirmed,
+        output: v.isConfirmed ? 'Visual inspection passed successfully' : 'Visual inspection failed'
       });
 
       // 2. Burn-In Test (frontend dialog)  
@@ -700,7 +701,8 @@ function DashboardView() {
       frontendResults.push({
         name: 'Burn-In Test',
         status: b.isConfirmed ? 'passed' : 'failed',
-        passed: b.isConfirmed
+        passed: b.isConfirmed,
+        output: b.isConfirmed ? 'Burn-In test passed successfully' : 'Burn-In test failed'
       });
 
       console.log("Frontend Results: ", frontendResults);
@@ -711,7 +713,12 @@ function DashboardView() {
         const resp = await fetch(`${process.env.REACT_APP_API_URL}/api/tests/run-all`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ mac: selectedMac, skipFrontendTests: true, frontendResults })
+          body: JSON.stringify({
+            mac: selectedMac,
+            skipFrontendTests: true,
+            frontendResults,
+            controllerId
+          })
         });
         const data = await resp.json();
         setTestStatus(`Done: ${data.summary.passed} passed, ${data.summary.failed} failed`);
