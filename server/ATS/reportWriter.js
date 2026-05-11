@@ -13,7 +13,9 @@ async function reportWriter({
     runResult,
     destination,
     // outputDir,
-    mac = "unknown-device"
+    mac = "unknown-device",
+    // unitSerialNo = '0000',
+    deviceId = '0000'
 }) {
     if (!DESTINATION_MAP[destination]) {
         throw new Error(`Invalid report destination: ${destination}`);
@@ -34,8 +36,21 @@ async function reportWriter({
 
     const safeMac = String(mac).replace(/:/g, "-");
     // const fileName = `${getFormattedDateTime("file")}_${safeMac}.rpt`;
-    const fileName = `${reportNo}_${getFormattedDateTime("file")}_${safeMac}.rpt`;
+
+    const safeControllerId = String(deviceId || "unknown-controller").replace(/[^a-zA-Z0-9-_]/g, "");
+
+    const fileName = `${reportNo}_${safeControllerId}_${getFormattedDateTime("file")}_${safeMac}.csv`;
     const filePath = path.join(baseDir, fileName);
+
+    let content = "";
+
+    // ================= HEADER ================= 
+    content += `Unit Sr No:,${reportNo}\n`;
+    content += `DateTime:,${getFormattedDateTime()}\n`;
+    content += `DeviceIP:,${mac}\n`;
+    content += `ControllerID:,${deviceId}\n`;
+    content += `TotalTests:,${runResult.summary.total}\n\n`;
+
 
     // Header
     await fs.promises.writeFile(

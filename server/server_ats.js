@@ -461,7 +461,7 @@ app.get("/api/tests/list", async (req, res) => {
 // ✅ Run a single test file (COMMENTED OUT - uncomment if needed in future)
 app.post("/api/tests/run", async (req, res) => {
   console.log("▶️ /api/tests/run endpoint called");
-  let { selectedTests } = req.body;
+  let { selectedTests, controllerId } = req.body;
   console.log("Requested test file:", selectedTests);
 
   if (!selectedTests || selectedTests.length === 0) {
@@ -527,7 +527,8 @@ app.post("/api/tests/run", async (req, res) => {
     await reportWriter({
       runResult: testResult,
       destination: "iMoni",
-      mac: firstMac
+      mac: firstMac,
+      deviceId: controllerId
     });
 
 
@@ -568,7 +569,7 @@ app.post("/api/tests/run-all", async (req, res) => {
   atsRuntime.resetStop();  // Reset stop flag when starting new test
 
   try {
-    const { mac, skipFrontendTests, frontendResults } = req.body;
+    const { mac, controllerId, skipFrontendTests, frontendResults } = req.body;
     const testDir = path.join(__dirname, "tests/iMoni");
 
     const summaryLines = [];
@@ -2277,8 +2278,8 @@ app.post('/api/tests/fan-test', async (req, res) => {
       timestamp: getFormattedDateTime()
     });
 
-    console.log(`📊 ATS Tests completed: ${passedCount} passed, ${failedCount} failed`);
-    res.json(response);
+    const { mac, controllerId } = req.body;
+
 
   } catch (err) {
     console.error("❌ Error running all tests:", err.message);

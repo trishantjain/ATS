@@ -47,6 +47,9 @@ function DashboardView() {
 
   const [selectedProduct, setSelectedProduct] = useState("");
 
+  // const [unitSerialNo, setUnitSerialNo] = useState("");
+  const [controllerId, setControllerId] = useState("");
+
   // States for Test Lists
   const [selectedTests, setSelectedTests] = useState([]);  // Stores selected tests
   const [fetchedTestList, setFetchedTestList] = useState([]); // Stores Fetched tests from backend
@@ -637,6 +640,16 @@ function DashboardView() {
   // IMONI TEST FUNCTION
   async function iMoni_test() {
     setAwaitingCommand(true); // Shows 'Running...' state
+
+    if (!controllerId.trim()) {
+      swal.fire({
+        icon: "warning",
+        title: "Controller ID Required",
+        text: "Please enter Controller ID before starting ATS"
+      });
+      return;
+    }
+
     const frontendResults = []; // Stores Visual & Burn-in results
     console.log("Fetched Test List Length: ", fetchedTestList.length);
     console.log("Selected Tests Length: ", selectedTests.length);
@@ -934,6 +947,32 @@ function DashboardView() {
                 </button> :
                 <h4>Select a product to run tests</h4>
           }
+
+          <div style={{ marginBottom: "15px" }}>
+            {/* <input
+              type="text"
+              placeholder="Enter Unit Serial Number"
+              value={unitSerialNo}
+              onChange={(e) => setUnitSerialNo(e.target.value)}
+              style={{
+                marginRight: "10px",
+                padding: "8px",
+                width: "220px"
+              }}
+            /> */}
+
+            <input
+              type="text"
+              placeholder="Enter Controller ID"
+              value={controllerId}
+              onChange={(e) => setControllerId(e.target.value)}
+              style={{
+                padding: "8px",
+                width: "220px"
+              }}
+            />
+          </div>
+
 
 
           {/* STOP TEST BUTTON */}
