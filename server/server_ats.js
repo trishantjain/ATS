@@ -572,22 +572,27 @@ app.post("/api/tests/run-all", async (req, res) => {
     const { mac, controllerId, skipFrontendTests, frontendResults } = req.body;
     const testDir = path.join(__dirname, "tests/iMoni");
 
-    const summaryLines = [];
+    // const summaryLines = [];
+
+    // Create test directory if not exists 
+    if (!fs.existsSync(testDir)) {
+      return res.status(400).json({
+        error: "Test folder not found",
+        timestamp: getFormattedDateTime()
+      });
+    }
 
     // Create test directory if it doesn't exist
-    if (!fs.existsSync(testDir)) {
-      res.json({ msg: "Test Folder not found" });
-    }
+    // if (!fs.existsSync(testDir)) {
+    //   res.json({ msg: "Test Folder not found" });
+    // }
 
     // Fetching test files
     const files = await fs.promises.readdir(testDir);
 
     // Sort files numerically (1_criticalload.srv, 2_nexttest.srv, etc.)
     let testFiles = files
-      .filter(file => {
-        const ext = path.extname(file).toLowerCase();
-        return ['.srv'].includes(ext);
-      })
+      .filter(file => path.extname(file).toLowerCase() === ".srv")
       .sort((a, b) => {
         // Extract numbers from filenames for sorting
         const numA = parseInt(a.split('_')[0]) || 0;
