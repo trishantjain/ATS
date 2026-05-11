@@ -172,7 +172,12 @@ function DashboardView() {
   };
 
   const handleFanClick = (level) => {
-    const isActive = activeFanBtns.includes(level);
+    // const isActive = activeFanBtns.includes(level);
+
+    const isActive =
+      latestReading &&
+      latestReading[`fanLevel${level}Running`] === true;
+
     const command = isActive
       ? `%R0${level}F${getFormattedDateTime()}$`
       : `%R0${level}N${getFormattedDateTime()}$`;
@@ -193,10 +198,15 @@ function DashboardView() {
     sendCommand(command);
 
     // Update UI immediately (optional, for instant feedback)
-    setActiveFanBtns(
+    // setActiveFanBtns(
+    //   isActive
+    //     ? activeFanBtns.filter((l) => l !== level)
+    //     : [...activeFanBtns, level]
+    // );
+    setActiveFanBtns((prev) =>
       isActive
-        ? activeFanBtns.filter((l) => l !== level)
-        : [...activeFanBtns, level]
+        ? prev.filter((l) => l !== level)
+        : [...prev, level]
     );
   };
 
