@@ -2,6 +2,10 @@ const { SerialPort } = require('serialport');
 const { ReadlineParser } = require('@serialport/parser-readline');
 const { reportWriter } = require('../ATS/reportWriter'); // adjust path
 
+// GETTING FAN CONTROLLER ID
+const fanTrayControllerId = process.argv[2] || "unknown-controller";
+
+
 function handleFanTestResult(data) {
     console.log("✅ Parsed ESP Result:", data);
 
@@ -11,11 +15,19 @@ function handleFanTestResult(data) {
         return;
     }
 
-    const stepResults = data.results.map((fan, idx) => ({
-        step: idx + 1,
-        status: fan.status === "PASS" ? "passed" : "failed",
-        message: `Fan ${fan.fan} RPM=${fan.rpm}`
-    }));
+    const MIN_FAN_RPM = 2300;
+    const MAX_FAN_RPM = 2900;
+
+    const stepResults = data.results.map((fan, idx) => {
+        const rpm = Number(fan.rpm);
+        const rpmPassed = Number.isFinite(rpm) && rpm >= MIN_FAN_RPM && rpm <= MAX_FAN_RPM;
+
+        return {
+            step: idx + 1,
+            status: rpmPassed ? "passed" : "failed",
+            message: `Fan ${fan.fan} RPM=${fan.rpm}`
+        };
+    });
 
     const passed = stepResults.every(s => s.status === "passed");
 
@@ -39,7 +51,8 @@ function handleFanTestResult(data) {
     reportWriter({
         runResult,
         destination: "fan",
-        mac: "ESP32-JIG"
+        mac: "ESP32-JIG",
+        deviceId: fanTrayControllerId
     })
         .then(res => {
             console.log("📄 Report saved:", res.filePath);
