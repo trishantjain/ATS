@@ -39,7 +39,7 @@ function handleFanTestResult(data) {
         },
         results: [
             {
-                name: "Fan Tray Test",
+                name: "Fan Tray Assembly Test",
                 status: passed ? "passed" : "failed",
                 stepResults
             }
