@@ -1,0 +1,29 @@
+name="Water Logging Test"
+pass="Water Logging Sensor Test successfully completed"
+fail="Water Logging Sensor Test failed"
+retryCount=0
+
+[step:1]
+msg="No Water Logging Sensor alarm should not appear now"
+waitFor="waterLogging"
+waitTime=10
+expectedValue="false"
+onPass="No Water Logging alarm | Ready to test"
+onFail="Water Logging already ON"
+
+[step:2]
+msg="Start testing Water Logging Sensor test"
+waitFor="waterLogging"
+waitTime=10
+expectedValue="true"
+onPass="Water Logging alarm successfully came"
+onFail="Water Logging alarm not turned on"
+
+[step:3]
+msg="Wipe off water from Logging sensor"
+waitFor="waterLogging"
+waitTime=10
+expectedValue="false"
+onPass="Water Logging alarm off successfully"
+onFail="Water Logging alarm not turned off"
+

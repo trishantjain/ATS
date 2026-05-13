@@ -47,7 +47,9 @@ function DashboardView() {
 
   const [selectedProduct, setSelectedProduct] = useState("");
 
-  // const [unitSerialNo, setUnitSerialNo] = useState("");
+  const [testLevel, setTestLevel] = useState("full-controller");
+  const [unitSerialNo, setUnitSerialNo] = useState("");
+  const [whitePcbSrNo, setWhitePcbSrNo] = useState("");
   const [controllerId, setControllerId] = useState("");
 
   // States for Test Lists
@@ -631,7 +633,7 @@ function DashboardView() {
     const fetchTests = async () => {
       try {
         if (selectedProduct !== "pdu") {
-          const res = await fetch(`${process.env.REACT_APP_API_URL}/api/tests/${selectedProduct}`);
+          const res = await fetch(`${process.env.REACT_APP_API_URL}/api/tests/${selectedProduct}?testLevel=${testLevel}`);
           const tests = await res.json();
           setFetchedTestList(tests);
           setSelectedTests(tests);
@@ -645,18 +647,19 @@ function DashboardView() {
     if (selectedProduct) {
       fetchTests();
     }
-  }, [selectedProduct]);
+  }, [selectedProduct, testLevel]);
 
   // IMONI TEST FUNCTION
   async function iMoni_test() {
     setAwaitingCommand(true); // Shows 'Running...' state
 
-    if (!controllerId.trim()) {
+    if (!unitSerialNo.trim()) {
       swal.fire({
         icon: "warning",
-        title: "Controller ID Required",
-        text: "Please enter Controller ID before starting ATS"
+        title: "Unit Serial Number Required",
+        text: "Please enter Unit Serial Number before starting ATS"
       });
+      setAwaitingCommand(false);
       return;
     }
 
@@ -717,7 +720,9 @@ function DashboardView() {
             mac: selectedMac,
             skipFrontendTests: true,
             frontendResults,
-            controllerId
+            whitePcbSrNo: whitePcbSrNo.trim(),
+            unitSerialNo: unitSerialNo.trim(),
+            testLevel
           })
         });
         const data = await resp.json();
@@ -726,14 +731,21 @@ function DashboardView() {
         setTestStatus(`Error: ${err.message}`);
       }
     } else {
-      console.log("Selected Test code runs ...",selectedTests);
+      console.log("Selected Test code runs ...", selectedTests);
 
 
       try {
         const resp = await fetch(`${process.env.REACT_APP_API_URL}/api/tests/run`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ mac: selectedMac, selectedProduct, selectedTests })
+          body: JSON.stringify({
+            mac: selectedMac,
+            selectedProduct,
+            selectedTests,
+            unitSerialNo: unitSerialNo.trim(),
+            whitePcbSrNo: whitePcbSrNo.trim(),
+            testLevel
+          })
         });
         const data = await resp.json();
         setTestStatus(`Done: ${data.summary.passed} passed, ${data.summary.failed} failed`);
@@ -939,6 +951,15 @@ function DashboardView() {
             </select>
           </div>
 
+          {selectedProduct === "iMoni" && (
+            <select
+              value={testLevel}
+              onChange={(e) => setTestLevel(e.target.value)}
+            >
+              <option value="full-controller">Full Controller</option>
+              <option value="green-pcb">Green PCB / Card Level</option>
+            </select>
+          )}
 
           {selectedProduct === "iMoni" ?
             <button
@@ -966,7 +987,7 @@ function DashboardView() {
           }
 
           <div style={{ marginBottom: "15px" }}>
-            {/* <input
+            <input
               type="text"
               placeholder="Enter Unit Serial Number"
               value={unitSerialNo}
@@ -976,9 +997,17 @@ function DashboardView() {
                 padding: "8px",
                 width: "220px"
               }}
-            /> */}
+            />
 
             <input
+              type="text"
+              placeholder="Enter White PCB Sr. No."
+              value={whitePcbSrNo}
+              onChange={(e) => setWhitePcbSrNo(e.target.value)}
+            />
+
+
+            {/* <input
               type="text"
               placeholder="Enter Controller ID"
               value={controllerId}
@@ -987,7 +1016,7 @@ function DashboardView() {
                 padding: "8px",
                 width: "220px"
               }}
-            />
+            /> */}
           </div>
 
 

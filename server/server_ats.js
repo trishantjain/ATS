@@ -435,6 +435,16 @@ app.get("/api/thresholds", (req, res) => {
   res.json(thresholds);
 });
 
+
+function getIMoniTestDir(testLevel) {
+  if (testLevel === "green-pcb") {
+    return path.join(__dirname, "tests/iMoni/green-pcb");
+  }
+
+  return path.join(__dirname, "tests/iMoni");
+}
+
+
 // ✅ List all available test files (COMMENTED OUT - uncomment if needed in future)
 app.get("/api/tests/list", async (req, res) => {
   const testDir = path.join(__dirname, "tests");
@@ -461,7 +471,15 @@ app.get("/api/tests/list", async (req, res) => {
 // ✅ Run a single test file (COMMENTED OUT - uncomment if needed in future)
 app.post("/api/tests/run", async (req, res) => {
   console.log("▶️ /api/tests/run endpoint called");
-  let { selectedTests, controllerId } = req.body;
+
+  let {
+    mac: selectedMac,
+    selectedTests,
+    controllerId,
+    unitSerialNo,
+    whitePcbSrNo,
+    testLevel = "green-pcb"
+  } = req.body;
   console.log("Requested test file:", selectedTests);
 
   if (!selectedTests || selectedTests.length === 0) {
@@ -476,7 +494,9 @@ app.post("/api/tests/run", async (req, res) => {
   }
 
   // const testPath = path.join(__dirname, "tests/iMoni", selectedTests);
-  const baseDir = path.join(__dirname, "tests/iMoni");
+  // const baseDir = path.join(__dirname, "tests/iMoni");
+  const baseDir = getIMoniTestDir(testLevel);
+
 
   // // Prevent path traversal
   // if (!path.normalize(testPath).startsWith(baseDir)) {
@@ -511,7 +531,9 @@ app.post("/api/tests/run", async (req, res) => {
     atsRuntime.resetStop();
     const testResult = await runTests({
       testFiles: selectedTests,
-      onStatus: broadcastTestStatus
+      onStatus: broadcastTestStatus,
+      testLevel,
+      testDir: baseDir
     });
 
     console.log("Test execution completed.", testResult);
@@ -528,7 +550,10 @@ app.post("/api/tests/run", async (req, res) => {
       runResult: testResult,
       destination: "iMoni",
       mac: firstMac,
-      deviceId: controllerId
+      deviceId: controllerId,
+      unitSerialNo,
+      whitePcbSrNo,
+      testLevel
     });
 
 
@@ -569,8 +594,17 @@ app.post("/api/tests/run-all", async (req, res) => {
   atsRuntime.resetStop();  // Reset stop flag when starting new test
 
   try {
-    const { mac, controllerId, skipFrontendTests, frontendResults } = req.body;
-    const testDir = path.join(__dirname, "tests/iMoni");
+    const {
+      mac,
+      whitePcbSrNo,
+      unitSerialNo,
+      testLevel = "full-controller",
+      skipFrontendTests,
+      frontendResults
+    } = req.body;
+    // const testDir = path.join(__dirname, "tests/iMoni");
+    const testDir = getIMoniTestDir(testLevel);
+
 
     // const summaryLines = [];
 
@@ -614,7 +648,12 @@ app.post("/api/tests/run-all", async (req, res) => {
     // if (!fs.existsSync(testResultDir)) {
     //   fs.mkdirSync(testResultDir, { recursive: true });
     // }
-    const testResult = await runTests({ testFiles, onStatus: broadcastTestStatus });
+    const testResult = await runTests({
+      testFiles,
+      onStatus: broadcastTestStatus,
+      testDir,
+      testLevel
+    });
 
     let mergedResults = [];
 
@@ -1739,7 +1778,9 @@ app.post("/api/tests/run-all", async (req, res) => {
       runResult: response,
       destination: "iMoni",
       mac: reportMac,
-      deviceId: controllerId
+      whitePcbSrNo,
+      unitSerialNo,
+      testLevel
     });
 
     // ================= FINAL WS EVENT ================= 
@@ -2426,8 +2467,17 @@ app.post('/api/tests/pdu-test', async (req, res) => {
 app.get('/api/tests/:testType', async (req, res) => {
   try {
     const testType = req.params.testType;
+    const testLevel = req.query.testLevel;
 
-    const testDir = path.join(__dirname, `/tests/${testType}`);
+    // const testDir = path.join(__dirname, `/tests/${testType}`);
+    let testDir;
+
+    if (testType === "iMoni") {
+      testDir = getIMoniTestDir(testLevel);
+    } else {
+      testDir = path.join(__dirname, `/tests/${testType}`);
+    }
+
 
     // Create test directory if it doesn't exist
     if (!fs.existsSync(testDir)) {
@@ -2996,7 +3046,7 @@ const tcpServer = net.createServer((socket) => {
           console.log("Door Alarm")
         }
 
-        if (lockStatus == "OPEN" ) {
+        if (lockStatus == "OPEN") {
           activeAlarms.push("Lock Alarm");
           console.log("Lock Alarm")
         }
@@ -3067,6 +3117,12 @@ const tcpServer = net.createServer((socket) => {
           batteryBackup,
           alarmActive,
           fireAlarm,
+          fanGroupStatus: [
+            fanLevel1Running,
+            fanLevel2Running,
+            fanLevel3Running,
+            fanLevel4Running,
+          ],
           fanLevel1Running,
           fanLevel2Running,
           fanLevel3Running,

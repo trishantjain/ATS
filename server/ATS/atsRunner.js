@@ -3,7 +3,14 @@ const fs = require("fs");
 const atsRuntime = require("./atsRuntime");
 const { getFormattedDateTime } = require("../utils/time");
 
-const runTests = async ({ testFiles, mac, onStatus, frontendResults = [] }) => {
+const runTests = async ({
+    testFiles,
+    mac,
+    onStatus,
+    frontendResults = [],
+    testDir,
+    testLevel = "full-controller"
+}) => {
     console.log(`\n=========== 🚀 Starting ATS Test Run: ${testFiles.length} test(s) ===========`);
     const results = [];
 
@@ -19,8 +26,9 @@ const runTests = async ({ testFiles, mac, onStatus, frontendResults = [] }) => {
 
         console.log(`🔬 Processing test file: ${testFile}`);
 
-        const testDir = path.join(__dirname, "../tests/iMoni");
-        const testFilePath = path.join(testDir, testFile);
+        // const testDir = path.join(__dirname, "../tests/iMoni");
+        const resolvedTestDir = testDir || path.join(__dirname, "../tests/iMoni");
+        const testFilePath = path.join(resolvedTestDir, testFile);
         console.log(`Path resolved for test file in atsRunner: ${testFilePath}`);
 
         try {
@@ -252,7 +260,7 @@ const runTests = async ({ testFiles, mac, onStatus, frontendResults = [] }) => {
 
                             let currentStepHandler = null;
 
-                            // Handler to check if sensor value increased by required amount
+                            // Handler to check sensor presence for Green PCB, or increase for full controller
                             const stepHandler = (reading) => {
                                 if (!reading || typeof reading !== 'object') {
                                     return false;
@@ -266,6 +274,19 @@ const runTests = async ({ testFiles, mac, onStatus, frontendResults = [] }) => {
                                 if (isNaN(currentValue)) {
                                     console.log(`   ⚠️ Invalid sensor value for ${step.waitFor}: ${reading[step.waitFor]}`);
                                     return false;
+                                }
+
+                                if (testLevel === "green-pcb") {
+                                    clearTimeout(timeout);
+                                    clearInterval(stopWatcher);
+                                    atsRuntime.clearTestWaitForMAC();
+                                    const idx = atsRuntime.deviceCommandWaiters.indexOf(stepHandler);
+                                    if (idx > -1) atsRuntime.deviceCommandWaiters.splice(idx, 1);
+                                    resolve({
+                                        success: true,
+                                        received: `${step.waitFor}=${currentValue}`
+                                    });
+                                    return true;
                                 }
 
                                 // Capture initial value on first reading

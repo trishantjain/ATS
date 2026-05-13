@@ -9,13 +9,21 @@ const DESTINATION_MAP = {
     pdu: "testResult/pdu"
 };
 
+const REPORT_SUBDIR_MAP = {
+    "green-pcb": "green-pcb",
+    "full-controller": "full-controller"
+};
+
+
 async function reportWriter({
     runResult,
     destination,
     // outputDir,
     mac = "unknown-device",
     // unitSerialNo = '0000',
-    deviceId = '0000'
+    whitePcbSrNo = "",
+    unitSerialNo = "",
+    testLevel = "full-controller"
 }) {
     if (!DESTINATION_MAP[destination]) {
         throw new Error(`Invalid report destination: ${destination}`);
@@ -23,11 +31,20 @@ async function reportWriter({
 
     const reportNo = getNextReportNumber(destination);
 
-    const baseDir = path.join(
+    let baseDir = path.join(
         __dirname,
         "..",
         DESTINATION_MAP[destination]
     );
+
+        
+    if (destination === "iMoni") {
+        baseDir = path.join(
+            baseDir,
+            REPORT_SUBDIR_MAP[testLevel] || "full-controller"
+        );
+    }
+
 
     if (!fs.existsSync(baseDir)) {
         fs.mkdirSync(baseDir, { recursive: true });
@@ -38,22 +55,33 @@ async function reportWriter({
     // const fileName = `${getFormattedDateTime("file")}_${safeMac}.rpt`;
     // const fileName = `${reportNo}_${getFormattedDateTime("file")}_${safeMac}.rpt`;
 
-    const safeControllerId = String(deviceId || "unknown-controller").replace(/[^a-zA-Z0-9-_]/g, "");
+    // const safeControllerId = String(deviceId || "unknown-controller").replace(/[^a-zA-Z0-9-_]/g, "");
+    const safeUnitSerialNo = String(unitSerialNo || "unknown-unit")
+        .replace(/[^a-zA-Z0-9-_]/g, "");
 
-    const fileName = `${reportNo}_${safeControllerId}_${getFormattedDateTime("file")}_${safeMac}.csv`;
+    const fileName = `${reportNo}_${safeUnitSerialNo}_${getFormattedDateTime("file")}_${safeMac}.csv`;
+
+    // const fileName = `${reportNo}_${safeControllerId}_${getFormattedDateTime("file")}_${safeMac}.csv`;
     const filePath = path.join(baseDir, fileName);
 
     let content = "";
 
     // ================= HEADER ================= 
-    content += `Unit Sr No:,${reportNo}\n`;
+    content += `Report No:,${reportNo}\n`;
+    content += `Unit Sr No:,${unitSerialNo || "NA"}\n`;
+    content += `CPU Sr. No.:,${whitePcbSrNo || "NA"}\n`;
     content += `DateTime:,${getFormattedDateTime()}\n`;
-    content += `DeviceIP:,${mac}\n`;
-    content += `ControllerID:,${deviceId}\n`;
+    content += `TestLevel:,${testLevel === "green-pcb" ? "Green PCB" : "SRMS Unit"}\n`;
+
+
+    if (testLevel !== "green-pcb") {
+        content += `DeviceIP:,${mac}\n`;
+    }
+
     content += `TotalTests:,${runResult.summary.total}\n\n`;
 
     // ================= TABLE HEADER ================= 
-    content += "Sr. No.,TestName,Status,FailedStep,Reason,Remarks\n";
+    content += "Sr. No.,TestName,Status,FailedStep,TotalSteps,Reason,Remarks\n";
 
     // Header
     // await fs.promises.writeFile(
@@ -119,17 +147,22 @@ async function reportWriter({
         const failedStepNo =
             failedStep?.step || "";
 
+        const totalSteps = test.stepResults?.length || "";
+
         // CHANGING FAILED STATUS TO '*FAILED' IN FAN REPORT
         const statusForReport =
             destination === "fan" && test.status === "failed"
-                ? "*failed"
+                ? "*FAILED"
                 : test.status.toUpperCase();
 
         content += [
             index + 1,
             `"${(test.name || "").replace(/"/g, '""')}"`,
-            test.status.toUpperCase(), failedStepNo,
-            `"${String(reason).replace(/"/g, '""')}"`
+            statusForReport,
+            failedStepNo,
+            totalSteps,
+            `"${String(reason).replace(/"/g, '""')}"`,
+            ""
         ].join(",") + "\n";
     });
 
