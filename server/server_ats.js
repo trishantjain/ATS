@@ -2764,7 +2764,7 @@ const tcpServer = net.createServer((socket) => {
 
         const output = +packet.readInt16LE(33).toFixed(2);
         const outputVoltage = output / 100;
-        const hupsDVC = packet.readInt16LE(35);
+        const hupsDVC = (+packet.readInt16LE(35).toFixed(2)) / 100;
         const input = +packet.readInt16LE(37).toFixed(2);
         const inputVoltage = input / 100;
         const hupsBatVolt = packet.readInt16LE(39);
@@ -2824,107 +2824,229 @@ const tcpServer = net.createServer((socket) => {
         if ((padding === 0x43) && (doorStatus === "OPEN")) {
           console.log("⚡Camera Function runs ...⚡")
 
-          let timestamp = getFormattedDateTime("path");
-          const snapshotFileName = `image_${timestamp}.jpg`;
+          //   let timestamp = getFormattedDateTime("path");
+          //   const snapshotFileName = `image_${timestamp}.jpg`;
 
 
           /* 
             Function that captures snapshots from Hi-Focus and Sparsh Cameras. 
           */
-          try {
-            console.log("⏰ Snapshot for Hi-Focus Camera ⏰");
+          //   try {
+          //     console.log("⏰ Snapshot for Hi-Focus Camera ⏰");
 
-            const cameraDetails = await Device.findOne({ mac }, 'ipCamera').lean();
-            const cameraMake = cameraDetails.ipCamera.type.trim();
-            console.log("Camera Make: ", cameraMake);
+          //     const cameraDetails = await Device.findOne({ mac }, 'ipCamera').lean();
+          //     const cameraMake = cameraDetails.ipCamera.type.trim();
+          //     console.log("Camera Make: ", cameraMake);
 
-            if (cameraMake === 'H') {
-              console.log("⏰ Snapshot for HiFocus Camera ⏰");
+          //     if (cameraMake === 'H') {
+          //       console.log("⏰ Snapshot for HiFocus Camera ⏰");
 
-              const ip = cameraDetails.ipCamera.ip.trim();
-              const snapshotOutputDir_MAC = path.join(snapshotOutputDir, mac.slice(8).replace(/[: ]/g, '_'));
+          //       const ip = cameraDetails.ipCamera.ip.trim();
+          //       const snapshotOutputDir_MAC = path.join(snapshotOutputDir, mac.slice(8).replace(/[: ]/g, '_'));
 
-              // Using ffmpeg to capture snapshot from the HI-Focus Camera
-              const args = [
-                '-rtsp_transport', 'tcp',
-                '-i', `rtsp://${ip}/media/video1`,
-                '-frames:v', '1',
-                `${snapshotOutputDir_MAC}/${snapshotFileName}`
-              ];
+          //       // Using ffmpeg to capture snapshot from the HI-Focus Camera
+          //       const args = [
+          //         '-rtsp_transport', 'tcp',
+          //         '-i', `rtsp://${ip}/media/video1`,
+          //         '-frames:v', '1',
+          //         `${snapshotOutputDir_MAC}/${snapshotFileName}`
+          //       ];
 
-              const ffmpeg = spawn('ffmpeg', args);
+          //       const ffmpeg = spawn('ffmpeg', args);
 
-              // For Debugging
-              ffmpeg.stderr.on('data', (data) => {
-                console.log(`ffmpeg: ${data}`);
-              });
+          //       // For Debugging
+          //       ffmpeg.stderr.on('data', (data) => {
+          //         console.log(`ffmpeg: ${data}`);
+          //       });
 
-              ffmpeg.on('close', (code) => {
-                if (code === 0) {
-                  if (eMS_LOGS) console.log("Captured successfully...");
-                } else {
-                  console.error(`ffmpeg process exited with code ${code}`);
-                }
-              });
+          //       ffmpeg.on('close', (code) => {
+          //         if (code === 0) {
+          //           if (eMS_LOGS) console.log("Captured successfully...");
+          //         } else {
+          //           console.error(`ffmpeg process exited with code ${code}`);
+          //         }
+          //       });
 
-              ffmpeg.on('error', (err) => {
-                console.error(`❌ Failed to start ffmpeg:`, err.message);
-              });
+          //       ffmpeg.on('error', (err) => {
+          //         console.error(`❌ Failed to start ffmpeg:`, err.message);
+          //       });
 
-            } else {
-              console.log("⏰ Snapshot for Sparsh Camera ⏰");
+          //     } else {
+          //       console.log("⏰ Snapshot for Sparsh Camera ⏰");
 
-              console.log("Timestamp: ", timestamp);
+          //       console.log("Timestamp: ", timestamp);
 
-              // Extracting Camera IP from DB for Sparsh Camera
-              let camIP = cameraDetails.ipCamera.ip.trim();
+          //       // Extracting Camera IP from DB for Sparsh Camera
+          //       let camIP = cameraDetails.ipCamera.ip.trim();
 
-              // Added 3 seconds delay for first snapshot capture to wait for opening the door 
-              setTimeout(() => {
-                let url = `https://${camIP}/CGI/command/snap?channel=01`;
-                console.log("📸 Capturing from URL:", url);
+          //       // Added 3 seconds delay for first snapshot capture to wait for opening the door 
+          //       setTimeout(() => {
+          //         let url = `https://${camIP}/CGI/command/snap?channel=01`;
+          //         console.log("📸 Capturing from URL:", url);
 
-                const snapshotOutputDir_MAC = path.join(snapshotOutputDir, mac.slice(8).replace(/[. ]/g, '_'));
-                const snapshotOutputPath = path.join(snapshotOutputDir_MAC, snapshotFileName);
+          //         const snapshotOutputDir_MAC = path.join(snapshotOutputDir, mac.slice(8).replace(/[. ]/g, '_'));
+          //         const snapshotOutputPath = path.join(snapshotOutputDir_MAC, snapshotFileName);
 
-                if (eMS_LOGS) console.log("🔴outputDir: ", snapshotOutputDir, "🔴");
+          //         if (eMS_LOGS) console.log("🔴outputDir: ", snapshotOutputDir, "🔴");
 
-                try {
-                  if (!fs.existsSync(snapshotOutputDir)) {
-                    fs.mkdirSync(snapshotOutputDir, { recursive: true });
-                    console.log(`📁 Created directory: ${snapshotOutputDir}`);
-                  }
-                } catch (err) {
-                  console.error(`❌ Failed to create directory ${snapshotOutputDir}:`, err.message);
-                }
+          //         try {
+          //           if (!fs.existsSync(snapshotOutputDir)) {
+          //             fs.mkdirSync(snapshotOutputDir, { recursive: true });
+          //             console.log(`📁 Created directory: ${snapshotOutputDir}`);
+          //           }
+          //         } catch (err) {
+          //           console.error(`❌ Failed to create directory ${snapshotOutputDir}:`, err.message);
+          //         }
 
-                axios({
-                  method: 'GET',
-                  url: url,
-                  responseType: 'stream',
-                  timeout: 10000
-                })
-                  .then((response) => {
-                    const writer = fs.createWriteStream(snapshotOutputPath);
-                    response.data.pipe(writer);
+          //         axios({
+          //           method: 'GET',
+          //           url: url,
+          //           responseType: 'stream',
+          //           timeout: 10000
+          //         })
+          //           .then((response) => {
+          //             const writer = fs.createWriteStream(snapshotOutputPath);
+          //             response.data.pipe(writer);
 
-                    return new Promise((resolve, reject) => {
-                      writer.on('finish', resolve);
-                      writer.on('error', reject);
-                    });
-                  })
-                  .then(() => {
-                    if (eMS_LOGS) console.log(`✅ Snapshot captured: ${snapshotFileName}`);
-                  })
-                  .catch((error) => {
-                    console.error(`❌ Error capturing snapshot: ${error.message}`);
-                  });
-              }, 3000); // 3 second delay
-            }
-          } catch (err) {
-            console.error(`Error occured while caputuring snapshots: ${err}`)
+          //             return new Promise((resolve, reject) => {
+          //               writer.on('finish', resolve);
+          //               writer.on('error', reject);
+          //             });
+          //           })
+          //           .then(() => {
+          //             if (eMS_LOGS) console.log(`✅ Snapshot captured: ${snapshotFileName}`);
+          //           })
+          //           .catch((error) => {
+          //             console.error(`❌ Error capturing snapshot: ${error.message}`);
+          //           });
+          //       }, 3000); // 3 second delay
+          //     }
+          //   } catch (err) {
+          //     console.error(`Error occured while caputuring snapshots: ${err}`)
+          //   }
+          // }
+
+          // ===================== NEW CAMERA LOGIC | DFR CAMERA =====================
+
+          // RESOLVING PATH FOR EXE FILE
+          // const exePath = process.env.READIMAGE_EXE_PATH || path.join(__dirname, "ReadImage.exe");
+          const now = new Date();
+          const timestamp = getFormattedDateTime("filename")
+          // console.log(timestamp);
+          const snapshotFileName = `image_${timestamp}.jpg`;
+          const snapshotOutputDir_MAC = path.join(snapshotOutputDir, mac.slice(8).replace(/[. ]/g, '_'));
+          const outputPath = path.join(snapshotOutputDir_MAC, snapshotFileName);
+          const exePath = process.env.READIMAGE_EXE_PATH || path.join(__dirname, "ReadImage_recovered_5.exe");
+
+
+          // HANDLING EXE FILE READ TIMEOUT
+          const timeoutMs = Number.parseInt(process.env.READIMAGE_TIMEOUT_MS || "45000", 10);
+
+          if (!fs.existsSync(exePath)) {
+            throw new Error(`ReadImage executable not found at: ${exePath}`);
           }
+
+          /**
+           * Prepare arguments for the executable
+           * Default format:
+           *   ReadImage.exe <cameraIp> <outputPath>
+           *
+           * Can be overridden using environment variable:
+           *   READIMAGE_ARGS_JSON
+           * Example:
+           *   ["--ip","{ip}","--out","{out}"]
+           */
+          let args = [String(ip), String(outputPath)];
+          if (process.env.READIMAGE_ARGS_JSON) {
+            try {
+              const parsed = JSON.parse(process.env.READIMAGE_ARGS_JSON);
+
+              // Ensure it is an array
+              if (!Array.isArray(parsed)) throw new Error("READIMAGE_ARGS_JSON must be a JSON array");
+
+              // Replace placeholders with actual values
+              args = parsed.map((a) =>
+                String(a).replaceAll("{ip}",
+                  String(ip)).replaceAll("{out}",
+                    String(outputPath)));
+            } catch (e) {
+              throw new Error(`Invalid READIMAGE_ARGS_JSON: ${e.message}`);
+            }
+          }
+
+
+          await new Promise((resolve, reject) => {
+
+            const child = spawn(exePath, args, {
+              windowsHide: true,  // Hide console window on Windows
+              stdio: ["ignore", "pipe", "pipe"]   // Ignore stdin, capture stdout/stder
+            });
+
+            let stderr = "";
+            child.stderr.on("data", (d) => {
+              stderr += d.toString();
+            });
+
+            // Handle spawn errors
+            child.on("error", (err) => {
+              reject(err);
+            });
+
+            // Timeout handling
+            const timer = setTimeout(() => {
+              try { child.kill(); } catch { /* ignore */ }
+              reject(new Error(`ReadImage timed out after ${timeoutMs}ms (exe=${exePath}, ip=${ip}, out=${outputPath})`));
+            }, Number.isFinite(timeoutMs) ? timeoutMs : 45000);
+
+
+            // Process completion handler
+            child.on("close", (code) => {
+              clearTimeout(timer);
+
+              // SUCCESS
+              if (code === 0) return resolve();
+
+              // Failure with exit code and optional stderr
+              reject(new Error(`ReadImage exited with code ${code}${stderr ? `: ${stderr.trim()}` : ""}`));
+            });
+          });
+
+
+
+          /**
+          * Validate output file
+          * - Must exist
+          * - Must not be empty
+          */
+          let stat;
+          try {
+            stat = fs.statSync(outputPath);
+
+          } catch {
+            throw new Error(`ReadImage completed but output file was not created: ${outputPath}`);
+          }
+
+          // Ensure file is valid
+          if (!stat.isFile() || stat.size === 0) {
+            throw new Error(`ReadImage output file is empty or invalid: ${outputPath}`);
+          }
+
+          // 🔥 VALIDATE IMAGE
+          // const isValid = await validateImage(outputPath);
+
+          // if (!isValid) {
+          //   throw new Error("Corrupted image detected by sharp");
+          // }
+
+          // const fileCheck = await imageSizeCheck(outputPath);
+
+          // if (fileCheck.fileSize.kb < 50) {
+          //     throw new Error("Invalid Image | Size is less than 50kb");
+          // }
         }
+
+        // ===================== NEW CAMERA LOGIC | DFR CAMERA =====================
+
 
 
         // ===================== Logging Incoming Data from Simulator =====================
