@@ -1,10 +1,11 @@
-name="Limit Switch Test"
-pass="Limit Switch successfully completed"
-fail="Limit Switch failed"
+name="Non - Critical Load Test"
+pass="Non - Critical Load successfully completed"
+fail="Non - Critical Load failed"
+continueOnFail=1
 retryCount=0
 
 [step:1]
-msg="Close the Door before starting"
+msg="Turn OFF Non - Critical Load before starting"
 waitFor="doorStatus"
 waitTime=15
 expectedValue="CLOSED"
@@ -12,17 +13,17 @@ onPass="Door is closed, | Ready to test |"
 onFail="Door is still open. Close the door first."
 
 [step:2]
-msg="Now Open the Door"
+msg="Turn ON Non - Critical Load now"
 waitFor="doorStatus"
-waitTime=15
+waitTime=20
 expectedValue="OPEN"
 onPass="Door alarm triggered successfully"
 onFail="Door alarm did not trigger within time"
 
 [step:3]
-msg="Close the Door again"
+msg="Turn OFF Non - Critical Load"
 waitFor="doorStatus"
-waitTime=15
+waitTime=20
 expectedValue="CLOSED"
 onPass="Door alarm went off successfully"
 onFail="Door alarm did not go off within time"
