@@ -1300,21 +1300,21 @@ function DashboardView() {
                   />
                   <Gauge
                     label="DV Current"
-                    value={latestReading.batteryBackup}
+                    value={latestReading.hupsDVC}
                     max={12}
                     color="#ffc107"
                     alarm={latestReading.batteryBackupAlarm}
                   />
                   <Gauge
                     label="Battery %"
-                    value={(latestReading.batteryBackup * 1.5).toFixed(2)}
+                    value={(latestReading.hupsBatVolt * 1.5).toFixed(2)}
                     max={120}
                     color="#ffc107"
                     alarm={latestReading.batteryBackupAlarm}
                   />
                   <Gauge
                     label="Battery(Hours)"
-                    value={(latestReading.batteryBackup).toFixed(2)}
+                    value={(latestReading.hupsBatVolt).toFixed(2)}
                     max={120}
                     color="#ffc107"
                     alarm={latestReading.batteryBackupAlarm}
@@ -1425,7 +1425,7 @@ function DashboardView() {
                       {hupsKeys.map((hups, i) => (
                         <div key={i} className="alarm-indicator">
                           <div
-                            className={`alarm-led ${latestReading[hups.key] ? "active" : ""
+                            className={`alarm-led ${latestReading[hups.key] ? "" : "active"
                               }`}
                           />
                           <div className="alarm-label">
