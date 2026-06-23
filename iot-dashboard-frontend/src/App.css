@@ -1005,3 +1005,115 @@ body {
 .test-select{
   margin-top: 20px;
 }
+
+/* ATS PANEL */
+
+.ats-panel {
+  background: #111111;
+  padding: 20px;
+  margin: 15px;
+  border-radius: 12px;
+  border: 1px solid #333333;
+  box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
+}
+
+.ats-select {
+  min-width: 240px;
+  height: 44px;
+  padding: 0 12px;
+  background: #1a1a1a;
+  color: white;
+  border: 1px solid #444444;
+  border-radius: 8px;
+  font-size: 14px;
+  margin-left: 3px;
+  margin-bottom: 4px;
+}
+
+.ats-select:focus {
+  outline: none;
+  border-color: #00c8ff;
+  box-shadow: 0 0 8px rgba(0, 200, 255, 0.5);
+}
+
+.ats-input {
+  height: 44px;
+  padding: 0 14px;
+  background: #1a1a1a;
+  color: white;
+  border: 1px solid #444444;
+  border-radius: 8px;
+  font-size: 14px;
+  margin-left: 3px;
+}
+
+.ats-input::placeholder {
+  color: #888888;
+}
+
+.ats-input:focus {
+  outline: none;
+  border-color: #00c8ff;
+  box-shadow: 0 0 10px rgba(0, 200, 255, 0.5);
+}
+
+.ats-input.required {
+  border: 2px solid #00c8ff;
+}
+
+.ats-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: white;
+  margin-bottom: 18px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.ats-checkbox input {
+  width: 18px;
+  height: 18px;
+  accent-color: #3b82f6;
+}
+
+.ats-run-btn {
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 12px 35px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: 0.2s;
+  height: 54px;
+  min-width: 220px; 
+}
+
+.ats-run-btn:hover {
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  transform: translateY(-1px);
+  box-shadow: 0 0 15px rgba(59, 130, 246, 0.4);
+}
+
+.ats-actions {
+  display: flex;
+  align-items: center;
+  gap: 25px;
+  margin-top: 15px;
+}
+
+.ats-run-btn:disabled {
+  background: #475569;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.ats-title {
+  color: white;
+  margin-bottom: 20px;
+  font-size: 24px;
+  font-weight: 700;
+}

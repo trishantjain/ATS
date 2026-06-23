@@ -1,7 +1,12 @@
 const fs = require("fs");
 const path = require("path");
 const { getFormattedDateTime } = require("../utils/time");
-const { getNextReportNumber } = require("../ESP_Testing/reportCounter")
+const { getNextReportNumber } = require("../Testing/reportCounter")
+
+const ExcelJS = require("exceljs");
+
+// const workbook = new ExcelJS.Workbook();
+// const worksheet = workbook.addWorksheet("Test Report");
 
 const DESTINATION_MAP = {
     fan: "testResult/fan",
@@ -14,6 +19,63 @@ const REPORT_SUBDIR_MAP = {
     "full-controller": "full-controller"
 };
 
+async function generateFanMainReport({
+    runResult,
+    reportNo,
+    unitSerialNo,
+    safeMac,
+    baseDir
+}) {
+
+    const workbook = new ExcelJS.Workbook();
+
+    const worksheet =
+        workbook.addWorksheet("Fan ATS Report");
+
+    worksheet.addRow(["Report No", reportNo]);
+    worksheet.addRow(["Fan Tray No", unitSerialNo]);
+    worksheet.addRow(["Date Time", getFormattedDateTime()]);
+    worksheet.addRow([]);
+
+    worksheet.columns = [
+        { header: "Fan", width: 10 },
+        { header: "Pulses", width: 15 },
+        { header: "Status", width: 15 },
+        { header: "Remarks", width: 40 }
+    ];
+
+    const steps =
+        runResult.results[0]?.stepResults || [];
+
+    steps.forEach((step) => {
+        worksheet.addRow([
+            `Fan ${step.step}`,
+            step.message,
+            step.status.toUpperCase(),
+            step.status === "passed"
+                ? "PASS"
+                : "FAIL"
+        ]);
+    });
+
+    const mainDir = path.join(
+        baseDir,
+        "..",
+        "fan-main-report"
+    );
+
+    if (!fs.existsSync(mainDir)) {
+        fs.mkdirSync(mainDir, { recursive: true });
+    }
+
+    const fileName =
+        `${reportNo}_${unitSerialNo}_${safeMac}_main.xlsx`;
+
+    await workbook.xlsx.writeFile(
+        path.join(mainDir, fileName)
+    );
+}
+
 
 async function reportWriter({
     runResult,
@@ -21,27 +83,42 @@ async function reportWriter({
     // outputDir,
     mac = "unknown-device",
     // unitSerialNo = '0000',
-    whitePcbSrNo = "",
+    cpuSrNo = "",
+    basePcbSrNo = "",
+    cameraSrNo = "",
+    psuSrNo = "",
     unitSerialNo = "",
+    generateReport,
     testLevel = "full-controller"
 }) {
     if (!DESTINATION_MAP[destination]) {
         throw new Error(`Invalid report destination: ${destination}`);
     }
 
-    const reportNo = getNextReportNumber(destination);
+    let reportNo = "";
+    let baseDir;
+    // if (testLevel === "green-pcb") {
+    //     reportNo = getNextReportNumber("iMoni-Base");
+    // } else if(testLevel==="full-controller"){
+    //     reportNo = getNextReportNumber("iMoni-SRMS");
+    // }
 
-    let baseDir = path.join(
+    baseDir = path.join(
         __dirname,
         "..",
         DESTINATION_MAP[destination]
     );
 
-        
+
     if (destination === "iMoni") {
+        const reportFolder = generateReport === false
+            ? "log-writer"
+            : "RPT";
+
         baseDir = path.join(
             baseDir,
-            REPORT_SUBDIR_MAP[testLevel] || "full-controller"
+            REPORT_SUBDIR_MAP[testLevel] || "full-controller",
+            reportFolder
         );
     }
 
@@ -51,6 +128,22 @@ async function reportWriter({
     }
     console.log("runResult: ", runResult);
 
+
+    let templatePath;
+
+    if (destination === "fan") {
+        templatePath = path.join(__dirname, "./template/fan_template.xlsx");
+        reportNo = getNextReportNumber("FAN");
+    }
+    else if (testLevel === "green-pcb") {
+        templatePath = path.join(__dirname, "./template/green-pcb_template.xlsx");
+        reportNo = getNextReportNumber("iMoni-Base");
+    }
+    else {
+        templatePath = path.join(__dirname, "./template/srms_template.xlsx");
+        reportNo = getNextReportNumber("iMoni-SRMS");
+    }
+
     const safeMac = String(mac).replace(/:/g, "-");
     // const fileName = `${getFormattedDateTime("file")}_${safeMac}.rpt`;
     // const fileName = `${reportNo}_${getFormattedDateTime("file")}_${safeMac}.rpt`;
@@ -59,29 +152,171 @@ async function reportWriter({
     const safeUnitSerialNo = String(unitSerialNo || "unknown-unit")
         .replace(/[^a-zA-Z0-9-_]/g, "");
 
-    const fileName = `${reportNo}_${safeUnitSerialNo}_${getFormattedDateTime("file")}_${safeMac}.csv`;
+    let fileName
+
+    if (testLevel === "green-pcb") {
+        fileName = `${reportNo}_${basePcbSrNo}_${getFormattedDateTime("file")}_${safeMac}.xlsx`;
+    } else{
+        fileName = `${reportNo}_${safeUnitSerialNo}_${getFormattedDateTime("file")}_${safeMac}.xlsx`;
+    }
 
     // const fileName = `${reportNo}_${safeControllerId}_${getFormattedDateTime("file")}_${safeMac}.csv`;
     const filePath = path.join(baseDir, fileName);
 
-    let content = "";
-
-    // ================= HEADER ================= 
-    content += `Report No:,${reportNo}\n`;
-    content += `Unit Sr No:,${unitSerialNo || "NA"}\n`;
-    content += `CPU Sr. No.:,${whitePcbSrNo || "NA"}\n`;
-    content += `DateTime:,${getFormattedDateTime()}\n`;
-    content += `TestLevel:,${testLevel === "green-pcb" ? "Green PCB" : "SRMS Unit"}\n`;
+    const workbook = new ExcelJS.Workbook();
 
 
-    if (testLevel !== "green-pcb") {
-        content += `DeviceIP:,${mac}\n`;
+
+    await workbook.xlsx.readFile(templatePath);
+
+    const worksheet = workbook.getWorksheet(1);
+
+    // ================= HEADER =================
+
+    // HEADER FOR FAN TESTING
+    if (destination === "fan") {
+        // worksheet.addRow(["Report Sr. No:", reportNo]);
+        // worksheet.addRow(["Fan Tray Sr. No.:", unitSerialNo || "NA"]);
+        // // worksheet.addRow(["CPU Sr. No.:", whitePcbSrNo || "NA"]);
+        // worksheet.addRow(["DateTime:", getFormattedDateTime()]);
+        // worksheet.addRow(["TotalTests:", runResult.summary.total]);
+        // worksheet.addRow([]);
+        // worksheet.addRow(["Test:", "Fan Tray Assembly Test"]);
+
+        // worksheet.addRow([
+        //     "TestLevel:",
+        //     testLevel === "green-pcb" ? "Green PCB" : "SRMS Unit"
+        // ]);
+        worksheet.getCell("B2").value = reportNo;
+        worksheet.getCell("B3").value = unitSerialNo || "NA";
+        worksheet.getCell("B4").value = getFormattedDateTime();
+        worksheet.getCell("B5").value = runResult.summary.total;
+    }
+    // HEADER FOR IMONI (GREEN PCB) TESTING
+    else if ((destination === "iMoni") && (testLevel === "green-pcb")) {
+        // const titleRow = worksheet.addRow(["IMONI TEST REPORT"]);
+        // worksheet.mergeCells(
+        //     titleRow.number, 1,
+        //     titleRow.number, 7
+        // );
+        // worksheet.addRow(["Report Sr. No:", reportNo]);
+        // worksheet.addRow(["Unit Sr No:", unitSerialNo || "NA"]);
+        // worksheet.addRow(["CPU Sr. No.:", whitePcbSrNo || "NA"]);
+        // worksheet.addRow(["DateTime:", getFormattedDateTime()]);
+        // worksheet.addRow(["TestLevel:", runResult.summary.testLevel]);
+
+        // worksheet.addRow([
+        //     "TestLevel:",
+        //     testLevel === "green-pcb" ? "Green PCB" : "SRMS Unit"
+        // ]);
+
+        // if (testLevel !== "green-pcb") {
+        //     worksheet.addRow(["DeviceIP:", mac]);
+        // }
+        // worksheet.addRow(["TotalTests:", runResult.summary.total]);
+        // worksheet.addRow([]);
+
+
+
+        worksheet.getCell("B2").value = reportNo;
+        worksheet.getCell("B3").value = basePcbSrNo || "NA";
+        // worksheet.getCell("B4").value = whitePcbSrNo || "NA";
+        worksheet.getCell("B4").value = getFormattedDateTime();
+        // worksheet.getCell("B5").value = runResult.summary.testLevel;
+        worksheet.getCell("B5").value =
+            testLevel === "green-pcb"
+                ? "iMoni Base PCB"
+                : "iMoni Assembly";
+        // worksheet.getCell("B7").value = mac;
+        worksheet.getCell("B6").value = runResult.summary.total;
+    }
+    // HEADER FOR IMONI (SRMS) TESTING
+    else if ((destination === "iMoni") && (testLevel !== "green-pcb")) {
+        // const titleRow = worksheet.addRow(["IMONI TEST REPORT"]);
+        // worksheet.mergeCells(
+        //     titleRow.number, 1,
+        //     titleRow.number, 7
+        // );
+        // worksheet.addRow(["Report Sr. No:", reportNo]);
+        // worksheet.addRow(["Unit Sr No:", unitSerialNo || "NA"]);
+        // worksheet.addRow(["CPU Sr. No.:", whitePcbSrNo || "NA"]);
+        // worksheet.addRow(["DateTime:", getFormattedDateTime()]);
+        // worksheet.addRow(["TestLevel:", runResult.summary.testLevel]);
+
+        // worksheet.addRow([
+        //     "TestLevel:",
+        //     testLevel === "green-pcb" ? "Green PCB" : "SRMS Unit"
+        // ]);
+
+        // if (testLevel !== "green-pcb") {
+        //     worksheet.addRow(["DeviceIP:", mac]);
+        // }
+        // worksheet.addRow(["TotalTests:", runResult.summary.total]);
+        // worksheet.addRow([]);
+
+
+        // worksheet.getCell("B2").value = reportNo;
+        // worksheet.getCell("B3").value = unitSerialNo || "NA";
+        // worksheet.getCell("B4").value = cpuSrNo || "NA";
+        // worksheet.getCell("B5").value = getFormattedDateTime();
+        // // worksheet.getCell("B6").value = runResult.summary.testLevel;
+        // worksheet.getCell("B6").value =
+        //     testLevel === "green-pcb"
+        //         ? "iMoni Base PCB"
+        //         : "iMoni Assembly";
+        // worksheet.getCell("B7").value = mac;
+        // worksheet.getCell("B8").value = runResult.summary.total;
+        worksheet.getCell("B2").value = reportNo;
+        worksheet.getCell("B3").value = unitSerialNo || "NA";
+
+        worksheet.getCell("B4").value = getFormattedDateTime();
+
+        worksheet.getCell("B5").value =
+            testLevel === "green-pcb"
+                ? "iMoni Base PCB"
+                : "iMoni Assembly";
+
+        worksheet.getCell("B6").value = mac;
+
+        worksheet.getCell("C7").value = cpuSrNo || "NA";
+        worksheet.getCell("D7").value = basePcbSrNo || "NA";
+        worksheet.getCell("E7").value = cameraSrNo || "NA";
+        worksheet.getCell("F7").value = psuSrNo || "NA";
+
+        worksheet.getCell("B7").value = runResult.summary.total;
+
     }
 
-    content += `TotalTests:,${runResult.summary.total}\n\n`;
 
-    // ================= TABLE HEADER ================= 
-    content += "Sr. No.,TestName,Status,FailedStep,TotalSteps,Reason,Remarks\n";
+    // ================= TABLE HEADER =================
+    // if (destination === "fan") {
+    //     const headerRow = worksheet.addRow([
+    //         "Fan",
+    //         "StepStatus",
+    //         "Message",
+    //         // "FailedStep",
+    //         // "TotalSteps",
+    //         // "Reason",
+    //         "Remarks"
+    //     ]);
+
+    //     headerRow.font = { bold: true };
+    // }
+    // // HEADER FOR IMONI TESTING
+    // else if (destination === "iMoni") {
+    //     const headerRow = worksheet.addRow([
+    //         "Sr. No.",
+    //         "TestName",
+    //         "Status",
+    //         "FailedStep",
+    //         "TotalSteps",
+    //         "Reason",
+    //         "Remarks"
+    //     ]);
+
+    //     headerRow.font = { bold: true };
+    // }
+
 
     // Header
     // await fs.promises.writeFile(
@@ -125,50 +360,140 @@ async function reportWriter({
     //     await fs.promises.appendFile(filePath, "\n=== TEST END ===\n\n");
     // }
 
+    if (destination === "fan") {
+        // currentRow = 11;
+        let row = 11;
+
+        const steps = runResult.results[0]?.stepResults || [];
+
+        steps.forEach((step) => {
+
+            worksheet.getCell(`A${row}`).value =
+                `Fan ${step.step}`;
+
+            worksheet.getCell(`B${row}`).value =
+                step.status.toUpperCase();
+
+            worksheet.getCell(`C${row}`).value =
+                step.message;
+
+            worksheet.getCell(`D${row}`).value = "";
+
+            row++;
+        });
+
+        worksheet.getCell("B8").value =
+            runResult.summary.failed > 0
+                ? "Failed"
+                : "Passed";
+    }
+    else if (testLevel === "green-pcb") {
+        currentRow = 9;
+    }
+    else {
+        currentRow = 10;
+    }
+
     // ================= TEST DATA ================= 
-    runResult.results.forEach((test, index) => {
-        // FAILED STEP 
-        const failedStep = test.stepResults?.find(
-            s => s.status === "failed"
-        );
+    if (destination !== "fan") {
+        runResult.results.forEach((test, index) => {
+            // FAILED STEP 
+            const failedStep = test.stepResults?.find(
+                s => s.status === "failed"
+            );
 
-        // LAST PASSED STEP 
-        const passedStep = test.stepResults
-            ?.filter(s => s.status === "passed")
-            ?.slice(-1)[0];
+            // LAST PASSED STEP 
+            const passedStep = test.stepResults
+                ?.filter(s => s.status === "passed")
+                ?.slice(-1)[0];
 
-        // REASON 
-        const reason =
-            failedStep?.message ||
-            passedStep?.message ||
-            test.output || "";
+            // REASON 
+            const reason =
+                failedStep?.message ||
+                passedStep?.message ||
+                test.output || "";
 
-        // FAILED STEP NUMBER 
-        const failedStepNo =
-            failedStep?.step || "";
+            // FAILED STEP NUMBER 
+            const failedStepNo =
+                failedStep?.step || "";
 
-        const totalSteps = test.stepResults?.length || "";
+            const totalSteps = test.stepResults?.length || "";
 
-        // CHANGING FAILED STATUS TO '*FAILED' IN FAN REPORT
-        const statusForReport =
-            destination === "fan" && test.status === "failed"
-                ? "*FAILED"
-                : test.status.toUpperCase();
+            // CHANGING FAILED STATUS TO '*FAILED' IN FAN REPORT
+            const statusForReport =
+                destination === "fan" && test.status === "failed"
+                    ? "*FAILED"
+                    : test.status.toUpperCase();
 
-        content += [
-            index + 1,
-            `"${(test.name || "").replace(/"/g, '""')}"`,
-            statusForReport,
-            failedStepNo,
-            totalSteps,
-            `"${String(reason).replace(/"/g, '""')}"`,
-            ""
-        ].join(",") + "\n";
-    });
+
+            // worksheet.addRow([
+            //     index + 1,
+            //     test.name || "",
+            //     statusForReport,
+            //     failedStepNo,
+            //     totalSteps,
+            //     String(reason),
+            //     ""
+            // ]);
+
+            // worksheet.insertRow(currentRow++, [
+            //     index + 1,
+            //     test.name || "",
+            //     statusForReport,
+            //     failedStepNo,
+            //     totalSteps,
+            //     String(reason),
+            //     ""
+            // ]);
+            let row = currentRow;
+
+            worksheet.getCell(`A${row}`).value = index + 1;
+            worksheet.getCell(`B${row}`).value = test.name || "";
+            worksheet.getCell(`C${row}`).value = statusForReport;
+            // worksheet.getCell(`D${row}`).value = failedStepNo;
+            worksheet.getCell(`D${row}`).value = totalSteps;
+            worksheet.getCell(`E${row}`).value = String(reason);
+            worksheet.getCell(`F${row}`).value = "";
+
+            currentRow++;
+
+        });
+    }
+
+    // worksheet.columns = [
+    //     { width: 10 },
+    //     { width: 35 },
+    //     { width: 14 },
+    //     { width: 12 },
+    //     { width: 12 },
+    //     { width: 55 },
+    //     { width: 20 }
+    // ];
+
+    // worksheet.eachRow((row) => {
+    //     row.eachCell((cell) => {
+    //         cell.alignment = {
+    //             vertical: "top",
+    //             wrapText: true
+    //         };
+    //     });
+    // });
+
 
     // WRITE COMPLETE FILE ONCE 
-    await fs.promises.writeFile(filePath, content);
+    // await fs.promises.writeFile(filePath, content);
+    await workbook.xlsx.writeFile(filePath);
     console.log(`✅ Report Generated: ${fileName}`);
+
+    if (destination === "fan") {
+        await generateFanMainReport({
+            runResult,
+            reportNo,
+            unitSerialNo,
+            safeMac,
+            baseDir
+        });
+    }
 
     return { filePath, fileName };
 }

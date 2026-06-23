@@ -5,7 +5,7 @@ import time
 # CONFIG
 # =========================================================
 
-PORT = "COM4"          # CHANGE THIS
+PORT = "COM26"          # CHANGE THIS
 BAUD = 921600
 
 OUTPUT_FILE = "server/Testing/test-images/capture_C9_1.jpg"

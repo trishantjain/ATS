@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <title>Fan Testing</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background: #f5f5f5;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #555;
+            font-weight: bold;
+        }
+
+        input,
+        select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            font-family: Arial, sans-serif;
+        }
+
+        input:focus,
+        select:focus {
+            outline: none;
+            border-color: #4CAF50;
+            box-shadow: 0 0 5px rgba(76, 175, 80, 0.3);
+        }
+
+        button {
+            width: 100%;
+            padding: 12px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: 10px;
+            transition: background 0.3s;
+        }
+
+        button:hover {
+            background: #45a049;
+        }
+
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .status {
+            margin-top: 30px;
+            padding: 15px;
+            border-radius: 4px;
+            text-align: center;
+            font-weight: bold;
+            display: none;
+        }
+
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+            display: block;
+        }
+
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+            display: block;
+        }
+
+        .status.loading {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+            display: block;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #4CAF50;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 8px;
+            vertical-align: middle;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        .error-message {
+            margin-top: 10px;
+            font-size: 12px;
+            color: #721c24;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>🧪 Fan Testing</h1>
+
+        <form id="testForm">
+            <!-- Fan ID Input -->
+            <div class="form-group">
+                <label for="fanId">Fan ID:</label>
+                <input type="text" id="fanId" placeholder="e.g., Fan-Tray-001" required>
+            </div>
+
+            <!-- COM Port Input -->
+            <select id="connectionType">
+                <option value="serial">COM Port</option>
+                <option value="wifi">WiFi</option>
+            </select>
+            <div class="form-group">
+                <label for="comPort">COM Port:</label>
+                <select id="comPort" required>
+                    <option value="">-- Select COM Port --</option>
+                </select>
+                <button type="button" id="refreshPortsBtn">🔄 Refresh Ports</button>
+            </div>
+
+            <!-- Start Test Button -->
+            <button type="button" id="startBtn" onclick="startTest()">
+                Start Test
+            </button>
+        </form>
+
+        <div id="logContainer" style="
+        background:black;
+        color:#00ff00;
+        height:250px;
+        overflow-y:auto;
+        padding:10px;
+        margin-top:20px;
+        font-family:monospace;
+        white-space:pre-wrap;">
+        </div>
+
+        <!-- STATUS DISPLAY -->
+        <div id="status" class="status"></div>
+    </div>
+
+    <script>
+        const logContainer = document.getElementById('logContainer');
+        const connectionType = document.getElementById('connectionType').value;
+
+        // POPULATE COM PORTS ON LOAD
+        window.electronAPI.getComPorts().then(ports => {
+            const select = document.getElementById('comPort');
+
+            if (!ports || ports.length === 0) {
+                select.innerHTML = '<option value="">No COM ports found</option>';
+                return;
+            }
+
+            select.innerHTML = '<option value="">-- Select COM Port --</option>';
+            ports.forEach(port => {
+                const option = document.createElement('option');
+                option.value = port.path || port;
+                option.textContent = port.path || port;
+                select.appendChild(option);
+            });
+        });
+
+        function startTest() {
+            const fanId = document.getElementById('fanId').value.trim();
+            const comPort = document.getElementById('comPort').value;
+            const statusDiv = document.getElementById('status');
+            const startBtn = document.getElementById('startBtn');
+            const connectionType = document.getElementById('connectionType').value;
+
+            // Validation
+            if (!fanId) {
+                statusDiv.className = 'status error';
+                statusDiv.innerHTML = '❌ Please enter Fan ID';
+                return;
+            }
+
+            if (connectionType === "serial" && !comPort) {
+                statusDiv.className = 'status error';
+                statusDiv.innerHTML = '❌ Please select a COM port';
+                return;
+            }
+
+            // Show loading state
+            statusDiv.className = 'status loading';
+            statusDiv.innerHTML = '<span class="spinner"></span>Testing in progress...';
+            startBtn.disabled = true;
+
+            // Send test request
+            window.electronAPI.startFanTest(fanId, comPort, connectionType);
+        }
+
+
+
+        // Listen for test results
+        window.electronAPI.onTestResult((result) => {
+            const statusDiv = document.getElementById('status');
+            const startBtn = document.getElementById('startBtn');
+
+            startBtn.disabled = false;
+
+            if (result.success) {
+                statusDiv.className = 'status success';
+                statusDiv.innerHTML = `✅ Test Passed<br><small>${result.message || ''}</small>`;
+            } else {
+                statusDiv.className = 'status error';
+                statusDiv.innerHTML = `❌ Test Failed<br><small class="error-message">${result.error || 'Unknown error'}</small>`;
+            }
+        });
+
+        window.electronAPI.onEspLog((line) => {
+            const logContainer = document.getElementById('logContainer');
+
+            logContainer.innerHTML += line + "<br>";
+            logContainer.scrollTop = logContainer.scrollHeight;
+        });
+
+        // Clean up on close
+        window.addEventListener('beforeunload', () => {
+            window.electronAPI.removeTestResultListener();
+        });
+
+        async function loadComPorts() {
+            const ports = await window.electronAPI.getComPorts();
+            const comPortSelect = document.getElementById('comPort');
+            comPortSelect.innerHTML = '<option value="">Select COM Port</option>';
+            ports.forEach(port => {
+                const option = document.createElement('option');
+                option.value = port.path;
+                option.textContent = `${port.path} (${port.manufacturer || 'Unknown'})`;
+                comPortSelect.appendChild(option);
+            });
+        }
+
+        // Load ports on window open
+        loadComPorts();
+
+        // Refresh ports button
+        document.getElementById('refreshPortsBtn').addEventListener('click', loadComPorts);
+    </script>
+</body>
+
+</html>

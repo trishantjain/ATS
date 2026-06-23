@@ -6,10 +6,10 @@ import re
 # DICT STORING REGISTER NUMBER OF HUPS & ITS VALUE [IN HEX]
 register_values = {
     # MPPT ALARM
-    "0190": "0001",  # [0001] 1 - working, [0000] 0 - alarm
+    "0190": "0000",  # [0001] 1 - working, [0000] 0 - alarm
 
     # OVERLOAD ALARM
-    "0188": "0001",  # [0001] 1 - working, [0000] 0 - alarm
+    "0188": "0000",  # [0001] 1 - working, [0000] 0 - alarm
 
     # MAINS ALARM
     "0180": "0001",  # [0001] 1 - working, [0000] 0 - alarm
