@@ -7,7 +7,7 @@ retryCount=0
 [step:1]
 msg="Inside Temperature Sensor test started"
 waitFor="insideTemperature"
-waitTime=15
+waitTime=30
 increasedBy=5
 onPass="Inside Temperature sensor successfully tested"
 onFail="Inside Temperature not increased by 5°C"

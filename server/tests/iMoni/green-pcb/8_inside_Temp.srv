@@ -1,0 +1,13 @@
+name="Inside Temperature Sensor Test"
+type="sensor"
+pass="Inside Temperature Sensor Test successfully completed"
+fail="Inside Temperature Sensor Test failed"
+retryCount=0
+
+[step:1]
+msg="Inside Temperature Sensor test started"
+waitFor="insideTemperature"
+waitTime=10
+increasedBy=5
+onPass="Inside Temperature Sensor Test successfully tested"
+onFail="Inside Temperature  not increased by 5°C"

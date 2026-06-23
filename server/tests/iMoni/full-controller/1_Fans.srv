@@ -6,7 +6,7 @@ retryCount=0
 [step:1]
 msg="Turn OFF all Fans before starting"
 waitFor="fanLevel1Running;fanLevel2Running;fanLevel3Running;fanLevel4Running;fan1Status;fan2Status;fan3Status;fan4Status;fan5Status;fan6Status"
-waitTime=20
+waitTime=15
 expectedValue="false;false;false;false;0;0;0;0;0;0"
 onPass="All fans are off, | Ready to test |"
 onFail="Some fans are still running. Turn off all fans first."
@@ -14,7 +14,7 @@ onFail="Some fans are still running. Turn off all fans first."
 [step:2]
 msg="Turn ON Fan Group 1"
 waitFor="fanLevel1Running;fanLevel2Running;fanLevel3Running;fanLevel4Running;fan1Status;fan2Status;fan3Status;fan4Status;fan5Status;fan6Status"
-waitTime=20
+waitTime=15
 expectedValue="true;false;false;false;1;1;0;0;0;0"
 onPass="Fan Group 1 turned on successfully"
 onFail="Fan Group 1 not turned on"
@@ -22,7 +22,7 @@ onFail="Fan Group 1 not turned on"
 [step:3]
 msg="Turn OFF Fan Group 1"
 waitFor="fanLevel1Running;fanLevel2Running;fanLevel3Running;fanLevel4Running;fan1Status;fan2Status;fan3Status;fan4Status;fan5Status;fan6Status"
-waitTime=20
+waitTime=15
 expectedValue="false;false;false;false;0;0;0;0;0;0"
 onPass="Fan Group 1 turned off successfully"
 onFail="Fan Group 1 not turned off"
@@ -30,7 +30,7 @@ onFail="Fan Group 1 not turned off"
 [step:4]
 msg="Turn ON Fan Group 2"
 waitFor="fanLevel1Running;fanLevel2Running;fanLevel3Running;fanLevel4Running;fan1Status;fan2Status;fan3Status;fan4Status;fan5Status;fan6Status"
-waitTime=20
+waitTime=15
 expectedValue="false;true;false;false;0;0;1;0;0;0"
 onPass="Fan Group 2 turned on successfull"
 onFail="Fan Group 2 not turned on"
@@ -38,7 +38,7 @@ onFail="Fan Group 2 not turned on"
 [step:5]
 msg="Turn OFF Fan Group 2"
 waitFor="fanLevel1Running;fanLevel2Running;fanLevel3Running;fanLevel4Running;fan1Status;fan2Status;fan3Status;fan4Status;fan5Status;fan6Status"
-waitTime=20
+waitTime=15
 expectedValue="false;false;false;false;0;0;0;0;0;0"
 onPass="Fan Group 2 turned off successfully"
 onFail="Fan Group 2 not turned off"
@@ -46,7 +46,7 @@ onFail="Fan Group 2 not turned off"
 [step:6]
 msg="Turn ON Fan Group 3"
 waitFor="fanLevel1Running;fanLevel2Running;fanLevel3Running;fanLevel4Running;fan1Status;fan2Status;fan3Status;fan4Status;fan5Status;fan6Status"
-waitTime=20
+waitTime=15
 expectedValue="false;false;true;false;0;0;0;1;1;0"
 onPass="Fan Group 3 turned on successfully"
 onFail="Fan Group 3 not turned on"
@@ -54,7 +54,7 @@ onFail="Fan Group 3 not turned on"
 [step:7]
 msg="Turn OFF Fan Group 3"
 waitFor="fanLevel1Running;fanLevel2Running;fanLevel3Running;fanLevel4Running;fan1Status;fan2Status;fan3Status;fan4Status;fan5Status;fan6Status"
-waitTime=20
+waitTime=15
 expectedValue="false;false;false;false;0;0;0;0;0;0"
 onPass="Fan Group 3 turned off successfully"
 onFail="Fan Group 3 not turned off"
@@ -62,7 +62,7 @@ onFail="Fan Group 3 not turned off"
 [step:8]
 msg="Turn ON Fan Group 4"
 waitFor="fanLevel1Running;fanLevel2Running;fanLevel3Running;fanLevel4Running;fan1Status;fan2Status;fan3Status;fan4Status;fan5Status;fan6Status"
-waitTime=20
+waitTime=15
 expectedValue="false;false;false;true;0;0;0;0;0;1"
 onPass="Fan Group 4 turned off successfully"
 onFail="Fan Group 4 not turned off"
@@ -70,7 +70,7 @@ onFail="Fan Group 4 not turned off"
 [step:9]
 msg="Turn OFF Fan Group 4"
 waitFor="fanLevel1Running;fanLevel2Running;fanLevel3Running;fanLevel4Running;fan1Status;fan2Status;fan3Status;fan4Status;fan5Status;fan6Status"
-waitTime=20
+waitTime=15
 expectedValue="false;false;false;false;0;0;0;0;0;0"
 onPass="Fan Group 3 turned off successfully"
 onFail="Fan Group 3 not turned off"

@@ -7,23 +7,23 @@ retryCount=0
 [step:1]
 msg="Turn OFF Non - Critical Load before starting"
 waitFor="doorStatus"
-waitTime=15
+waitTime=10
 expectedValue="CLOSED"
-onPass="Door is closed, | Ready to test |"
+onPass="Door is closed, | Ready to test"
 onFail="Door is still open. Close the door first."
 
 [step:2]
 msg="Turn ON Non - Critical Load now"
 waitFor="doorStatus"
-waitTime=15
+waitTime=10
 expectedValue="OPEN"
-onPass="Door alarm triggered successfully"
-onFail="Door alarm did not trigger within time"
+onPass="Door alarm opened successfully"
+onFail="Door alarm did not opened within time"
 
 [step:3]
 msg="Turn OFF Non - Critical Load"
 waitFor="doorStatus"
-waitTime=15
+waitTime=10
 expectedValue="CLOSED"
 onPass="Door alarm went off successfully"
 onFail="Door alarm did not go off within time"

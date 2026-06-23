@@ -1,0 +1,13 @@
+name="Humidity Sensor Test"
+type="sensor"
+pass="Humidity sensor test successfully completed"
+fail="Humidity sensor Test failed"
+retryCount=0
+
+[step:1]
+msg="Humidity Sensor test started"
+waitFor="humidity"
+waitTime=30
+increasedBy=10
+onPass="Humidity Sensor alarm successfully"
+onFail="Humidity Sensor alarm not turned on"

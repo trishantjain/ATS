@@ -49,8 +49,11 @@ function DashboardView() {
 
   const [testLevel, setTestLevel] = useState("full-controller");
   const [unitSerialNo, setUnitSerialNo] = useState("");
-  const [whitePcbSrNo, setWhitePcbSrNo] = useState("");
-  const [controllerId, setControllerId] = useState("");
+  const [cpuSrNo, setCpuSrNo] = useState("");
+  const [basePcbSrNo, setBasePcbSrNo] = useState("");
+  const [cameraSrNo, setCameraSrNo] = useState("");
+  const [psuSrNo, setPsuSrNo] = useState("");
+  // const [controllerId, setControllerId] = useState("");
 
   // States for Test Lists
   const [selectedTests, setSelectedTests] = useState([]);  // Stores selected tests
@@ -59,6 +62,8 @@ function DashboardView() {
   const [awaitingCommand, setAwaitingCommand] = useState(false); // Waiting for ATS Execution
   const [fanTestStatus, setFanTestStatus] = useState(false); // Waiting for Fan Test Execution
   const [pduTestStatus, setPduTestStatus] = useState(false); // Waiting for PDU Test Execution
+
+  const [generateReport, setGenerateReport] = useState(true);
 
   const isTestRunning = awaitingCommand || fanTestStatus || pduTestStatus;
 
@@ -183,6 +188,8 @@ function DashboardView() {
     const command = isActive
       ? `%R0${level}F${getFormattedDateTime()}$`
       : `%R0${level}N${getFormattedDateTime()}$`;
+
+    console.log(command);
 
     if (level !== 5) {
       sendToLog(
@@ -653,14 +660,26 @@ function DashboardView() {
   async function iMoni_test() {
     setAwaitingCommand(true); // Shows 'Running...' state
 
-    if (!unitSerialNo.trim()) {
-      swal.fire({
-        icon: "warning",
-        title: "Unit Serial Number Required",
-        text: "Please enter Unit Serial Number before starting ATS"
-      });
-      setAwaitingCommand(false);
-      return;
+    if (testLevel === "green-pcb") {
+      if (!basePcbSrNo.trim()) {
+        swal.fire({
+          icon: "warning",
+          title: "Base PCB Serial Number Required",
+          text: "Please enter Base PCB Serial Number before starting ATS"
+        });
+        setAwaitingCommand(false);
+        return;
+      }
+    } else {
+      if (!unitSerialNo.trim()) {
+        swal.fire({
+          icon: "warning",
+          title: "Unit Serial Number Required",
+          text: "Please enter Unit Serial Number before starting ATS"
+        });
+        setAwaitingCommand(false);
+        return;
+      }
     }
 
     const frontendResults = []; // Stores Visual & Burn-in results
@@ -720,8 +739,12 @@ function DashboardView() {
             mac: selectedMac,
             skipFrontendTests: true,
             frontendResults,
-            whitePcbSrNo: whitePcbSrNo.trim(),
+            cpuSrNo: cpuSrNo.trim(),
+            basePcbSrNo: basePcbSrNo.trim(),
+            cameraSrNo: cameraSrNo.trim(),
+            psuSrNo: psuSrNo.trim(),
             unitSerialNo: unitSerialNo.trim(),
+            generateReport,
             testLevel
           })
         });
@@ -743,7 +766,11 @@ function DashboardView() {
             selectedProduct,
             selectedTests,
             unitSerialNo: unitSerialNo.trim(),
-            whitePcbSrNo: whitePcbSrNo.trim(),
+            cpuSrNo: cpuSrNo.trim(),
+            basePcbSrNo: basePcbSrNo.trim(),
+            cameraSrNo: cameraSrNo.trim(),
+            psuSrNo: psuSrNo.trim(),
+            generateReport,
             testLevel
           })
         });
@@ -938,7 +965,7 @@ function DashboardView() {
       </div>
 
       {/* TEST PANEL */}
-      <div className="test-controls-panel">
+      {/* <div className="test-controls-panel">
         <h2>🧪 ATS Test Controls</h2>
         <div className="test-buttons">
 
@@ -949,9 +976,9 @@ function DashboardView() {
               <option value="fan">Fan Tests</option>
               <option value="pdu">PDU Tests</option>
             </select>
-          </div>
+          </div> */}
 
-          {selectedProduct === "iMoni" && (
+      {/* {selectedProduct === "iMoni" && (
             <select
               value={testLevel}
               onChange={(e) => setTestLevel(e.target.value)}
@@ -959,9 +986,9 @@ function DashboardView() {
               <option value="full-controller">Full Controller</option>
               <option value="green-pcb">Green PCB / Card Level</option>
             </select>
-          )}
+          )} */}
 
-          {selectedProduct === "iMoni" ?
+      {/* {selectedProduct === "iMoni" ?
             <button
               className="btn-test"
               onClick={iMoni_test}
@@ -984,10 +1011,48 @@ function DashboardView() {
                   {pduTestStatus ? "Running PDU Test..." : "Run PDU Test"}
                 </button> :
                 <h4>Select a product to run tests</h4>
-          }
+          } */}
 
-          <div style={{ marginBottom: "15px" }}>
+
+      {/* <div className="grid grid-cols-5 gap-3 mt-4">
             <input
+              className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white"
+              placeholder="Unit Serial Number"
+              value={unitSerialNo}
+              onChange={(e) => setUnitSerialNo(e.target.value)}
+            />
+
+            <input
+              className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white"
+              placeholder="CPU Sr. No."
+              value={cpuSrNo}
+              onChange={(e) => setCpuSrNo(e.target.value)}
+            />
+
+            <input
+              className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white"
+              placeholder="Base PCB Sr. No."
+              value={basePcbSrNo}
+              onChange={(e) => setBasePcbSrNo(e.target.value)}
+            />
+
+            <input
+              className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white"
+              placeholder="Camera Sr. No."
+              value={cameraSrNo}
+              onChange={(e) => setCameraSrNo(e.target.value)}
+            />
+
+            <input
+              className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white"
+              placeholder="PSU Sr. No."
+              value={psuSrNo}
+              onChange={(e) => setPsuSrNo(e.target.value)}
+            />
+          </div> */}
+
+      {/* <div style={{ marginBottom: "15px" }}> */}
+      {/* <input
               type="text"
               placeholder="Enter Unit Serial Number"
               value={unitSerialNo}
@@ -997,17 +1062,38 @@ function DashboardView() {
                 padding: "8px",
                 width: "220px"
               }}
+            /> */}
+
+      {/* <input
+              type="text"
+              placeholder="Enter CPU Sr. No."
+              value={cpuSrNo}
+              onChange={(e) => setCpuSrNo(e.target.value)}
             />
 
             <input
               type="text"
-              placeholder="Enter White PCB Sr. No."
-              value={whitePcbSrNo}
-              onChange={(e) => setWhitePcbSrNo(e.target.value)}
+              placeholder="Enter Base PCB Sr. No."
+              value={basePcbSrNo}
+              onChange={(e) => setBasePcbSrNo(e.target.value)}
             />
 
+            <input
+              type="text"
+              placeholder="Enter Camera Sr. No."
+              value={cameraSrNo}
+              onChange={(e) => setCameraSrNo(e.target.value)}
+            />
 
-            {/* <input
+            <input
+              type="text"
+              placeholder="Enter PSU Sr. No."
+              value={psuSrNo}
+              onChange={(e) => setPsuSrNo(e.target.value)}
+            /> */}
+
+
+      {/* <input
               type="text"
               placeholder="Enter Controller ID"
               value={controllerId}
@@ -1017,12 +1103,12 @@ function DashboardView() {
                 width: "220px"
               }}
             /> */}
-          </div>
+      {/* </div> */}
 
 
 
-          {/* STOP TEST BUTTON */}
-          {(awaitingCommand || fanTestStatus || pduTestStatus) && (
+      {/* STOP TEST BUTTON */}
+      {/* {(awaitingCommand || fanTestStatus || pduTestStatus) && (
             <button
               className="btn-test-stop"
               onClick={async () => {
@@ -1063,10 +1149,10 @@ function DashboardView() {
             >
               🛑 Stop Test
             </button>
-          )}
+          )} */}
 
-          {/* CANCEL FAN TEST BUTTON */}
-          {/* {fanTestStatus && (
+      {/* CANCEL FAN TEST BUTTON */}
+      {/* {fanTestStatus && (
             <button
               className="btn-test-stop"
               onClick={async () => {
@@ -1101,16 +1187,16 @@ function DashboardView() {
             </button>
           )} */}
 
-          {/* <button
+      {/* <button
             className="btn-test-secondary"
             onClick={runTestsStepByStep}
           >
             Run Step-by-Step
           </button> */}
-        </div>
+      {/* </div> */}
 
-        {/* TEST NOTIFICATION BANNER */}
-        {notification && (
+      {/* TEST NOTIFICATION BANNER */}
+      {/* {notification && (
           <div style={{
             backgroundColor: notification.type === 'success' ? '#1a3a2a' : notification.type === 'error' ? '#3a1a1a' : '#1a3a3a',
             border: `2px solid ${notification.type === 'success' ? '#00cc66' : notification.type === 'error' ? '#cc3333' : '#00cccc'}`,
@@ -1159,9 +1245,9 @@ function DashboardView() {
               ✕
             </button>
           </div>
-        )}
+        )} */}
 
-        {/* <div className="test-status-display">
+      {/* <div className="test-status-display">
           <h4>Test Status: {testStatus}</h4>
           {currentTest && <p>Current Test: {currentTest}</p>}
 
@@ -1185,7 +1271,7 @@ function DashboardView() {
           </div>
         </div> */}
 
-        {testProgress.length > 0 && (
+      {/* {testProgress.length > 0 && (
           <div className="test-results">
             <h4>ATS Results ({testProgress.length} tests)</h4>
             {testStatus}
@@ -1221,14 +1307,323 @@ function DashboardView() {
             />
             {test}
           </label>
-        )) : <p>No Tests found</p>}
+        )) : <p>No Tests found</p>} */}
 
 
-        {/* {pduTestStatus && (
+      {/* {pduTestStatus && (
           <img className="pdu-image" src="./pdu/ch1.png">
           </img>
         )} */}
+      {/* </div> */}
+
+      <div className="ats-panel">
+        <h2 className="ats-title">🧪 ATS Test Controls</h2>
+
+        <div className="ats-row">
+          <select
+            value={selectedProduct}
+            onChange={handleProductChange}
+            className="ats-select"
+          >
+            <option value="">Select Product</option>
+            <option value="iMoni">iMoni Tests</option>
+            <option value="fan">Fan Tests</option>
+            <option value="pdu">PDU Tests</option>
+          </select>
+
+          {selectedProduct === "iMoni" && (
+            <select
+              value={testLevel}
+              onChange={(e) => setTestLevel(e.target.value)}
+              className="ats-select"
+            >
+              <option value="full-controller">Assembly</option>
+              <option value="green-pcb">Base PCB Level</option>
+            </select>
+          )}
+        </div>
+
+        <div className="ats-grid">
+
+          {testLevel === "green-pcb" ? (
+            <>
+              <input
+                className="ats-input"
+                placeholder="Base PCB Serial Number"
+                value={basePcbSrNo}
+                onChange={(e) => setBasePcbSrNo(e.target.value)}
+              />
+            </>
+          ) : (
+            <>
+              <input
+                className="ats-input"
+                placeholder="iMoni Ass. Serial Number"
+                value={unitSerialNo}
+                onChange={(e) => setUnitSerialNo(e.target.value)}
+              />
+
+              <input
+                className="ats-input"
+                placeholder="CPU Serial Number"
+                value={cpuSrNo}
+                onChange={(e) => setCpuSrNo(e.target.value)}
+              />
+
+              <input
+                className="ats-input"
+                placeholder="Base PCB Serial Number"
+                value={basePcbSrNo}
+                onChange={(e) => setBasePcbSrNo(e.target.value)}
+              />
+
+              <input
+                className="ats-input"
+                placeholder="Camera Serial Number"
+                value={cameraSrNo}
+                onChange={(e) => setCameraSrNo(e.target.value)}
+              />
+
+              <input
+                className="ats-input"
+                placeholder="PSU Serial Number"
+                value={psuSrNo}
+                onChange={(e) => setPsuSrNo(e.target.value)}
+              />
+            </>
+          )}
+
+        </div>
+
+        <div className="ats-actions">
+          <label className="ats-checkbox">
+            <input
+              type="checkbox"
+              checked={generateReport}
+              onChange={(e) => setGenerateReport(e.target.checked)}
+            />
+            Generate Report
+          </label>
+
+          <button
+            className="ats-run-btn"
+            onClick={iMoni_test}
+            disabled={awaitingCommand}
+          >
+            {awaitingCommand ? "Running ATS..." : "Run ATS Tests"}
+          </button>
+        </div>
+
       </div>
+
+      {/* STOP TEST BUTTON */}
+      {(awaitingCommand || fanTestStatus || pduTestStatus) && (
+        <button
+          className="btn-test-stop"
+          onClick={async () => {
+            try {
+              await fetch(`${process.env.REACT_APP_API_URL}/api/tests/stop`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+              });
+              setTestStatus('🛑 Tests stopped by user');
+              setNotification({
+                title: 'Tests Stopped',
+                message: 'Testing process was stopped by user',
+                type: 'error'
+              });
+              // Set states to false AFTER the API call completes
+              setAwaitingCommand(false);
+              setFanTestStatus(false);
+              setPduTestStatus(false);
+            } catch (err) {
+              console.error('Failed to stop tests:', err);
+              // Still reset states even on error
+              setAwaitingCommand(false);
+              setFanTestStatus(false);
+              setPduTestStatus(false);
+            }
+          }
+          }
+          style={{
+            backgroundColor: '#cc3333',
+            color: 'white',
+            border: 'none',
+            padding: '10px 20px',
+            borderRadius: '5px',
+            cursor: 'pointer',
+            marginLeft: '10px',
+            fontWeight: 'bold'
+          }}
+        >
+          🛑 Stop Test
+        </button>
+      )}
+
+      {/* CANCEL FAN TEST BUTTON */}
+      {fanTestStatus && (
+        <button
+          className="btn-test-stop"
+          onClick={async () => {
+            try {
+              await fetch(`${process.env.REACT_APP_API_URL}/api/tests/stop`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+              });
+              setFanTestStatus(false);
+              setTestStatus('🛑 Tests stopped by user');
+              setNotification({
+                title: 'Tests Stopped',
+                message: 'Testing process was stopped by user',
+                type: 'error'
+              });
+            } catch (err) {
+              console.error('Failed to stop tests:', err);
+            }
+          }}
+          style={{
+            backgroundColor: '#cc3333',
+            color: 'white',
+            border: 'none',
+            padding: '10px 20px',
+            borderRadius: '5px',
+            cursor: 'pointer',
+            marginLeft: '10px',
+            fontWeight: 'bold'
+          }}
+        >
+          🛑 Stop Test
+        </button>
+      )}
+
+      {/* <button
+            className="btn-test-secondary"
+            onClick={runTestsStepByStep}
+          >
+            Run Step-by-Step
+          </button> */}
+      {/* </div> */}
+
+      {/* TEST NOTIFICATION BANNER */}
+      {notification && (
+        <div style={{
+          backgroundColor: notification.type === 'success' ? '#1a3a2a' : notification.type === 'error' ? '#3a1a1a' : '#1a3a3a',
+          border: `2px solid ${notification.type === 'success' ? '#00cc66' : notification.type === 'error' ? '#cc3333' : '#00cccc'}`,
+          borderRadius: '8px',
+          padding: '16px',
+          marginBottom: '16px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'flex-start',
+          color: '#fff',
+          boxShadow: `0 4px 12px ${notification.type === 'success' ? 'rgba(0, 204, 102, 0.3)' : notification.type === 'error' ? 'rgba(204, 51, 51, 0.3)' : 'rgba(0, 204, 204, 0.3)'}`,
+          animation: 'slideIn 0.3s ease-out',
+          transition: 'all 0.3s ease'
+        }}>
+          <style>{`
+              @keyframes slideIn {
+                from { opacity: 0; transform: translateY(-10px); }
+                to { opacity: 1; transform: translateY(0); }
+              }
+            `}</style>
+          <div style={{ flex: 1 }}>
+            <h4 style={{ margin: '0 0 8px 0', color: notification.type === 'success' ? '#00cc66' : notification.type === 'error' ? '#cc3333' : '#00cccc', fontSize: '18px' }}>
+              {notification.title}
+            </h4>
+            {notification.pre && (
+              <p style={{ margin: '0 0 8px 0', color: '#ffcc00', fontSize: '14px', fontWeight: 'bold' }}>
+                ⚠️ {notification.pre}
+              </p>
+            )}
+            <p style={{ margin: 0, fontSize: '16px', lineHeight: '1.6', fontWeight: '500' }}>
+              {notification.message}
+            </p>
+          </div>
+          <button
+            onClick={() => setNotification(null)}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: notification.type === 'success' ? '#00cc66' : notification.type === 'error' ? '#cc3333' : '#00cccc',
+              fontSize: '20px',
+              cursor: 'pointer',
+              marginLeft: '12px',
+              padding: '0 8px'
+            }}
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
+      {/* <div className="test-status-display">
+          <h4>Test Status: {testStatus}</h4>
+          {currentTest && <p>Current Test: {currentTest}</p>}
+
+          <div className="simulation-buttons">
+            <h5>Simulate Device Response (for testing):</h5>
+            <button onClick={() => simulateDeviceResponse(1)}>Response: 1</button>
+            <button onClick={() => simulateDeviceResponse(2)}>Response: 2</button>
+            <button onClick={() => simulateDeviceResponse(3)}>Response: 3</button>
+            <button onClick={() => simulateDeviceResponse(0)}>Response: 0</button>
+          </div>
+
+          <div className="manual-command">
+            <input
+              type="text"
+              placeholder="Enter device command/response"
+              value={testCommandInput}
+              onChange={(e) => setTestCommandInput(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && sendManualTestCommand()}
+            />
+            <button onClick={sendManualTestCommand}>Send to Device</button>
+          </div>
+        </div> */}
+
+      {testProgress.length > 0 && (
+        <div className="test-results">
+          <h4>ATS Results ({testProgress.length} tests)</h4>
+          {testStatus}
+          <div className="test-results-list">
+            {testProgress.map((result, index) => (
+              <div key={index} className={`test-result ${result.status}`}>
+                <strong>{result.name || result.test}</strong>: {result.status.toUpperCase()}
+                {result.message && <div className="test-message">📝 {result.message}</div>}
+                <div className="test-details">
+                  <div>Expected: {result.expectedOutcome !== null ? result.expectedOutcome : 'N/A'}</div>
+                  <div>Received: {result.receivedOutcome || 'No response'}</div>
+                </div>
+                {result.output && <div className="test-output">{result.output}</div>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {!isTestRunning && fetchedTestList.length > 0 ? fetchedTestList.map((test) => (
+        <label key={test} style={{ display: "block" }}>
+          <input
+            type="checkbox"
+            value={test}
+            checked={selectedTests.includes(test)}
+            onChange={(e) => {
+              if (e.target.checked) {
+                setSelectedTests([...selectedTests, test]);
+              } else {
+                setSelectedTests(selectedTests.filter(t => t !== test));
+              }
+            }}
+          />
+          {test}
+        </label>
+      )) : <p>No Tests found</p>}
+
+
+      {pduTestStatus && (
+        <img className="pdu-image" src="./pdu/ch1.png">
+        </img>
+      )}
+      {/* </div>
 
       {/* DASHBOARD */}
       <div className="dashboard">
@@ -1300,21 +1695,21 @@ function DashboardView() {
                   />
                   <Gauge
                     label="DV Current"
-                    value={latestReading.batteryBackup}
+                    value={latestReading.hupsDVC}
                     max={12}
                     color="#ffc107"
                     alarm={latestReading.batteryBackupAlarm}
                   />
                   <Gauge
                     label="Battery %"
-                    value={(latestReading.batteryBackup * 1.5).toFixed(2)}
+                    value={(latestReading.hupsBatVolt * 1.5).toFixed(2)}
                     max={120}
                     color="#ffc107"
                     alarm={latestReading.batteryBackupAlarm}
                   />
                   <Gauge
                     label="Battery(Hours)"
-                    value={(latestReading.batteryBackup).toFixed(2)}
+                    value={(latestReading.hupsBatVolt).toFixed(2)}
                     max={120}
                     color="#ffc107"
                     alarm={latestReading.batteryBackupAlarm}
@@ -1425,7 +1820,7 @@ function DashboardView() {
                       {hupsKeys.map((hups, i) => (
                         <div key={i} className="alarm-indicator">
                           <div
-                            className={`alarm-led ${latestReading[hups.key] ? "active" : ""
+                            className={`alarm-led ${latestReading[hups.key] ? "" : "active"
                               }`}
                           />
                           <div className="alarm-label">
