@@ -156,7 +156,7 @@ async function reportWriter({
 
     if (testLevel === "green-pcb") {
         fileName = `${reportNo}_${basePcbSrNo}_${getFormattedDateTime("file")}_${safeMac}.xlsx`;
-    } else{
+    } else {
         fileName = `${reportNo}_${safeUnitSerialNo}_${getFormattedDateTime("file")}_${safeMac}.xlsx`;
     }
 
@@ -175,18 +175,6 @@ async function reportWriter({
 
     // HEADER FOR FAN TESTING
     if (destination === "fan") {
-        // worksheet.addRow(["Report Sr. No:", reportNo]);
-        // worksheet.addRow(["Fan Tray Sr. No.:", unitSerialNo || "NA"]);
-        // // worksheet.addRow(["CPU Sr. No.:", whitePcbSrNo || "NA"]);
-        // worksheet.addRow(["DateTime:", getFormattedDateTime()]);
-        // worksheet.addRow(["TotalTests:", runResult.summary.total]);
-        // worksheet.addRow([]);
-        // worksheet.addRow(["Test:", "Fan Tray Assembly Test"]);
-
-        // worksheet.addRow([
-        //     "TestLevel:",
-        //     testLevel === "green-pcb" ? "Green PCB" : "SRMS Unit"
-        // ]);
         worksheet.getCell("B2").value = reportNo;
         worksheet.getCell("B3").value = unitSerialNo || "NA";
         worksheet.getCell("B4").value = getFormattedDateTime();
@@ -194,30 +182,6 @@ async function reportWriter({
     }
     // HEADER FOR IMONI (GREEN PCB) TESTING
     else if ((destination === "iMoni") && (testLevel === "green-pcb")) {
-        // const titleRow = worksheet.addRow(["IMONI TEST REPORT"]);
-        // worksheet.mergeCells(
-        //     titleRow.number, 1,
-        //     titleRow.number, 7
-        // );
-        // worksheet.addRow(["Report Sr. No:", reportNo]);
-        // worksheet.addRow(["Unit Sr No:", unitSerialNo || "NA"]);
-        // worksheet.addRow(["CPU Sr. No.:", whitePcbSrNo || "NA"]);
-        // worksheet.addRow(["DateTime:", getFormattedDateTime()]);
-        // worksheet.addRow(["TestLevel:", runResult.summary.testLevel]);
-
-        // worksheet.addRow([
-        //     "TestLevel:",
-        //     testLevel === "green-pcb" ? "Green PCB" : "SRMS Unit"
-        // ]);
-
-        // if (testLevel !== "green-pcb") {
-        //     worksheet.addRow(["DeviceIP:", mac]);
-        // }
-        // worksheet.addRow(["TotalTests:", runResult.summary.total]);
-        // worksheet.addRow([]);
-
-
-
         worksheet.getCell("B2").value = reportNo;
         worksheet.getCell("B3").value = basePcbSrNo || "NA";
         // worksheet.getCell("B4").value = whitePcbSrNo || "NA";
@@ -232,40 +196,6 @@ async function reportWriter({
     }
     // HEADER FOR IMONI (SRMS) TESTING
     else if ((destination === "iMoni") && (testLevel !== "green-pcb")) {
-        // const titleRow = worksheet.addRow(["IMONI TEST REPORT"]);
-        // worksheet.mergeCells(
-        //     titleRow.number, 1,
-        //     titleRow.number, 7
-        // );
-        // worksheet.addRow(["Report Sr. No:", reportNo]);
-        // worksheet.addRow(["Unit Sr No:", unitSerialNo || "NA"]);
-        // worksheet.addRow(["CPU Sr. No.:", whitePcbSrNo || "NA"]);
-        // worksheet.addRow(["DateTime:", getFormattedDateTime()]);
-        // worksheet.addRow(["TestLevel:", runResult.summary.testLevel]);
-
-        // worksheet.addRow([
-        //     "TestLevel:",
-        //     testLevel === "green-pcb" ? "Green PCB" : "SRMS Unit"
-        // ]);
-
-        // if (testLevel !== "green-pcb") {
-        //     worksheet.addRow(["DeviceIP:", mac]);
-        // }
-        // worksheet.addRow(["TotalTests:", runResult.summary.total]);
-        // worksheet.addRow([]);
-
-
-        // worksheet.getCell("B2").value = reportNo;
-        // worksheet.getCell("B3").value = unitSerialNo || "NA";
-        // worksheet.getCell("B4").value = cpuSrNo || "NA";
-        // worksheet.getCell("B5").value = getFormattedDateTime();
-        // // worksheet.getCell("B6").value = runResult.summary.testLevel;
-        // worksheet.getCell("B6").value =
-        //     testLevel === "green-pcb"
-        //         ? "iMoni Base PCB"
-        //         : "iMoni Assembly";
-        // worksheet.getCell("B7").value = mac;
-        // worksheet.getCell("B8").value = runResult.summary.total;
         worksheet.getCell("B2").value = reportNo;
         worksheet.getCell("B3").value = unitSerialNo || "NA";
 
@@ -375,7 +305,9 @@ async function reportWriter({
                 step.status.toUpperCase();
 
             worksheet.getCell(`C${row}`).value =
-                step.message;
+                step.status === "passed"
+                    ? "RPM=OK"
+                    : "RPM=FAIL";
 
             worksheet.getCell(`D${row}`).value = "";
 
@@ -459,25 +391,6 @@ async function reportWriter({
 
         });
     }
-
-    // worksheet.columns = [
-    //     { width: 10 },
-    //     { width: 35 },
-    //     { width: 14 },
-    //     { width: 12 },
-    //     { width: 12 },
-    //     { width: 55 },
-    //     { width: 20 }
-    // ];
-
-    // worksheet.eachRow((row) => {
-    //     row.eachCell((cell) => {
-    //         cell.alignment = {
-    //             vertical: "top",
-    //             wrapText: true
-    //         };
-    //     });
-    // });
 
 
     // WRITE COMPLETE FILE ONCE 

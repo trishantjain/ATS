@@ -39,21 +39,21 @@ function startFanTest(fanTrayControllerId, portName, logCallback) {
             // const MIN_FAN_RPM = 2300;
             // const MAX_FAN_RPM = 2900;
 
-            const MIN_PULSE = 150;
+            // const MIN_PULSE = 100;
 
-            const stepResults = data.results.map((fan, idx) => {
+            const stepResults = data.results.map((fan, idx) => ({
                 // const rpm = Number(fan.rpm);
                 // const rpmPassed = Number.isFinite(rpm) && rpm >= MIN_FAN_RPM && rpm <= MAX_FAN_RPM;
 
-                const pulses = Number(fan.pulses);  // or fan.pulses if you renamed it
-                const pulsePassed = Number.isFinite(pulses) && pulses > MIN_PULSE;
+                // const pulses = Number(fan.pulses);  // or fan.pulses if you renamed it
+                // const pulsePassed = Number.isFinite(pulses) && pulses > MIN_PULSE;
 
-                return {
-                    step: idx + 1,
-                    status: pulsePassed ? "passed" : "failed",
-                    message: `Fan ${fan.fan} Pulses=${fan.pulses}`
-                };
-            });
+                // return {
+                step: idx + 1,
+                status: fan.status === "PASS" ? "passed" : "failed",
+                message: `Fan ${fan.fan} Pulses=${fan.pulses}`
+                // };
+            }));
 
             const testPassed = stepResults.every(s => s.status === "passed");
 
