@@ -1,7 +1,7 @@
 const { SerialPort } = require('serialport');
 const { ReadlineParser } = require('@serialport/parser-readline');
 const { reportWriter } = require('../ATS/reportWriter'); // adjust path
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  
+
 // GETTING FAN CONTROLLER ID FROM THE COMMAND LINE
 const fanTrayControllerId = process.argv[2] || "unknown-controller";
 
@@ -63,11 +63,13 @@ function handleFanTestResult(data) {
 }
 
 // 🔥 CHANGE THIS to your COM port
-const port = new SerialPort({
-    path: 'COM19',
-    baudRate: 115200,
-    autoOpen: false
-});
+const port = new SerialPort(
+    {
+        path: 'COM19',
+        baudRate: 115200,
+        autoOpen: false
+    }
+);
 
 const parser = port.pipe(new ReadlineParser({ delimiter: '\n' }));
 
