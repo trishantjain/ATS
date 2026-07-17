@@ -1,7 +1,9 @@
 import telnetlib
 import time
+import subprocess
+import platform
 
-HOST = "192.168.0.110"
+HOST = "192.168.0.20"
 PORT = 23
 
 def type_command(tn, cmd):
@@ -24,6 +26,30 @@ def type_command(tn, cmd):
     except Exception as e:
         print(e)
 
+
+def ping_ip(ip):
+    # Windows uses -n, Linux/macOS use -c
+    param = "-n" if platform.system().lower() == "windows" else "-c"
+
+    result = subprocess.run(
+        ["ping", param, "4", ip],
+        capture_output=True,
+        text=True
+    )
+
+    print(result.stdout)
+
+    if result.stderr:
+        print(result.stderr)
+
+
+    if result.returncode == 0:
+        print(f"✅ {ip} is reachable.")
+        return True
+    else:
+        print(f"❌ {ip} is NOT reachable.")
+        print(result.stdout)
+        return False    
 
 while True:
 
@@ -58,6 +84,9 @@ while True:
 
         print("\nWaiting for reboot...")
         time.sleep(5)
+
+        new_ip = f"192.168.0.{serial}"
+        ping_ip(new_ip)
 
         tn.close()
 
