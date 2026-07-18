@@ -8,7 +8,7 @@ fail="Camera test failed"
 [step:1]
 msg="Capturing image from camera."
 waitFor=capture
-cameraUrl="https://picsum.photos/640/480"
+cameraIp="192.168.0.120"
 waitTime=60
 onPass="Camera capture successful"
 onFail="Camera capture failed or user rejected"
