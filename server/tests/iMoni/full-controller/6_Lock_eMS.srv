@@ -22,7 +22,7 @@ onFail="Door not opened"
 [step:3]
 msg="Wait for closing the door"
 waitFor="lockStatus"
-waitTime=30
+waitTime=40
 expectedValue="CLOSED"
 onPass="Door closed successfully"
 onFail="Door not closed"

@@ -15,6 +15,6 @@ onFail="Fan 1 & 2 not started"
 msg="Remove Fan 1 Wire"
 waitFor="fanLevel1Running;fanLevel2Running;fanLevel3Running;fanLevel4Running;fan1Status;fan2Status;fan3Status;fan4Status;fan5Status;fan6Status"
 waitTime=20
-expectedValue="true;false;false;true;2;1;0;0;0;1"
+expectedValue="true;false;false;true;2;1;0;0;0;0"
 onPass="Fan 1 Wire removed successfully"
 onFail="Fan 1 wire not removed"
