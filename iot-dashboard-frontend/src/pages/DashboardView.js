@@ -182,8 +182,9 @@ function DashboardView() {
     // const isActive = activeFanBtns.includes(level);
 
     const isActive =
-      latestReading &&
-      latestReading[`fanLevel${level}Running`] === true;
+      level === 5
+        ? activeFanBtns.includes(5)
+        : latestReading?.[`fanLevel${level}Running`] === true;
 
     const command = isActive
       ? `%R0${level}F${getFormattedDateTime()}$`
@@ -212,11 +213,18 @@ function DashboardView() {
     //     ? activeFanBtns.filter((l) => l !== level)
     //     : [...activeFanBtns, level]
     // );
-    setActiveFanBtns((prev) =>
-      isActive
-        ? prev.filter((l) => l !== level)
-        : [...prev, level]
-    );
+    // setActiveFanBtns((prev) =>
+    //   isActive
+    //     ? prev.filter((l) => l !== level)
+    //     : [...prev, level]
+    // );
+    if (level === 5) {
+      setActiveFanBtns((prev) =>
+        prev.includes(5)
+          ? prev.filter((l) => l !== 5)
+          : [...prev, 5]
+      );
+    }
   };
 
   //! New code for Open Lock (using Sweetalert2)

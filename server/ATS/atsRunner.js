@@ -2,6 +2,7 @@ const path = require("path");
 const fs = require("fs");
 const atsRuntime = require("./atsRuntime");
 const { getFormattedDateTime } = require("../utils/time");
+const { spawn } = require("child_process");
 
 const runTests = async ({
     testFiles,
@@ -112,8 +113,8 @@ const runTests = async ({
                             currentStep.onPass = line.substring(7).replace(/["\']/g, '');
                         } else if (line.startsWith('onFail=')) {
                             currentStep.onFail = line.substring(7).replace(/["\']/g, '');
-                        } else if (line.startsWith('cameraUrl=')) {
-                            currentStep.cameraUrl = line.substring(10).replace(/["\']/g, '');
+                        } else if (line.startsWith('cameraIp=')) {
+                            currentStep.cameraIp = line.substring(9).replace(/["\']/g, '');
                         }
                     }
                     // PROPERTIES BEFORE THE STEPS
@@ -429,148 +430,219 @@ const runTests = async ({
 
                         // Camera capture step
                         if (step.waitFor === 'capture') {
-                            console.log(`   📸 Capturing image from camera...`);
-
-                            const cameraUrl = step.cameraUrl || 'http://192.168.0.120/CGI/command/snap?channel=01';
-                            const now = new Date();
-                            const timestamp = now.toISOString()
-                                .replace(/[-:]/g, '')
-                                .replace(/T/, '_')
-                                .replace(/\..+/, '')
-                                .slice(0, 15);
-
-                            const fileName = `test_${timestamp}.jpg`;
-                            const outputDir = 'C:/snaps';
-                            const outputPath = path.join(outputDir, fileName);
-
-                            if (!fs.existsSync(outputDir)) {
-                                fs.mkdirSync(outputDir, { recursive: true });
-                            }
-
                             try {
-                                // Capture image from camera
-                                const response = await axios({
-                                    method: 'GET',
-                                    url: cameraUrl,
-                                    responseType: 'stream',
-                                    timeout: 10000
-                                });
+                                console.log("   Capturing image using ReadImage executable...");
 
-                                // Save the image
+                                const cameraIp =
+                                    step.cameraIp ||
+                                    process.env.CAMERA_IP ||
+                                    "192.168.0.120";
+
+                                const timestamp = getFormattedDateTime("filename");
+                                const fileName = `test_${timestamp}.jpg`;
+
+                                const outputDir = process.env.SNAP_DIR || "C:/Snaps";
+                                const outputPath = path.join(outputDir, fileName);
+
+                                const exePath =
+                                    process.env.READIMAGE_EXE_PATH ||
+                                    path.join(__dirname, "..", "ReadImage_recovered_5.exe");
+
+                                const timeoutMs = Number.parseInt(
+                                    process.env.READIMAGE_TIMEOUT_MS || "45000",
+                                    10
+                                );
+
+                                if (!fs.existsSync(outputDir)) {
+                                    fs.mkdirSync(outputDir, { recursive: true });
+                                }
+
+                                if (!fs.existsSync(exePath)) {
+                                    throw new Error(`ReadImage executable not found at: ${exePath}`);
+                                }
+
+                                let args = [String(cameraIp), String(outputPath)];
+
+                                if (process.env.READIMAGE_ARGS_JSON) {
+                                    const parsed = JSON.parse(process.env.READIMAGE_ARGS_JSON);
+
+                                    if (!Array.isArray(parsed)) {
+                                        throw new Error("READIMAGE_ARGS_JSON must be a JSON array");
+                                    }
+
+                                    args = parsed.map((arg) =>
+                                        String(arg)
+                                            .replaceAll("{ip}", String(cameraIp))
+                                            .replaceAll("{out}", String(outputPath))
+                                    );
+                                }
+
                                 await new Promise((resolve, reject) => {
-                                    const writer = fs.createWriteStream(outputPath);
-                                    response.data.pipe(writer);
-                                    writer.on('finish', resolve);
-                                    writer.on('error', reject);
+                                    const child = spawn(exePath, args, {
+                                        windowsHide: true,
+                                        stdio: ["ignore", "pipe", "pipe"]
+                                    });
+
+                                    let stdout = "";
+                                    let stderr = "";
+
+                                    child.stdout.on("data", (data) => {
+                                        stdout += data.toString();
+                                    });
+
+                                    child.stderr.on("data", (data) => {
+                                        stderr += data.toString();
+                                    });
+
+                                    child.on("error", reject);
+
+                                    const timer = setTimeout(() => {
+                                        try {
+                                            child.kill();
+                                        } catch {
+                                            // ignore kill failure
+                                        }
+
+                                        reject(
+                                            new Error(
+                                                `ReadImage timed out after ${timeoutMs}ms ` +
+                                                `(exe=${exePath}, ip=${cameraIp}, out=${outputPath})`
+                                            )
+                                        );
+                                    }, Number.isFinite(timeoutMs) ? timeoutMs : 45000);
+
+                                    child.on("close", (code) => {
+                                        clearTimeout(timer);
+
+                                        if (code === 0) {
+                                            return resolve();
+                                        }
+
+                                        reject(
+                                            new Error(
+                                                `ReadImage exited with code ${code}` +
+                                                `${stderr ? `: ${stderr.trim()}` : ""}` +
+                                                `${stdout ? ` | stdout: ${stdout.trim()}` : ""}`
+                                            )
+                                        );
+                                    });
                                 });
 
-                                console.log(`    ✅ Image captured: ${fileName}`);
-                                console.log(`    📁 Image saved at: ${outputPath}`);
+                                let stat;
+                                try {
+                                    stat = fs.statSync(outputPath);
+                                } catch {
+                                    throw new Error(
+                                        `ReadImage completed but output file was not created: ${outputPath}`
+                                    );
+                                }
 
-                                // FIRST: Set up the dialog resolver BEFORE broadcasting
+                                if (!stat.isFile() || stat.size === 0) {
+                                    throw new Error(`ReadImage output file is empty or invalid: ${outputPath}`);
+                                }
+
+                                console.log(`    Image captured: ${fileName}`);
+                                console.log(`    Image saved at: ${outputPath}`);
+
                                 const dialogPromise = new Promise((resolve) => {
                                     const timeout = setTimeout(() => {
-                                        console.log(`    ⏰ Dialog timeout after ${step.waitTime || 60}s`);
-                                        pendingDialogResolver = null;
-                                        resolve({ confirmed: false, reason: 'TIMEOUT' });
+                                        console.log(`    Dialog timeout after ${step.waitTime || 60}s`);
+                                        atsRuntime.setDialogResolver(null);
+                                        resolve({ confirmed: false, reason: "TIMEOUT" });
                                     }, (step.waitTime || 60) * 1000);
 
-                                    pendingDialogResolver = (confirmed) => {
-                                        console.log(`    📨 Dialog response received: ${confirmed}`);
+                                    atsRuntime.setDialogResolver((confirmed) => {
+                                        console.log(`    Dialog response received: ${confirmed}`);
                                         clearTimeout(timeout);
-                                        pendingDialogResolver = null;
-                                        resolve({ confirmed, reason: confirmed ? 'USER_CONFIRMED' : 'USER_CANCELLED' });
-                                    };
+                                        atsRuntime.setDialogResolver(null);
+
+                                        resolve({
+                                            confirmed,
+                                            reason: confirmed ? "USER_CONFIRMED" : "USER_CANCELLED"
+                                        });
+                                    });
                                 });
 
-                                // THEN: Broadcast to show dialog on frontend
-                                console.log(`   📤 Broadcasting CAMERA_IMAGE_CAPTURED to ${wsClients.size} clients`);
-
-                                // Broadcast image captured - send to frontend for display
                                 onStatus?.({
-                                    type: 'CAMERA_IMAGE_CAPTURED',
-                                    testFile: testFile,
+                                    type: "CAMERA_IMAGE_CAPTURED",
+                                    testFile,
                                     name: testResult.name,
-                                    stepNumber: stepNumber,
+                                    stepNumber,
                                     totalSteps: testConfig.steps.length,
                                     imagePath: outputPath,
                                     imageName: fileName,
-                                    message: step.msg || 'Camera image captured. Please verify.',
+                                    message: step.msg || "Camera image captured. Please verify.",
                                     waitTime: step.waitTime || 60,
                                     timestamp: getFormattedDateTime()
                                 });
 
-                                // Wait for user dialog confirmation
-                                console.log(`   ⏳ Waiting for user confirmation...`);
+                                console.log("   Waiting for user confirmation...");
 
                                 const dialogResult = await dialogPromise;
 
-                                // Process dialog result
                                 if (dialogResult.confirmed) {
-                                    console.log(`   ✅ Step ${stepNumber} PASSED: User confirmed camera working`);
                                     stepResults.push({
                                         step: stepNumber,
-                                        status: 'passed',
-                                        message: step.onPass || 'Camera test passed - User confirmed',
+                                        status: "passed",
+                                        message: step.onPass || "Camera test passed - User confirmed",
                                         received: `Image: ${fileName}`
                                     });
 
                                     onStatus?.({
-                                        type: 'STEP_COMPLETED',
-                                        testFile: testFile,
+                                        type: "STEP_COMPLETED",
+                                        testFile,
                                         name: testResult.name,
-                                        stepNumber: stepNumber,
+                                        stepNumber,
                                         totalSteps: testConfig.steps.length,
-                                        status: 'passed',
-                                        message: step.onPass || 'Camera test passed',
+                                        status: "passed",
+                                        message: step.onPass || "Camera test passed",
                                         timestamp: getFormattedDateTime()
                                     });
                                 } else {
-                                    console.log(`   ❌ Step ${stepNumber} FAILED: ${dialogResult.reason}`);
                                     allStepsPassed = false;
+
                                     stepResults.push({
                                         step: stepNumber,
-                                        status: 'failed',
+                                        status: "failed",
                                         message: step.onFail || `Camera test failed - ${dialogResult.reason}`,
                                         received: `Image: ${fileName}`
                                     });
 
                                     onStatus?.({
-                                        type: 'STEP_COMPLETED',
-                                        testFile: testFile,
+                                        type: "STEP_COMPLETED",
+                                        testFile,
                                         name: testResult.name,
-                                        stepNumber: stepNumber,
+                                        stepNumber,
                                         totalSteps: testConfig.steps.length,
-                                        status: 'failed',
+                                        status: "failed",
                                         message: step.onFail || `Camera test failed - ${dialogResult.reason}`,
                                         timestamp: getFormattedDateTime()
                                     });
 
-                                    break; // Stop on failure
+                                    break;
                                 }
-
                             } catch (err) {
-                                console.log(`   ❌ Step ${stepNumber} FAILED: Camera error - ${err.message} \n${err.stack}`);
+                                console.log(`   Step ${stepNumber} FAILED: Camera error - ${err.message}`);
+
                                 allStepsPassed = false;
+
                                 stepResults.push({
                                     step: stepNumber,
-                                    status: 'failed',
+                                    status: "failed",
                                     message: step.onFail || `Camera capture failed: ${err.message}`,
                                     received: null
                                 });
 
                                 onStatus?.({
-                                    type: 'STEP_COMPLETED',
-                                    testFile: testFile,
+                                    type: "STEP_COMPLETED",
+                                    testFile,
                                     name: testResult.name,
-                                    stepNumber: stepNumber,
+                                    stepNumber,
                                     totalSteps: testConfig.steps.length,
-                                    status: 'failed',
+                                    status: "failed",
                                     message: `Camera capture failed: ${err.message}`,
                                     timestamp: getFormattedDateTime()
                                 });
-
-                                // break; // Stop on failure
 
                                 continue;
                             }
@@ -588,7 +660,7 @@ const runTests = async ({
                     const reportContent = `Test: ${testResult.name} , Status: ${testResult.status} , Steps: ${stepResults.length}/${testConfig.steps.length}`;
                     try {
                         // await fs.promises.appendFile(testReportFilePath, `${reportContent}\n`);
-                        console.log(`✅ Test report appended to: ${testReportFileName}`);
+                        console.log(`✅ Test report appended`);
                     } catch (err) {
                         console.log(`🔴 Error writing test report: ${err.stack} 🔴`);
                     }
@@ -896,7 +968,7 @@ const runTests = async ({
                     const reportContent = `Test: ${testResult.name} , Status: ${testResult.status} , Steps: ${stepResults.length}/${testConfig.steps.length}`;
                     try {
                         // await fs.promises.appendFile(testReportFilePath, `${reportContent}\n`);
-                        console.log(`✅ Test report appended to: ${testReportFileName}`);
+                        console.log(`✅ Test report appended`);
                     } catch (err) {
                         console.log(`🔴 Error writing test report: ${err.stack} 🔴`);
                     }
@@ -1111,7 +1183,7 @@ const runTests = async ({
                     const reportContent = `Test: ${testResult.name} , Status: ${testResult.status}`;
                     try {
                         // await fs.promises.appendFile(testReportFilePath, `${reportContent}\n`);
-                        console.log(`✅ Test report appended to: ${testReportFileName}`);
+                        console.log(`✅ Test report appended`);
                     } catch (err) {
                         console.log(`🔴 Error writing test report: ${err.stack} 🔴`);
                     }
