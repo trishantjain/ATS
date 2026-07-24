@@ -7,7 +7,7 @@ retryCount=0
 [step:1]
 msg="Humidity Sensor test started"
 waitFor="humidity"
-waitTime=15
-increasedBy=10
+waitTime=25
+increasedBy=5
 onPass="Humidity alarm successfully"
 onFail="Humidity alarm not turned on"

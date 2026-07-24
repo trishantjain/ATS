@@ -156,6 +156,8 @@ if __name__ == "__main__":
         print("Example: python read_serial_hex.py COM3 115200")
         sys.exit(1)
 
+    # USE BAUD RATE IS 9600 FOR 'HUPS' 
+
     port_name = sys.argv[1]
     baud_rate = int(sys.argv[2]) if len(sys.argv) > 2 else 9600
 
