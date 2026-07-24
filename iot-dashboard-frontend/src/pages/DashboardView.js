@@ -43,6 +43,9 @@ function DashboardView() {
   const [testCommandInput, setTestCommandInput] = useState("");
   const [notification, setNotification] = useState(null);
   const [liveReading, setLiveReading] = useState(null);  // Separate state for immediate UI updates
+
+  const [showATSPanel, setShowATSPanel] = useState(true);
+
   const notificationTimeoutRef = useRef(null);  // Track notification auto-dismiss timeout
 
   const [selectedProduct, setSelectedProduct] = useState("");
@@ -667,6 +670,7 @@ function DashboardView() {
   // IMONI TEST FUNCTION
   async function iMoni_test() {
     setAwaitingCommand(true); // Shows 'Running...' state
+    setShowATSPanel(false);
 
     if (testLevel === "green-pcb") {
       if (!basePcbSrNo.trim()) {
@@ -686,6 +690,7 @@ function DashboardView() {
           text: "Please enter Unit Serial Number before starting ATS"
         });
         setAwaitingCommand(false);
+        setShowATSPanel(true);
         return;
       }
     }
@@ -789,6 +794,7 @@ function DashboardView() {
       }
     }
     setAwaitingCommand(false);
+    setShowATSPanel(true);
   }
 
   // FAN TEST FUNCTION
@@ -1325,102 +1331,124 @@ function DashboardView() {
       {/* </div> */}
 
       <div className="ats-panel">
-        <h2 className="ats-title">🧪 ATS Test Controls</h2>
+        <div className="ats-header">
 
-        <div className="ats-row">
-          <select
-            value={selectedProduct}
-            onChange={handleProductChange}
-            className="ats-select"
-          >
-            <option value="">Select Product</option>
-            <option value="iMoni">iMoni Tests</option>
-            <option value="fan">Fan Tests</option>
-            <option value="pdu">PDU Tests</option>
-          </select>
+          <h2>🧪 ATS Test Controls</h2>
 
-          {selectedProduct === "iMoni" && (
-            <select
-              value={testLevel}
-              onChange={(e) => setTestLevel(e.target.value)}
-              className="ats-select"
-            >
-              <option value="full-controller">Assembly</option>
-              <option value="green-pcb">Base PCB Level</option>
-            </select>
-          )}
-        </div>
-
-        <div className="ats-grid">
-
-          {testLevel === "green-pcb" ? (
-            <>
-              <input
-                className="ats-input"
-                placeholder="Base PCB Serial Number"
-                value={basePcbSrNo}
-                onChange={(e) => setBasePcbSrNo(e.target.value)}
-              />
-            </>
+          {showATSPanel ? (
+            <button onClick={() => setShowATSPanel(false)}>
+              Hide Details
+            </button>
           ) : (
-            <>
-              <input
-                className="ats-input"
-                placeholder="iMoni Ass. Serial Number"
-                value={unitSerialNo}
-                onChange={(e) => setUnitSerialNo(e.target.value)}
-              />
-
-              <input
-                className="ats-input"
-                placeholder="CPU Serial Number"
-                value={cpuSrNo}
-                onChange={(e) => setCpuSrNo(e.target.value)}
-              />
-
-              <input
-                className="ats-input"
-                placeholder="Base PCB Serial Number"
-                value={basePcbSrNo}
-                onChange={(e) => setBasePcbSrNo(e.target.value)}
-              />
-
-              <input
-                className="ats-input"
-                placeholder="Camera Serial Number"
-                value={cameraSrNo}
-                onChange={(e) => setCameraSrNo(e.target.value)}
-              />
-
-              <input
-                className="ats-input"
-                placeholder="PSU Serial Number"
-                value={psuSrNo}
-                onChange={(e) => setPsuSrNo(e.target.value)}
-              />
-            </>
+            <button onClick={() => setShowATSPanel(true)}>
+              Show Details
+            </button>
           )}
 
         </div>
 
-        <div className="ats-actions">
-          <label className="ats-checkbox">
-            <input
-              type="checkbox"
-              checked={generateReport}
-              onChange={(e) => setGenerateReport(e.target.checked)}
-            />
-            Generate Report
-          </label>
+        {showATSPanel && (
 
-          <button
-            className="ats-run-btn"
-            onClick={iMoni_test}
-            disabled={awaitingCommand}
-          >
-            {awaitingCommand ? "Running ATS..." : "Run ATS Tests"}
-          </button>
-        </div>
+          <div className="ats-running-panel">
+            <div className="ats-row">
+              <select
+                value={selectedProduct}
+                onChange={handleProductChange}
+                className="ats-select"
+              >
+                <option value="">Select Product</option>
+                <option value="iMoni">iMoni Tests</option>
+                <option value="fan">Fan Tests</option>
+                <option value="pdu">PDU Tests</option>
+              </select>
+
+              {selectedProduct === "iMoni" && (
+                <select
+                  value={testLevel}
+                  onChange={(e) => setTestLevel(e.target.value)}
+                  className="ats-select"
+                >
+                  <option value="full-controller">Assembly</option>
+                  <option value="green-pcb">Base PCB Level</option>
+                </select>
+              )}
+            </div>
+
+            <div className="ats-grid">
+
+              {testLevel === "green-pcb" ? (
+                <>
+                  <input
+                    className="ats-input"
+                    placeholder="Base PCB Serial Number"
+                    value={basePcbSrNo}
+                    onChange={(e) => setBasePcbSrNo(e.target.value)}
+                  />
+                </>
+              ) : (
+                <>
+                  <input
+                    className="ats-input"
+                    placeholder="iMoni Ass. Serial Number"
+                    value={unitSerialNo}
+                    onChange={(e) => setUnitSerialNo(e.target.value)}
+                  />
+
+                  <input
+                    className="ats-input"
+                    placeholder="CPU Serial Number"
+                    value={cpuSrNo}
+                    onChange={(e) => setCpuSrNo(e.target.value)}
+                  />
+
+                  <input
+                    className="ats-input"
+                    placeholder="Base PCB Serial Number"
+                    value={basePcbSrNo}
+                    onChange={(e) => setBasePcbSrNo(e.target.value)}
+                  />
+
+                  <input
+                    className="ats-input"
+                    placeholder="Camera Serial Number"
+                    value={cameraSrNo}
+                    onChange={(e) => setCameraSrNo(e.target.value)}
+                  />
+
+                  <input
+                    className="ats-input"
+                    placeholder="PSU Serial Number"
+                    value={psuSrNo}
+                    onChange={(e) => setPsuSrNo(e.target.value)}
+                  />
+                </>
+              )}
+
+            </div>
+
+            <div className="ats-actions">
+              <label className="ats-checkbox">
+                <input
+                  type="checkbox"
+                  checked={generateReport}
+                  onChange={(e) => setGenerateReport(e.target.checked)}
+                />
+                Generate Report
+              </label>
+
+              <button
+                className="ats-run-btn"
+                onClick={iMoni_test}
+                disabled={awaitingCommand}
+              >
+                {awaitingCommand ? "Running ATS..." : "Run ATS Tests"}
+              </button>
+            </div>
+
+          </div>
+
+        )}
+
 
       </div>
 
@@ -1608,24 +1636,53 @@ function DashboardView() {
         </div>
       )}
 
-      {!isTestRunning && fetchedTestList.length > 0 ? fetchedTestList.map((test) => (
-        <label key={test} style={{ display: "block" }}>
-          <input
-            type="checkbox"
-            value={test}
-            checked={selectedTests.includes(test)}
-            onChange={(e) => {
-              if (e.target.checked) {
-                setSelectedTests([...selectedTests, test]);
-              } else {
-                setSelectedTests(selectedTests.filter(t => t !== test));
-              }
-            }}
-          />
-          {test}
-        </label>
-      )) : <p>No Tests found</p>}
+      {!isTestRunning && fetchedTestList.length > 0 ? (
+        <div className="test-list-panel">
 
+          <div className="test-list-header">
+            <h4>Selected Tests ({selectedTests.length})</h4>
+
+            <div className="test-actions">
+              <button onClick={() => setSelectedTests(fetchedTestList)}>
+                Select All
+              </button>
+
+              <button onClick={() => setSelectedTests([])}>
+                Clear
+              </button>
+            </div>
+          </div>
+
+          <div className="test-list">
+
+            {fetchedTestList.map((test) => (
+              <label key={test} className="test-item">
+
+                <input
+                  type="checkbox"
+                  checked={selectedTests.includes(test)}
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      setSelectedTests([...selectedTests, test]);
+                    } else {
+                      setSelectedTests(
+                        selectedTests.filter(t => t !== test)
+                      );
+                    }
+                  }}
+                />
+
+                <span>{test.replace(".srv", "")}</span>
+
+              </label>
+            ))}
+
+          </div>
+
+        </div>
+      ) : (
+        <p>No Tests found</p>
+      )}
 
       {pduTestStatus && (
         <img className="pdu-image" src="./pdu/ch1.png">
@@ -1751,143 +1808,189 @@ function DashboardView() {
               </button>
               <span>SysId: {selectedMac.slice(8)}</span>
               {"status" && (
-                <div className="alarm-group">
-                  <div className="fan-status">
-                    <div className="fan-status-line">
-                      <h4>Fan Running Status</h4>
-                      {[...Array(6)].map((_, i) => {
-                        const statusVal = latestReading[`fan${i + 1}Status`]; // 0=off, 1=healthy, 2=faulty
-                        // console.log('statusVal', statusVal);
-                        // console.log("statusC");
-                        let statusClass = "off";
-                        if (statusVal === 1) {
-                          statusClass = "running"; // green
-                        } else if (statusVal === 2) {
-                          statusClass = "faulty"; // red
-                        }
-                        // console.log(statusClass);
-                        return (
-                          <div key={i} className="fan-light">
-                            <div className={`fan-light-circle ${statusClass}`} />
-                            <div className="fan-label">F{i + 1}</div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                    <div className="alarm-line">
-                      <h4>Alarms</h4>
-                      {alarmKeys.map((alarm, i) => (
 
-                        <div key={i} className="alarm-indicator">
-                          <div
-                            className={`alarm-led ${latestReading[alarm.key] === 87 ? "wait" : latestReading[alarm.key] ? "active" : ""
-                              }`}
-                          />
-                          <div className="alarm-label">{alarm.Name}</div>
-                        </div>
-                      ))}
-                      {statusKeys.map((status, i) => {
-                        if (status.key !== "pwsFailCount") {
+                <div className="status-layout">
+
+                  {/* LEFT */}
+                  <div className="status-left">
+
+                    {/* Fan Running code */}
+                    <div className="status-card">
+                      <h4>Fan Running Status</h4>
+
+                      <div className="status-grid">
+                        {[...Array(6)].map((_, i) => {
+                          const statusVal = latestReading[`fan${i + 1}Status`]; // 0=off, 1=healthy, 2=faulty
+                          // console.log('statusVal', statusVal);
+                          // console.log("statusC");
+                          let statusClass = "off";
+                          if (statusVal === 1) {
+                            statusClass = "running"; // green
+                          } else if (statusVal === 2) {
+                            statusClass = "faulty"; // red
+                          }
+                          // console.log(statusClass);
                           return (
-                            <div key={i} className="alarm-indicator">
-                              <div
-                                className={`alarm-led ${latestReading[status.key] === "OPEN"
-                                  ? "active"
-                                  : ""
-                                  }`}
-                              />
-                              <div className="alarm-label">{status.Name}</div>
+                            <div key={i} className="fan-light">
+                              <div className={`fan-light-circle ${statusClass}`} />
+                              <div className="fan-label">F{i + 1}</div>
                             </div>
                           );
-                        } else {
-                          return (
-                            <>
+                        })}
+                      </div>
+                    </div>
+
+                    <div className="status-card">
+                      {/* Command buttons */}
+                      <h4>🛠 Commands</h4>
+                      <div className="fan-power-buttons aligned">
+                        {[1, 2, 3, 4, 5].map((level) => (
+                          <div key={level} className="fan-light">
+                            <button
+                              className={`power-btn ${activeFanBtns.includes(level) ||
+                                (latestReading &&
+                                  latestReading[`fanLevel${level}Running`] === true)
+                                ? "active"
+                                : ""
+                                }`}
+                              onClick={() => handleFanClick(level)}
+                            />
+                            <div className="fan-label">
+                              {level >= 1 && level <= 4 ? `FG ${level}` : "NON-CRITICAL LOAD"}
+                            </div>
+                          </div>
+                        ))}
+                        <div className="fan-light">
+                          <button className="lock-btn" onClick={handleOpenLock}>
+                            🔓
+                          </button>
+                          <div className="fan-label">Lock</div>
+                        </div>
+                        <div className="fan-light">
+                          <button className="lock-btn" onClick={handleResetLock}>
+                            🔐
+                          </button>
+                          <div className="fan-label">Reset</div>
+                        </div>
+                        <div className="fan-light">
+                          <button className="lock-btn" onClick={openPassword}>
+                            🔐
+                          </button>
+                          <div className="fan-label">Open PWD</div>
+                        </div>
+                      </div>
+
+                    </div>
+
+                  </div>
+
+
+                  {/* RIGHT */}
+                  <div className="status-right">
+
+                    <div className="status-card">
+                      <h4>Alarms</h4>
+
+                      <div className="status-grid">
+                        {/* Alarm map */}
+                        {alarmKeys.map((alarm, i) => (
+
+                          <div key={i} className="status-box">
+                            <div
+                              className={`alarm-led ${latestReading[alarm.key] === 87 ? "wait" : latestReading[alarm.key] ? "active" : ""
+                                }`}
+                            />
+                            <div className="status-title">{alarm.Name}</div>
+                          </div>
+                        ))}
+                        {statusKeys.map((status, i) => {
+                          if (status.key !== "pwsFailCount") {
+                            return (
                               <div key={i} className="alarm-indicator">
-                                {/* <div className={`alarm-led ${latestReading[status.key] === 1 ? 'active' : ''}`} /> */}
                                 <div
-                                  className={`alarm-led
-                              ${latestReading[status.key] === 1
-                                      ? "pass-danger"
-                                      : latestReading[status.key] === 2
-                                        ? "pass-warn"
-                                        : latestReading[status.key] === 3
-                                          ? "pass-active"
-                                          : ""
+                                  className={`alarm-led ${latestReading[status.key] === "OPEN"
+                                    ? "active"
+                                    : ""
                                     }`}
                                 />
                                 <div className="alarm-label">{status.Name}</div>
-                                <div className="alarm-attempt">{3 - latestReading[status.key]} Attempt Left</div>
                               </div>
-                            </>
-                          );
-                        }
-                      })}
+                            );
+                          } else {
+                            return (
+                              <>
+                                <div key={i} className="alarm-indicator">
+                                  {/* <div className={`alarm-led ${latestReading[status.key] === 1 ? 'active' : ''}`} /> */}
+                                  <div
+                                    className={`alarm-led
+                              ${latestReading[status.key] === 1
+                                        ? "pass-danger"
+                                        : latestReading[status.key] === 2
+                                          ? "pass-warn"
+                                          : latestReading[status.key] === 3
+                                            ? "pass-active"
+                                            : ""
+                                      }`}
+                                  />
+                                  <div className="alarm-label">{status.Name}</div>
+                                  <div className="alarm-attempt">{3 - latestReading[status.key]} Attempt Left</div>
+                                </div>
+                              </>
+                            );
+                          }
+                        })}
+                      </div>
                     </div>
-                    <div className="alarm-line">
+
+                    <div className="status-card">
                       <h4>HUPS</h4>
-                      {hupsKeys.map((hups, i) => (
-                        <div key={i} className="alarm-indicator">
-                          <div
-                            className={`alarm-led ${latestReading[hups.key] ? "" : "active"
-                              }`}
-                          />
-                          <div className="alarm-label">
-                            {hups.Name}
+
+                      <div className="status-grid">
+                        {/* HUPS map */}
+                        {hupsKeys.map((hups, i) => (
+                          <div key={i} className="status-box">
+                            <div
+                              className={`alarm-led ${latestReading[hups.key] ? "" : "active"
+                                }`}
+                            />
+                            <div className="status-title">
+                              {hups.Name}
+                            </div>
                           </div>
-                        </div>
-                      ))}
-                      {/* {["O.Load", "MPT", "MOSFET"].map((key, i) => (
-                        <div key={i} className="alarm-indicator">
-                          <div
-                            className={`alarm-led ${latestReading[key] === "OPEN" ? "active" : ""
-                              }`}
-                          />
-                          <div className="alarm-label">
-                            {key.replace("Status", "")}
-                          </div>
-                        </div>
-                      ))} */}
-                    </div>
-                    <h4>🛠 Commands</h4>
-                    <div className="fan-power-buttons aligned">
-                      {[1, 2, 3, 4, 5].map((level) => (
-                        <div key={level} className="fan-light">
-                          <button
-                            className={`power-btn ${activeFanBtns.includes(level) ||
-                              (latestReading &&
-                                latestReading[`fanLevel${level}Running`] === true)
-                              ? "active"
-                              : ""
-                              }`}
-                            onClick={() => handleFanClick(level)}
-                          />
-                          <div className="fan-label">
-                            {level >= 1 && level <= 4 ? `FG ${level}` : "NON-CRITICAL LOAD"}
-                          </div>
-                        </div>
-                      ))}
-                      <div className="fan-light">
-                        <button className="lock-btn" onClick={handleOpenLock}>
-                          🔓
-                        </button>
-                        <div className="fan-label">Lock</div>
-                      </div>
-                      <div className="fan-light">
-                        <button className="lock-btn" onClick={handleResetLock}>
-                          🔐
-                        </button>
-                        <div className="fan-label">Reset</div>
-                      </div>
-                      <div className="fan-light">
-                        <button className="lock-btn" onClick={openPassword}>
-                          🔐
-                        </button>
-                        <div className="fan-label">Open PWD</div>
+                        ))}
                       </div>
                     </div>
-                    {status && <p>{status}</p>}
+
                   </div>
+
                 </div>
+
+                // <div className="alarm-group">
+                //   <div className="fan-status">
+                //     <div className="fan-status-line">
+                //     </div>
+                //     <div className="alarm-line">
+                //       <h4 style={{ marginRight: 10 }}>Alarms</h4>
+
+                //       <h4 style={{ marginLeft: 35, marginRight: 10 }}>HUPS</h4>
+                //     </div>
+                //     <div className="alarm-line">
+                //       <h4>HUPS</h4>
+                //       {/* {["O.Load", "MPT", "MOSFET"].map((key, i) => (
+                //         <div key={i} className="alarm-indicator">
+                //           <div
+                //             className={`alarm-led ${latestReading[key] === "OPEN" ? "active" : ""
+                //               }`}
+                //           />
+                //           <div className="alarm-label">
+                //             {key.replace("Status", "")}
+                //           </div>
+                //         </div>
+                //       ))} */}
+                //     </div>
+                //     {status && <p>{status}</p>}
+                //   </div>
+                // </div>
               )}
 
               {/* ============================== TAB : SNAPSHOTS ============================== */}

@@ -89,8 +89,9 @@ body {
 /* Gauges */
 .gauges.grid-3x3 {
   display: grid;
-  grid-template-columns: repeat(4, auto);
-  gap: 12px;
+  grid-template-columns: repeat(9, 1fr);
+  gap: 8px;
+  align-items: center;
   justify-items: center;
 }
 
@@ -118,6 +119,7 @@ body {
 } */
 
 @keyframes blink {
+
   0%,
   100% {
     border-color: transparent;
@@ -141,11 +143,9 @@ body {
 .fan-status-line,
 .alarm-line {
   display: flex;
-  align-items: center;
-  /* justify-content: center; */
-  gap: 30px;
-  /* flex-wrap: wrap; */
-  margin: -10px 0;
+  flex-wrap: wrap;
+  gap: 14px;
+  align-items: flex-start;
 }
 
 .fan-light,
@@ -157,10 +157,11 @@ body {
 
 .fan-light-circle,
 .alarm-led {
-  width: 18px;
-  height: 18px;
+  width: 14px;
+  height: 14px;
   background-color: #555;
   box-shadow: 0 0 6px #000;
+  margin-bottom: 4px;
 }
 
 /* .pass::before {
@@ -183,15 +184,18 @@ body {
   color: #ccc;
   margin-top: 2px;
   text-wrap: wrap;
-  max-width: 80px; /* Limit width to force wrapping */
-  word-break: break-word; /* Allow long words to break */
+  max-width: 80px;
+  /* Limit width to force wrapping */
+  word-break: break-word;
+  /* Allow long words to break */
   text-align: center;
-  line-height: 1.2; /* Improve readability of wrapped text */
+  line-height: 1.2;
+  /* Improve readability of wrapped text */
 }
 
 .alarm-attempt {
   color: white;
-  font-size: 0.75rem;
+  font-size: 9px;
 }
 
 .alarm-led.active {
@@ -205,6 +209,7 @@ body {
   box-shadow: 0 0 12px red;
   animation: blinkAlarm 1s infinite alternate;
 }
+
 .alarm-led.wait {
   background-color: white;
   box-shadow: 0 0 12px white;
@@ -217,6 +222,7 @@ body {
   animation: blinkAlarm 1s infinite alternate;
   content: "1 Attempts Left";
 }
+
 .alarm-led.pass-danger {
   background-color: yellow;
   box-shadow: 0 0 12px yellow;
@@ -309,8 +315,7 @@ body {
 }
 
 .power-btn.active::before {
-  filter: brightness(0) saturate(100%) invert(48%) sepia(98%) saturate(1733%)
-    hue-rotate(82deg);
+  filter: brightness(0) saturate(100%) invert(48%) sepia(98%) saturate(1733%) hue-rotate(82deg);
 }
 
 .lock-btn {
@@ -386,19 +391,29 @@ body {
 
 .device-tile.disconnected {
   order: 1;
-} /* Show online devices first */
+}
+
+/* Show online devices first */
 .device-tile.status-alarm {
   order: 2;
-} /* Then offline devices */
+}
+
+/* Then offline devices */
 .device-tile.gauge-alarm {
   order: 3;
-} /* Then warning state */
+}
+
+/* Then warning state */
 .device-tile.connected {
   order: 3;
-} /* Then warning state */
+}
+
+/* Then warning state */
 .device-tile.disconnected {
   order: 0;
-} /* Selected device always on top */
+}
+
+/* Selected device always on top */
 
 /* Map markers */
 .custom-marker {
@@ -994,7 +1009,7 @@ body {
   justify-content: right;
 } */
 
-.pdu-image{  
+.pdu-image {
   background-color: white;
   padding: 10px;
   margin: 30px;
@@ -1002,7 +1017,7 @@ body {
   height: auto;
 }
 
-.test-select{
+.test-select {
   margin-top: 20px;
 }
 
@@ -1088,7 +1103,7 @@ body {
   cursor: pointer;
   transition: 0.2s;
   height: 54px;
-  min-width: 220px; 
+  min-width: 220px;
 }
 
 .ats-run-btn:hover {
@@ -1116,4 +1131,146 @@ body {
   margin-bottom: 20px;
   font-size: 24px;
   font-weight: 700;
+}
+
+
+
+
+
+
+.status-layout {
+  display: grid;
+  grid-template-columns: 1fr 1.2fr;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.status-left,
+.status-right {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.status-card {
+  background: #202020;
+  border: 1px solid #3b3b3b;
+  border-radius: 10px;
+  padding: 12px;
+}
+
+.status-card h4 {
+  margin: 0 0 10px;
+}
+
+.status-box {
+  width: 60px;
+  height: 60px;
+
+  border: 1px solid #444;
+  border-radius: 6px;
+  padding: 4px;
+
+  background: #232323;
+
+  display: flex;
+  flex-direction: column;
+
+  justify-content: center;
+  align-items: center;
+
+  text-align: center;
+
+  transition: .2s;
+}
+
+.status-box:hover {
+  border-color: #00c8ff;
+}
+
+.status-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+  gap: 12px;
+}
+
+.test-list-panel {
+  margin-top: 15px;
+
+  background: #181818;
+
+  border: 1px solid #333;
+
+  border-radius: 8px;
+
+  padding: 12px;
+}
+
+.test-list-header {
+  display: flex;
+
+  justify-content: space-between;
+
+  align-items: center;
+
+  margin-bottom: 10px;
+}
+
+.test-list-header h4 {
+  margin: 0;
+
+  font-size: 16px;
+}
+
+.test-actions {
+  display: flex;
+
+  gap: 8px;
+}
+
+.test-actions button {
+  padding: 4px 10px;
+
+  font-size: 12px;
+
+  cursor: pointer;
+}
+
+.test-list {
+
+  display: grid;
+
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+
+  gap: 8px;
+
+  max-height: 180px;
+
+  overflow-y: auto;
+
+  padding-right: 6px;
+}
+
+.test-item {
+
+  display: flex;
+
+  align-items: center;
+
+  gap: 8px;
+
+  padding: 6px 8px;
+
+  border-radius: 6px;
+
+  background: #242424;
+
+  cursor: pointer;
+
+  font-size: 14px;
+}
+
+.test-item:hover {
+
+  background: #303030;
 }
