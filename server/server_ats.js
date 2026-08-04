@@ -1,4 +1,7 @@
-require("dotenv").config();
+const path = require("path");
+require("dotenv").config({
+  path: path.join(__dirname, "/.env")
+});
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const User = require("./models/User");
@@ -10,12 +13,29 @@ const bodyParser = require("body-parser");
 const SensorReading = require("./models/SensorReading");
 const thresholds = require("./thresholds");
 const fs = require("fs");
-const path = require("path");
 const axios = require('axios');
 const { spawn } = require('child_process');
 const WebSocket = require('ws');
 
+
+const { startImageSimulator } = require("./imageSimulator.js");
+
+startImageSimulator();
+
+
+
 const atsRuntime = require("./ATS/atsRuntime");
+
+const logFile = path.join(
+  require("os").homedir(),
+  "Desktop",
+  "server-start.log"
+);
+
+fs.appendFileSync(
+  path.join(require("os").homedir(), "Desktop", "server-start.log"),
+  "server_ats.js started\n"
+);
 
 const app = express();
 const HTTP_PORT = process.env.HTTP_PORT || 5000;
@@ -30,6 +50,30 @@ const { runTests } = require("./ATS/atsRunner");
 const { reportWriter } = require("./ATS/reportWriter");
 app.use(cors());
 
+// ======= LOGS =======
+const FAN = false
+
+// ======= LOGS =======
+
+
+process.on("uncaughtException", (err) => {
+  fs.appendFileSync(
+    path.join(require("os").homedir(), "Desktop", "startup-error.log"),
+    "\n=== UNCAUGHT EXCEPTION ===\n" +
+    err.stack +
+    "\n"
+  );
+});
+
+process.on("unhandledRejection", (err) => {
+  fs.appendFileSync(
+    path.join(require("os").homedir(), "Desktop", "startup-error.log"),
+    "\n=== UNHANDLED REJECTION ===\n" +
+    (err?.stack || err) +
+    "\n"
+  );
+});
+
 // WebSocket Server
 const WS_PORT = process.env.WS_PORT || 8080;
 const wss = new WebSocket.Server({ port: WS_PORT });
@@ -39,6 +83,7 @@ const wsClients = new Set();
 // WEBSOCKET CONNECTION HANDLING
 wss.on('connection', (ws, req) => {
   console.log('🔌 WebSocket client connected from:', req.socket.remoteAddress);
+  fs.appendFileSync(logFile, "Websocket connected\n");
   wsClients.add(ws);
 
   // Send immediate welcome message
@@ -88,6 +133,7 @@ wss.on('connection', (ws, req) => {
 
 wss.on('listening', () => {
   console.log(`✅ WebSocket server running on port ${WS_PORT}`);
+  fs.appendFileSync(logFile, "Websocket server running\n");
 });
 
 // WEBSOCKET BROADCAST FUNCTION
@@ -142,6 +188,8 @@ setInterval(() => {
     console.log(`🔌 WebSocket Status: ${wsClients.size} active clients`);
   }
 }, 30000); // Every 30 seconds
+
+fs.appendFileSync(logFile, "started backend \n");
 
 // ===================== DEBUG SYSTEM =====================
 const debug = {
@@ -220,6 +268,8 @@ mongoose
   .connect(process.env.MONGO_URI)
   .then(() => console.log("MongoDB connected"))
   .catch((err) => console.error("MongoDB connection error:", err.message));
+
+fs.appendFileSync(logFile, "Mongo connected\n");
 
 
 
@@ -403,10 +453,15 @@ app.post("/api/log-command", (req, res) => {
   });
 });
 
+
 // ✅ Serve snapshot images
 app.get("/api/snapshots/:imageName", (req, res) => {
   const imageName = req.params.imageName;
-  const imagePath = path.join("C:/snaps", imageName);
+
+  const rawMac = req.query.mac;
+  const macSuffix = rawMac.slice(8).replace(/[. ]/g, "_"); // Gets characters 9-16 
+
+  const imagePath = path.join(`C:/snaps/${macSuffix}`, imageName);
 
   if (!fs.existsSync(imagePath)) {
     return res.status(404).json({ error: "Image not found" });
@@ -417,15 +472,41 @@ app.get("/api/snapshots/:imageName", (req, res) => {
 
 // ✅ Get list of available snapshots
 app.get("/api/snapshots", (req, res) => {
-  const snapshotsDir = "C:/snaps";
+  const snapshotsOutputDir = "C:/snaps";
 
   try {
-    const files = fs
-      .readdirSync(snapshotsDir)
-      .filter((file) => /\.(jpg|jpeg|png|gif)$/i.test(file))
-      .sort()
-      .slice(-15);
+    const rawMac = req.query.mac;
 
+    // Validate MAC address exists
+    if (!rawMac) {
+      return res.status(400).json({ error: "MAC address is required" });
+    }
+
+    const macSuffix = rawMac.slice(8).replace(/[. ]/g, "_"); // Gets characters 9-16 (0-indexed)
+    const snapshotsDir = `${snapshotsOutputDir}/${macSuffix}`;
+
+    let files = [];
+    try {
+      files = fs
+        .readdirSync(snapshotsDir)
+        .filter((file) => /\.(jpg|jpeg|png|gif)$/i.test(file))
+        // Sorting images in descending order based on timestamp in filename
+        .sort((a, b) => {
+          // Extract YYMMDDHHMMSS format for comparison
+          const getKey = (filename) => {
+            const match = filename.match(/_(\d{2})_(\d{2})_(\d{2})_(\d{2})_(\d{2})_(\d{2})\./);
+            return match ? match[3] + match[2] + match[1] + match[4] + match[5] + match[6] : '0';
+          };
+          return getKey(b).localeCompare(getKey(a));
+        })
+        .slice(0, 15); // Get last 15 images
+      console.log("snapshots: ", files)
+    } catch (dirErr) {
+
+      console.error("Snapshots directory not found or error reading:", dirErr.message);
+      // Return empty array if directory not found
+      files = [];
+    }
     res.json(files);
   } catch (err) {
     console.error("Error reading snapshots:", err);
@@ -1003,7 +1084,9 @@ const tcpServer = net.createServer((socket) => {
       // debug.lastPacketTime = Date.now();
       // debug.bufferStats.discardedBytes.totalBytes += data.length;
 
-      console.log(`Raw data received ${data.toString('hex')} with length (${data.length} bytes) from`, clientInfo);
+      // console.log(`Raw data received ${data.toString('hex')} with length (${data.length} bytes) from`, clientInfo);
+      fs.appendFileSync(logFile, "Data received\n");
+
       // console.log(`Raw data hex preview:`, data.toString('hex').substring(0, 100) + '...');
 
       // buffer = Buffer.concat([buffer, data]);
@@ -1169,8 +1252,8 @@ const tcpServer = net.createServer((socket) => {
           fanStatus[i] = (fanStatusBits >> (i * 2)) & 0x03; // 0=off, 1=healthy, 2=faulty
         }
 
-        console.log("Fan Status: ", fanStatus);
-        console.log(fanLevel1Running, fanLevel2Running, fanLevel3Running, fanLevel4Running);
+        if (FAN) console.log("Fan Status: ", fanStatus);
+        if (FAN) console.log(fanLevel1Running, fanLevel2Running, fanLevel3Running, fanLevel4Running);
 
         // console.log("Fan Status: ", fanStatus);
 
@@ -1179,111 +1262,10 @@ const tcpServer = net.createServer((socket) => {
           alreadyReplied = 40;
         }
 
+        console.log("Padding: ", padding);
         // ========== CAMERA LOGIC ==========
-        if ((padding === 0x43) && (doorStatus === "OPEN")) {
+        if ((padding == 0x43)) {
           console.log("⚡Camera Function runs ...⚡")
-
-          //   let timestamp = getFormattedDateTime("path");
-          //   const snapshotFileName = `image_${timestamp}.jpg`;
-
-
-          /* 
-            Function that captures snapshots from Hi-Focus and Sparsh Cameras. 
-          */
-          //   try {
-          //     console.log("⏰ Snapshot for Hi-Focus Camera ⏰");
-
-          //     const cameraDetails = await Device.findOne({ mac }, 'ipCamera').lean();
-          //     const cameraMake = cameraDetails.ipCamera.type.trim();
-          //     console.log("Camera Make: ", cameraMake);
-
-          //     if (cameraMake === 'H') {
-          //       console.log("⏰ Snapshot for HiFocus Camera ⏰");
-
-          //       const ip = cameraDetails.ipCamera.ip.trim();
-          //       const snapshotOutputDir_MAC = path.join(snapshotOutputDir, mac.slice(8).replace(/[: ]/g, '_'));
-
-          //       // Using ffmpeg to capture snapshot from the HI-Focus Camera
-          //       const args = [
-          //         '-rtsp_transport', 'tcp',
-          //         '-i', `rtsp://${ip}/media/video1`,
-          //         '-frames:v', '1',
-          //         `${snapshotOutputDir_MAC}/${snapshotFileName}`
-          //       ];
-
-          //       const ffmpeg = spawn('ffmpeg', args);
-
-          //       // For Debugging
-          //       ffmpeg.stderr.on('data', (data) => {
-          //         console.log(`ffmpeg: ${data}`);
-          //       });
-
-          //       ffmpeg.on('close', (code) => {
-          //         if (code === 0) {
-          //           if (eMS_LOGS) console.log("Captured successfully...");
-          //         } else {
-          //           console.error(`ffmpeg process exited with code ${code}`);
-          //         }
-          //       });
-
-          //       ffmpeg.on('error', (err) => {
-          //         console.error(`❌ Failed to start ffmpeg:`, err.message);
-          //       });
-
-          //     } else {
-          //       console.log("⏰ Snapshot for Sparsh Camera ⏰");
-
-          //       console.log("Timestamp: ", timestamp);
-
-          //       // Extracting Camera IP from DB for Sparsh Camera
-          //       let camIP = cameraDetails.ipCamera.ip.trim();
-
-          //       // Added 3 seconds delay for first snapshot capture to wait for opening the door 
-          //       setTimeout(() => {
-          //         let url = `https://${camIP}/CGI/command/snap?channel=01`;
-          //         console.log("📸 Capturing from URL:", url);
-
-          //         const snapshotOutputDir_MAC = path.join(snapshotOutputDir, mac.slice(8).replace(/[. ]/g, '_'));
-          //         const snapshotOutputPath = path.join(snapshotOutputDir_MAC, snapshotFileName);
-
-          //         if (eMS_LOGS) console.log("🔴outputDir: ", snapshotOutputDir, "🔴");
-
-          //         try {
-          //           if (!fs.existsSync(snapshotOutputDir)) {
-          //             fs.mkdirSync(snapshotOutputDir, { recursive: true });
-          //             console.log(`📁 Created directory: ${snapshotOutputDir}`);
-          //           }
-          //         } catch (err) {
-          //           console.error(`❌ Failed to create directory ${snapshotOutputDir}:`, err.message);
-          //         }
-
-          //         axios({
-          //           method: 'GET',
-          //           url: url,
-          //           responseType: 'stream',
-          //           timeout: 10000
-          //         })
-          //           .then((response) => {
-          //             const writer = fs.createWriteStream(snapshotOutputPath);
-          //             response.data.pipe(writer);
-
-          //             return new Promise((resolve, reject) => {
-          //               writer.on('finish', resolve);
-          //               writer.on('error', reject);
-          //             });
-          //           })
-          //           .then(() => {
-          //             if (eMS_LOGS) console.log(`✅ Snapshot captured: ${snapshotFileName}`);
-          //           })
-          //           .catch((error) => {
-          //             console.error(`❌ Error capturing snapshot: ${error.message}`);
-          //           });
-          //       }, 3000); // 3 second delay
-          //     }
-          //   } catch (err) {
-          //     console.error(`Error occured while caputuring snapshots: ${err}`)
-          //   }
-          // }
 
           // ===================== NEW CAMERA LOGIC | DFR CAMERA =====================
 
@@ -1297,6 +1279,10 @@ const tcpServer = net.createServer((socket) => {
           const outputPath = path.join(snapshotOutputDir_MAC, snapshotFileName);
           const exePath = process.env.READIMAGE_EXE_PATH || path.join(__dirname, "ReadImage_recovered_5.exe");
 
+
+          if (!fs.existsSync(snapshotOutputDir_MAC)) {
+            fs.mkdirSync(snapshotOutputDir_MAC, { recursive: true });
+          }
 
           // HANDLING EXE FILE READ TIMEOUT
           const timeoutMs = Number.parseInt(process.env.READIMAGE_TIMEOUT_MS || "45000", 10);
@@ -1364,6 +1350,7 @@ const tcpServer = net.createServer((socket) => {
 
               // SUCCESS
               if (code === 0) return resolve();
+              console.log("Capturing Image")
 
               // Failure with exit code and optional stderr
               reject(new Error(`ReadImage exited with code ${code}${stderr ? `: ${stderr.trim()}` : ""}`));
@@ -1377,6 +1364,7 @@ const tcpServer = net.createServer((socket) => {
           * - Must exist
           * - Must not be empty
           */
+          console.log("Image Check")
           let stat;
           try {
             stat = fs.statSync(outputPath);
@@ -1404,6 +1392,7 @@ const tcpServer = net.createServer((socket) => {
           // }
 
           // ===================== NEW CAMERA LOGIC | DFR CAMERA =====================
+          console.log("⚡Image saved⚡")
         }
 
 

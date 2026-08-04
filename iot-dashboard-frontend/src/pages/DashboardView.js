@@ -66,6 +66,8 @@ function DashboardView() {
   const [fanTestStatus, setFanTestStatus] = useState(false); // Waiting for Fan Test Execution
   const [pduTestStatus, setPduTestStatus] = useState(false); // Waiting for PDU Test Execution
 
+  const [testResults, setTestResults] = useState([]);
+
   const [generateReport, setGenerateReport] = useState(true);
 
   const isTestRunning = awaitingCommand || fanTestStatus || pduTestStatus;
@@ -415,8 +417,16 @@ function DashboardView() {
 
       ws.onmessage = (event) => {
         try {
+          console.log("RAW:", event.data);
           const message = JSON.parse(event.data);
-          console.log('📨 WebSocket message type:', message.type);
+          console.log("================================");
+          console.log("TYPE:", message.type);
+          console.log("MESSAGE:", message);
+          console.log("================================");
+
+          // const message = JSON.parse(event.data);
+
+          console.log("PARSED:", JSON.stringify(message, null, 2));
 
           // Getting New Reading from Socket
           if (message.type === 'NEW_READING') {
@@ -449,6 +459,17 @@ function DashboardView() {
                 type: 'info'
               });
 
+              console.log("Stored names:", testResults);
+              console.log("Incoming:", message.name);
+
+              setTestResults(prev =>
+                prev.map(t =>
+                  t.id === message.testFile
+                    ? { ...t, status: "running" }
+                    : t
+                )
+              );
+
               // Auto-close after 10 seconds
               setTimeout(() => {
                 setNotification(null);
@@ -458,6 +479,23 @@ function DashboardView() {
 
           if (message.type === 'TEST_COMPLETED') {
             setTestStatus(`${message.status === 'passed' ? '✅' : '❌'} ${message.name}: ${message.output}`);
+
+            console.log("Message: ", message);
+
+            setTestResults(prev =>
+              prev.map(t =>
+                t.id === message.testFile
+                  ? {
+                    ...t,
+                    status:
+                      message.status === "passed"
+                        ? "passed"
+                        : "failed",
+                    duration: message.duration || "-"
+                  }
+                  : t
+              )
+            );
           }
 
           // Handle multi-step test messages
@@ -672,6 +710,33 @@ function DashboardView() {
     setAwaitingCommand(true); // Shows 'Running...' state
     setShowATSPanel(false);
 
+    const initialResults = [];
+
+    // Frontend tests
+    initialResults.push({
+      name: "Visual Test",
+      status: "waiting",
+      duration: "-"
+    });
+
+    initialResults.push({
+      name: "Burn-In Test",
+      status: "waiting",
+      duration: "-"
+    });
+
+    // Backend tests
+    selectedTests.forEach(test => {
+      initialResults.push({
+        id: test,
+        name: test.replace(".srv", ""),
+        status: "waiting",
+        duration: "-"
+      });
+    });
+
+    setTestResults(initialResults);
+
     if (testLevel === "green-pcb") {
       if (!basePcbSrNo.trim()) {
         swal.fire({
@@ -715,8 +780,19 @@ function DashboardView() {
       //   text: 'Is Visual inspection passed?',
       //   showCancelButton: true,
       //   confirmButtonText: 'Pass',
-      //   cancelButtonText: "Fail"
-      // })
+
+      const visualPassed = v.isConfirmed;
+
+      setTestResults(prev =>
+        prev.map(t =>
+          t.name === "Visual Test"
+            ? {
+              ...t,
+              status: visualPassed ? "passed" : "failed"
+            }
+            : t
+        )
+      );
 
       frontendResults.push({
         name: 'Visual Test',
@@ -1345,6 +1421,56 @@ function DashboardView() {
             </button>
           )}
 
+        </div>
+
+        <div className="live-test-status">
+          <h3>Live Test Status</h3>
+
+          <table>
+            <thead>
+              <tr>
+                <th>Test</th>
+                <th>Status</th>
+                <th>Time</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {testResults.map((test, index) => (
+                <tr key={index}>
+                  <td>{test.name}</td>
+
+                  <td>
+                    {test.status === "waiting" && (
+                      <span className="status waiting">
+                        ⏳ Waiting
+                      </span>
+                    )}
+
+                    {test.status === "running" && (
+                      <span className="status running">
+                        🔄 Running
+                      </span>
+                    )}
+
+                    {test.status === "passed" && (
+                      <span className="status passed">
+                        ✅ Passed
+                      </span>
+                    )}
+
+                    {test.status === "failed" && (
+                      <span className="status failed">
+                        ❌ Failed
+                      </span>
+                    )}
+                  </td>
+
+                  <td>{test.duration}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
 
         {showATSPanel && (
@@ -1996,7 +2122,7 @@ function DashboardView() {
               {/* ============================== TAB : SNAPSHOTS ============================== */}
               <button
                 className="tabs-button"
-                onClick={() => setActiveTab("gauges")}
+                onClick={() => setActiveTab("snapshots")}
               >
                 Snapshots
               </button>
@@ -2018,7 +2144,7 @@ function DashboardView() {
                       {selectedImage.split("/").pop()} (
                       {snapshots.findIndex(
                         (img) =>
-                          `${process.env.REACT_APP_API_URL}/api/snapshots/${img}` ===
+                          `${process.env.REACT_APP_API_URL}/api/snapshots/${img}?mac=${selectedMac}` ===
                           selectedImage
                       ) + 1}{" "}
                       of {snapshots.length})
@@ -2034,14 +2160,14 @@ function DashboardView() {
                           e.stopPropagation();
                           const currentIndex = snapshots.findIndex(
                             (img) =>
-                              `${process.env.REACT_APP_API_URL}/api/snapshots/${img}` ===
+                              `${process.env.REACT_APP_API_URL}/api/snapshots/${img}?mac=${selectedMac}` ===
                               selectedImage
                           );
                           const prevIndex =
                             (currentIndex - 1 + snapshots.length) %
                             snapshots.length;
                           setSelectedImage(
-                            `${process.env.REACT_APP_API_URL}/api/snapshots/${snapshots[prevIndex]}`
+                            `${process.env.REACT_APP_API_URL}/api/snapshots/${snapshots[prevIndex]}?mac=${selectedMac}`
                           );
                         }}
                       >
@@ -2053,13 +2179,13 @@ function DashboardView() {
                           e.stopPropagation();
                           const currentIndex = snapshots.findIndex(
                             (img) =>
-                              `${process.env.REACT_APP_API_URL}/api/snapshots/${img}` ===
+                              `${process.env.REACT_APP_API_URL}/api/snapshots/${img}?mac=${selectedMac}` ===
                               selectedImage
                           );
                           const nextIndex =
                             (currentIndex + 1) % snapshots.length;
                           setSelectedImage(
-                            `${process.env.REACT_APP_API_URL}/api/snapshots/${snapshots[nextIndex]}`
+                            `${process.env.REACT_APP_API_URL}/api/snapshots/${snapshots[nextIndex]}?mac=${selectedMac}`
                           );
                         }}
                       >
@@ -2080,7 +2206,6 @@ function DashboardView() {
 
               {activeTab === "snapshots" && (
                 <div className="camera-tab">
-                  <h4>🖼️ Snapshots</h4>
                   <div className="snapshots-grid">
                     {snapshots.length > 0 ? (
                       snapshots.map((filename, i) => (

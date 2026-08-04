@@ -1180,7 +1180,6 @@ body {
   align-items: center;
 
   text-align: center;
-
   transition: .2s;
 }
 
@@ -1196,81 +1195,104 @@ body {
 
 .test-list-panel {
   margin-top: 15px;
-
   background: #181818;
-
   border: 1px solid #333;
-
   border-radius: 8px;
-
   padding: 12px;
 }
 
 .test-list-header {
   display: flex;
-
   justify-content: space-between;
-
   align-items: center;
-
   margin-bottom: 10px;
 }
 
 .test-list-header h4 {
   margin: 0;
-
   font-size: 16px;
 }
 
 .test-actions {
   display: flex;
-
   gap: 8px;
 }
 
 .test-actions button {
   padding: 4px 10px;
-
   font-size: 12px;
-
   cursor: pointer;
 }
 
 .test-list {
-
   display: grid;
-
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-
   gap: 8px;
-
   max-height: 180px;
-
   overflow-y: auto;
-
   padding-right: 6px;
 }
 
 .test-item {
-
   display: flex;
-
   align-items: center;
-
   gap: 8px;
-
   padding: 6px 8px;
-
   border-radius: 6px;
-
   background: #242424;
-
   cursor: pointer;
-
   font-size: 14px;
 }
 
 .test-item:hover {
-
   background: #303030;
+}
+
+.live-test-status{
+    margin-top:15px;
+    background:#1f2937;
+    border-radius:8px;
+    padding:12px;
+}
+
+.live-test-status h3{
+    margin-bottom:10px;
+    color:#fff;
+}
+
+.live-test-status table{
+    width:100%;
+    border-collapse:collapse;
+}
+
+.live-test-status th{
+    text-align:left;
+    padding:8px;
+    color:#ccc;
+    border-bottom:1px solid #444;
+}
+
+.live-test-status td{
+    padding:8px;
+    border-bottom:1px solid #333;
+}
+
+.status{
+    font-weight:bold;
+}
+
+.waiting{
+    color:#999;
+}
+
+.running{
+    color:#4fc3f7;
+}
+
+.passed{
+    color:#4caf50;
+}
+
+.failed{
+    color:#f44336;
 }

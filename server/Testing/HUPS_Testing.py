@@ -23,7 +23,7 @@ register_values = {
     "021C": "000C",  # 12V
 
     # LOAD CURRENT
-    "021E": "1518",  # 5400
+    "021E": "12C0",  # 5400
 
     # HUPS - MPPT 1 OUTPUT VOLT
     # EMS - OUTPUT VOLTAGE
@@ -153,7 +153,7 @@ def read_serial_as_hex(port: str, baudrate: int = 9600, timeout: float = 1.0):
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         print("Usage: python read_serial_hex.py <PORT> [BAUDRATE]")
-        print("Example: python read_serial_hex.py COM3 115200")
+        print("Example: python read_serial_hex.py COM3 9600")
         sys.exit(1)
 
     # USE BAUD RATE IS 9600 FOR 'HUPS' 
