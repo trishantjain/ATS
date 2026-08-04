@@ -111,9 +111,7 @@ async function reportWriter({
 
 
     if (destination === "iMoni") {
-        const reportFolder = generateReport === false
-            ? "log-writer"
-            : "RPT";
+        const reportFolder = "RPT";
 
         baseDir = path.join(
             baseDir,
@@ -406,6 +404,81 @@ async function reportWriter({
             safeMac,
             baseDir
         });
+    }
+
+
+    // await workbook.xlsx.writeFile(filePath);
+    // console.log(`✅ Report Generated: ${fileName}`);
+
+    // ================= GENERATE ALL PASSED REPORT =================
+    if (destination === "iMoni" && generateReport) {
+
+        const allPassedDir = path.join(
+            __dirname,
+            "..",
+            DESTINATION_MAP[destination],
+            REPORT_SUBDIR_MAP[testLevel] || "full-controller",
+            "AllPassed"
+        );
+
+        if (!fs.existsSync(allPassedDir)) {
+            fs.mkdirSync(allPassedDir, { recursive: true });
+        }
+
+        // Select correct All Passed template
+        let allPassedTemplate;
+
+        if (testLevel === "green-pcb") {
+            allPassedTemplate = path.join(
+                __dirname,
+                "./template/green-pcb_allpassed_template.xlsx"
+            );
+        } else {
+            allPassedTemplate = path.join(
+                __dirname,
+                "./template/srms_allpassed_template.xlsx"
+            );
+        }
+
+        const passedWorkbook = new ExcelJS.Workbook();
+        await passedWorkbook.xlsx.readFile(allPassedTemplate);
+
+        const passedWorksheet = passedWorkbook.getWorksheet(1);
+
+        if ((destination === "iMoni") && (testLevel === "green-pcb")) {
+
+            passedWorksheet.getCell("B2").value = reportNo;
+            passedWorksheet.getCell("B3").value = basePcbSrNo || "NA";
+            passedWorksheet.getCell("B4").value = getFormattedDateTime();
+            passedWorksheet.getCell("B5").value = "iMoni Base PCB";
+            passedWorksheet.getCell("B6").value = runResult.summary.total;
+
+        }
+        else {
+
+            passedWorksheet.getCell("B2").value = reportNo;
+            passedWorksheet.getCell("B3").value = unitSerialNo || "NA";
+            passedWorksheet.getCell("B4").value = getFormattedDateTime();
+            passedWorksheet.getCell("B5").value = "iMoni Assembly";
+            passedWorksheet.getCell("B6").value = mac;
+
+            passedWorksheet.getCell("B7").value = runResult.summary.total;
+
+            passedWorksheet.getCell("C7").value = cpuSrNo || "NA";
+            passedWorksheet.getCell("D7").value = basePcbSrNo || "NA";
+            passedWorksheet.getCell("E7").value = cameraSrNo || "NA";
+            passedWorksheet.getCell("F7").value = psuSrNo || "NA";
+        }
+
+
+        const allPassedFilePath = path.join(
+            allPassedDir,
+            fileName
+        );
+
+        await passedWorkbook.xlsx.writeFile(allPassedFilePath);
+
+        console.log(`✅ All Passed Report Generated: ${fileName}`);
     }
 
     return { filePath, fileName };

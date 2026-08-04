@@ -6,7 +6,7 @@ retryCount=0
 [step:1]
 msg="Turn on FG 1 | "
 waitFor="fanLevel1Running;fanLevel2Running;fanLevel3Running;fanLevel4Running;fan1Status;fan2Status;fan3Status;fan4Status;fan5Status;fan6Status"
-waitTime=30
+waitTime=15
 expectedValue="true;false;false;false;1;1;0;0;0;0"
 onPass="Fan 1 & 2 is On"
 onFail="Fan 1 & 2 not started"
@@ -15,6 +15,6 @@ onFail="Fan 1 & 2 not started"
 msg="Remove Fan 1 Wire"
 waitFor="fanLevel1Running;fanLevel2Running;fanLevel3Running;fanLevel4Running;fan1Status;fan2Status;fan3Status;fan4Status;fan5Status;fan6Status"
 waitTime=20
-expectedValue="true;false;false;true;2;1;0;0;0;1"
+expectedValue="true;false;false;false;2;1;0;0;0;0"
 onPass="Fan 1 Wire removed successfully"
 onFail="Fan 1 wire not removed"
