@@ -451,7 +451,7 @@ async function reportWriter({
             passedWorksheet.getCell("B3").value = basePcbSrNo || "NA";
             passedWorksheet.getCell("B4").value = getFormattedDateTime();
             passedWorksheet.getCell("B5").value = "iMoni Base PCB";
-            passedWorksheet.getCell("B6").value = runResult.summary.total;
+            // passedWorksheet.getCell("B6").value = runResult.summary.total;
 
         }
         else {
@@ -462,7 +462,7 @@ async function reportWriter({
             passedWorksheet.getCell("B5").value = "iMoni Assembly";
             passedWorksheet.getCell("B6").value = mac;
 
-            passedWorksheet.getCell("B7").value = runResult.summary.total;
+            // passedWorksheet.getCell("B7").value = runResult.summary.total;
 
             passedWorksheet.getCell("C7").value = cpuSrNo || "NA";
             passedWorksheet.getCell("D7").value = basePcbSrNo || "NA";
