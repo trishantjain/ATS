@@ -84,6 +84,7 @@ const runTests = async ({
                         // Start new step
                         currentStep = {
                             stepNumber: parseInt(stepMatch[1]),
+                            type: "",
                             msg: "",
                             waitFor: "",
                             waitTime: 20,
@@ -115,6 +116,9 @@ const runTests = async ({
                             currentStep.onFail = line.substring(7).replace(/["\']/g, '');
                         } else if (line.startsWith('cameraIp=')) {
                             currentStep.cameraIp = line.substring(9).replace(/["\']/g, '');
+                        }
+                        else if (line.startsWith('type=')) {
+                            currentStep.type = line.substring(5).replace(/["']/g, '');
                         }
                     }
                     // PROPERTIES BEFORE THE STEPS
@@ -216,6 +220,33 @@ const runTests = async ({
                             waitTime: step.waitTime || 20,
                             timestamp: getFormattedDateTime()
                         });
+
+                        if (step.type === "instruction") {
+                            console.log(`📖 Instruction Step ${stepNumber}`);
+
+                            await new Promise(resolve =>
+                                setTimeout(resolve, (step.waitTime || 10) * 1000)
+                            );
+
+                            stepResults.push({
+                                step: stepNumber,
+                                status: "passed",
+                                message: step.onPass || "Instruction completed"
+                            });
+
+                            onStatus?.({
+                                type: "STEP_COMPLETED",
+                                testFile,
+                                name: testResult.name,
+                                stepNumber,
+                                totalSteps: testConfig.steps.length,
+                                status: "passed",
+                                message: step.onPass || "Instruction completed",
+                                timestamp: getFormattedDateTime()
+                            });
+
+                            continue;
+                        }
 
                         // Wait for sensor value to increase by the defined amount
                         const stepResult = await new Promise((resolve) => {
