@@ -93,10 +93,18 @@ while True:
         # Change SYSID
         type_command(tn, f"cfg sysid 00 17 34 51 68 {serial}")
 
-        # Read configuration
+        # LDR CMD
+        type_command(tn, "cfg ldr 3000")
+        type_command(tn, "cfg save")
+
+        type_command(tn, "camcfg par 31 04")
+
+        # SMOKE CMD
+        type_command(tn, "cfg smoke 3")
 
         type_command(tn, "cfg save")
 
+        # Read configuration
         cfg_read = type_command(tn, "cfg read")
 
         type_command(tn, "erase reboot yes")
