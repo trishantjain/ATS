@@ -5,9 +5,15 @@ fail="Inside Temperature Test failed"
 retryCount=0
 
 [step:1]
+type="instruction"
+msg="Prepare Heat Gun"
+waitTime=4
+onPass="Heat gun ready."
+
+[step:2]
 msg="Inside Temperature Sensor test started"
 waitFor="insideTemperature"
-waitTime=30
+waitTime=25
 increasedBy=5
 onPass="Inside Temperature sensor successfully tested"
 onFail="Inside Temperature not increased by 5°C"

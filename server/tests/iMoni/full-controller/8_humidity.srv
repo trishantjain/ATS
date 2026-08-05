@@ -1,0 +1,19 @@
+name="Humidity Test"
+type="sensor"
+pass="Humidity successfully completed"
+fail="Humidity Test failed"
+retryCount=0
+
+[step:1]
+type="instruction"
+msg="Prepare Heat Gun"
+waitTime=10
+onPass="Heat gun ready."
+
+[step:2]
+msg="Humidity Sensor test started"
+waitFor="humidity"
+waitTime=25
+increasedBy=5
+onPass="Humidity alarm successfully"
+onFail="Humidity alarm not turned on"
