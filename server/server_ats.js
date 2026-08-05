@@ -524,7 +524,7 @@ function getIMoniTestDir(testLevel) {
     return path.join(__dirname, "tests/iMoni/green-pcb");
   }
 
-  return path.join(__dirname, "tests/iMoni");
+  return path.join(__dirname, "tests/iMoni/full-controller");
 }
 
 
