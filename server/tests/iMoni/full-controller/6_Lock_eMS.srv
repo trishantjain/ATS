@@ -14,7 +14,7 @@ onFail="Door is already open"
 [step:2]
 msg="Enter admin password through eMS to open Lock"
 waitFor="lockStatus"
-waitTime=30
+waitTime=15
 expectedValue="OPEN"
 onPass="Door opened successfully"
 onFail="Door not opened"
@@ -22,7 +22,7 @@ onFail="Door not opened"
 [step:3]
 msg="Wait for closing the door"
 waitFor="lockStatus"
-waitTime=40
+waitTime=30
 expectedValue="CLOSED"
 onPass="Door closed successfully"
 onFail="Door not closed"
