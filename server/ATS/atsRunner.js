@@ -401,7 +401,6 @@ const runTests = async ({
                                 timestamp: getFormattedDateTime()
                             });
 
-
                             // Stop on first failure (or continue based on config)
                             if (testConfig.continueOnFail) {
                                 continue;   // next step
@@ -982,7 +981,11 @@ const runTests = async ({
                             // Stop on first failure (or continue based on config)
                             // break;
 
-                            continue;
+                            // continue;
+                            if (testConfig.continueOnFail) {
+                                continue;   // next step
+                            }
+                            break;          // stop this test -> next test file
                         }
                     }
 

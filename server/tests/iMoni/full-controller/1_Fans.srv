@@ -2,6 +2,7 @@ name="Fan Test"
 pass="Fan test successfully completed"
 fail="Fan test failed"
 retryCount=0
+continueOnFail=1
 
 [step:1]
 msg="Turn OFF all Fans before starting"
