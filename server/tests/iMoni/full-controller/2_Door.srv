@@ -14,7 +14,7 @@ onFail="Door is still open. Close the door first."
 [step:2]
 msg="Now Open the Door"
 waitFor="doorStatus"
-waitTime=15
+waitTime=12
 expectedValue="OPEN"
 onPass="Door alarm triggered successfully"
 onFail="Door alarm did not trigger within time"

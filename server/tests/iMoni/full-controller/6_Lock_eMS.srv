@@ -6,7 +6,7 @@ retryCount=0
 [step:1]
 msg="Door should be locked"
 waitFor="lockStatus"
-waitTime=30
+waitTime=15
 expectedValue="CLOSED"
 onPass="Lock is ready to test"
 onFail="Door is already open"
@@ -22,7 +22,7 @@ onFail="Door not opened"
 [step:3]
 msg="Wait for closing the door"
 waitFor="lockStatus"
-waitTime=30
+waitTime=15
 expectedValue="CLOSED"
 onPass="Door closed successfully"
 onFail="Door not closed"
