@@ -70,11 +70,16 @@ function DashboardView() {
 
   const [generateReport, setGenerateReport] = useState(true);
 
+  const [refreshing, setRefreshing] = useState(false);
+
+
   const isTestRunning = awaitingCommand || fanTestStatus || pduTestStatus;
 
   //Map and marker refs
   // const mapRef = useRef(null);
   const wsRef = useRef(null);
+
+  const manualCloseRef = useRef(false);
   // const markerRefs = useRef({});
 
   const latestReadingsByMac = {};
@@ -399,193 +404,193 @@ function DashboardView() {
     });
   };
 
-  useEffect(() => {
-    const connectWebSocket = () => {
-      console.log('🔄 Attempting WebSocket connection...');
+  const connectWebSocket = () => {
+    console.log("🔄 Attempting WebSocket connection...");
 
-      const wsUrl = process.env.NODE_ENV === 'production'
+    const wsUrl =
+      process.env.NODE_ENV === "production"
         ? `wss://${window.location.host}`
-        : (process.env.REACT_APP_WS_URL || 'ws://localhost:8080');
+        : (process.env.REACT_APP_WS_URL || "ws://localhost:8080");
 
-      const ws = new WebSocket(wsUrl);
-      wsRef.current = ws;
+    const ws = new WebSocket(wsUrl);
 
-      // Connecting WebSocket
-      ws.onopen = () => {
-        console.log('✅ WebSocket connected successfully');
-      };
+    wsRef.current = ws;
 
-      ws.onmessage = (event) => {
-        try {
-          console.log("RAW:", event.data);
-          const message = JSON.parse(event.data);
-          console.log("================================");
-          console.log("TYPE:", message.type);
-          console.log("MESSAGE:", message);
-          console.log("================================");
+    ws.onopen = () => {
+      console.log("✅ WebSocket connected successfully");
+    };
 
-          // const message = JSON.parse(event.data);
+    ws.onmessage = (event) => {
+      try {
+        console.log("RAW:", event.data);
+        const message = JSON.parse(event.data);
+        console.log("================================");
+        console.log("TYPE:", message.type);
+        console.log("MESSAGE:", message);
+        console.log("================================");
 
-          console.log("PARSED:", JSON.stringify(message, null, 2));
+        // const message = JSON.parse(event.data);
 
-          // Getting New Reading from Socket
-          if (message.type === 'NEW_READING') {
-            const newReading = message.data;
-            setSelectedMac(prev => prev || newReading.mac);
-            setSelectedDevice(prev => prev || newReading.locationId || newReading.mac);
-            // Update live reading immediately for current device
-            setLiveReading(prev => {
-              if (!prev || prev.mac === newReading.mac) return newReading;
-              return prev;
+        console.log("PARSED:", JSON.stringify(message, null, 2));
+
+        // Getting New Reading from Socket
+        if (message.type === 'NEW_READING') {
+          const newReading = message.data;
+          setSelectedMac(prev => prev || newReading.mac);
+          setSelectedDevice(prev => prev || newReading.locationId || newReading.mac);
+          // Update live reading immediately for current device
+          setLiveReading(prev => {
+            if (!prev || prev.mac === newReading.mac) return newReading;
+            return prev;
+          });
+          //! Also update readings array for history
+          setReadings(prev => {
+            const filtered = prev.filter(r => r.mac !== newReading.mac);
+            return [...filtered, newReading].slice(-400);
+          });
+        }
+
+        // Handle test status messages
+        if (message.type === 'TEST_STARTED') {
+          setCurrentTest(message.name || message.testFile);
+          setTestStatus(`🏁 ${message.pre || message.message || 'Test started'}`);
+
+          // Show notification banner - check for pre (multi-step) or message (single-step)
+          if (message.pre || (message.message && message.message !== "No message")) {
+            setNotification({
+              title: `Test: ${message.name}`,
+              pre: message.pre || '',
+              message: message.message || '',
+              type: 'info'
             });
-            //! Also update readings array for history
-            setReadings(prev => {
-              const filtered = prev.filter(r => r.mac !== newReading.mac);
-              return [...filtered, newReading].slice(-400);
-            });
-          }
 
-          // Handle test status messages
-          if (message.type === 'TEST_STARTED') {
-            setCurrentTest(message.name || message.testFile);
-            setTestStatus(`🏁 ${message.pre || message.message || 'Test started'}`);
-
-            // Show notification banner - check for pre (multi-step) or message (single-step)
-            if (message.pre || (message.message && message.message !== "No message")) {
-              setNotification({
-                title: `Test: ${message.name}`,
-                pre: message.pre || '',
-                message: message.message || '',
-                type: 'info'
-              });
-
-              console.log("Stored names:", testResults);
-              console.log("Incoming:", message.name);
-
-              setTestResults(prev =>
-                prev.map(t =>
-                  t.id === message.testFile
-                    ? { ...t, status: "running" }
-                    : t
-                )
-              );
-
-              // Auto-close after 10 seconds
-              setTimeout(() => {
-                setNotification(null);
-              }, 10000);
-            }
-          }
-
-          if (message.type === 'TEST_COMPLETED') {
-            setTestStatus(`${message.status === 'passed' ? '✅' : '❌'} ${message.name}: ${message.output}`);
-
-            console.log("Message: ", message);
+            console.log("Stored names:", testResults);
+            console.log("Incoming:", message.name);
 
             setTestResults(prev =>
               prev.map(t =>
                 t.id === message.testFile
-                  ? {
-                    ...t,
-                    status:
-                      message.status === "passed"
-                        ? "passed"
-                        : "failed",
-                    duration: message.duration || "-"
-                  }
+                  ? { ...t, status: "running" }
                   : t
               )
             );
+
+            // Auto-close after 10 seconds
+            setTimeout(() => {
+              setNotification(null);
+            }, 10000);
           }
+        }
 
-          // Handle multi-step test messages
-          if (message.type === 'STEP_STARTED') {
-            setCurrentTestStep(message.stepNumber);
-            // Server sends 'message' field for step message
-            const stepMsg = message.message && message.message !== "No message" ? message.message : `Step ${message.stepNumber}/${message.totalSteps}`;
-            setTestStatus(`🔄 ${message.name} - ${stepMsg}`);
+        if (message.type === 'TEST_COMPLETED') {
+          setTestStatus(`${message.status === 'passed' ? '✅' : '❌'} ${message.name}: ${message.output}`);
 
-            // Handle dialog confirmation steps
-            // if (message.waitFor === "dialog") {
-            //   swal.fire({
-            //     title: message.name,
-            //     text: message.msg || `Is Step ${message.stepNumber} completed?`,
-            //     icon: 'question',
-            //     showCancelButton: true,
-            //     confirmButtonText: 'Yes, Passed ✅',
-            //     cancelButtonText: 'No, Failed ❌',
-            //     confirmButtonColor: '#28a745',
-            //     cancelButtonColor: '#dc3545',
-            //     allowOutsideClick: false,
-            //     allowEscapeKey: false
-            //   }).then((result) => {
-            //     // Send response back to server via WebSocket
-            //     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-            //       wsRef.current.send(JSON.stringify({
-            //         type: 'DIALOG_RESPONSE',
-            //         confirmed: result.isConfirmed,
-            //         stepNumber: message.stepNumber,
-            //         testName: message.name
-            //       }));
-            //       console.log(`📤 Sent dialog response: ${result.isConfirmed ? 'OK' : 'Cancel'}`);
-            //     }
-            //   });
-            //   return;  // Don't show notification for dialog steps
-            // }
+          console.log("Message: ", message);
 
-            // Show notification immediately - cancel any pending timeout
-            if (message.message && message.message !== "No message") {
-              // Clear previous auto-dismiss timeout
-              if (notificationTimeoutRef.current) {
-                clearTimeout(notificationTimeoutRef.current);
-              }
+          setTestResults(prev =>
+            prev.map(t =>
+              t.id === message.testFile
+                ? {
+                  ...t,
+                  status:
+                    message.status === "passed"
+                      ? "passed"
+                      : "failed",
+                  duration: message.duration || "-"
+                }
+                : t
+            )
+          );
+        }
 
-              const currentWaitTime = message.waitTime || 20;
+        // Handle multi-step test messages
+        if (message.type === 'STEP_STARTED') {
+          setCurrentTestStep(message.stepNumber);
+          // Server sends 'message' field for step message
+          const stepMsg = message.message && message.message !== "No message" ? message.message : `Step ${message.stepNumber}/${message.totalSteps}`;
+          setTestStatus(`🔄 ${message.name} - ${stepMsg}`);
 
-              setNotification({
-                title: `${message.name} - Step ${message.stepNumber}/${message.totalSteps}`,
-                message: message.message,
-                type: 'info',
-                waitTime: currentWaitTime
-              });
+          // Handle dialog confirmation steps
+          // if (message.waitFor === "dialog") {
+          //   swal.fire({
+          //     title: message.name,
+          //     text: message.msg || `Is Step ${message.stepNumber} completed?`,
+          //     icon: 'question',
+          //     showCancelButton: true,
+          //     confirmButtonText: 'Yes, Passed ✅',
+          //     cancelButtonText: 'No, Failed ❌',
+          //     confirmButtonColor: '#28a745',
+          //     cancelButtonColor: '#dc3545',
+          //     allowOutsideClick: false,
+          //     allowEscapeKey: false
+          //   }).then((result) => {
+          //     // Send response back to server via WebSocket
+          //     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+          //       wsRef.current.send(JSON.stringify({
+          //         type: 'DIALOG_RESPONSE',
+          //         confirmed: result.isConfirmed,
+          //         stepNumber: message.stepNumber,
+          //         testName: message.name
+          //       }));
+          //       console.log(`📤 Sent dialog response: ${result.isConfirmed ? 'OK' : 'Cancel'}`);
+          //     }
+          //   });
+          //   return;  // Don't show notification for dialog steps
+          // }
 
-              // Auto-dismiss after waitTime (but will be replaced by STEP_COMPLETED anyway)
-              notificationTimeoutRef.current = setTimeout(() => {
-                setNotification(null);
-              }, currentWaitTime * 1000);
-            }
-          }
-
-          if (message.type === 'STEP_COMPLETED') {
-            // Server sends 'status' field: 'passed' or 'failed'
-            const isPassed = message.status === 'passed';
-            const stepResult = isPassed ? '✅' : '❌';
-            setTestStatus(`${stepResult} ${message.name} - Step ${message.stepNumber}/${message.totalSteps} ${isPassed ? 'PASSED' : 'FAILED'}`);
-
+          // Show notification immediately - cancel any pending timeout
+          if (message.message && message.message !== "No message") {
             // Clear previous auto-dismiss timeout
             if (notificationTimeoutRef.current) {
               clearTimeout(notificationTimeoutRef.current);
             }
 
-            // Show completion notification immediately
+            const currentWaitTime = message.waitTime || 20;
+
             setNotification({
               title: `${message.name} - Step ${message.stepNumber}/${message.totalSteps}`,
-              message: `${stepResult} ${message.message || (isPassed ? 'Step passed' : 'Step failed')}`,
-              type: isPassed ? 'success' : 'error'
+              message: message.message,
+              type: 'info',
+              waitTime: currentWaitTime
             });
 
-            // Auto-dismiss after 3 seconds (or will be replaced by next STEP_STARTED)
+            // Auto-dismiss after waitTime (but will be replaced by STEP_COMPLETED anyway)
             notificationTimeoutRef.current = setTimeout(() => {
               setNotification(null);
-            }, 3000);
+            }, currentWaitTime * 1000);
+          }
+        }
+
+        if (message.type === 'STEP_COMPLETED') {
+          // Server sends 'status' field: 'passed' or 'failed'
+          const isPassed = message.status === 'passed';
+          const stepResult = isPassed ? '✅' : '❌';
+          setTestStatus(`${stepResult} ${message.name} - Step ${message.stepNumber}/${message.totalSteps} ${isPassed ? 'PASSED' : 'FAILED'}`);
+
+          // Clear previous auto-dismiss timeout
+          if (notificationTimeoutRef.current) {
+            clearTimeout(notificationTimeoutRef.current);
           }
 
-          if (message.type === 'CAMERA_IMAGE_CAPTURED') {
-            console.log('📷 Camera image captured:', message);
+          // Show completion notification immediately
+          setNotification({
+            title: `${message.name} - Step ${message.stepNumber}/${message.totalSteps}`,
+            message: `${stepResult} ${message.message || (isPassed ? 'Step passed' : 'Step failed')}`,
+            type: isPassed ? 'success' : 'error'
+          });
 
-            swal.fire({
-              title: '📷 Camera Test',
-              html: `
+          // Auto-dismiss after 3 seconds (or will be replaced by next STEP_STARTED)
+          notificationTimeoutRef.current = setTimeout(() => {
+            setNotification(null);
+          }, 3000);
+        }
+
+        if (message.type === 'CAMERA_IMAGE_CAPTURED') {
+          console.log('📷 Camera image captured:', message);
+
+          swal.fire({
+            title: '📷 Camera Test',
+            html: `
       <div style="text-align: center;">
         <p style="margin-bottom: 15px; font-size: 16px;">${message.message || 'Camera image captured. Please verify.'}</p>
         <div style="background: #2a2a3a; padding: 15px; border-radius: 8px; margin: 15px 0;">
@@ -597,51 +602,66 @@ function DashboardView() {
         <p style="color: #aaa; font-size: 14px;">Please open the file to verify and confirm the result.</p>
       </div>
     `,
-              showCancelButton: true,
-              confirmButtonText: '✅ Pass',
-              cancelButtonText: '❌ Fail',
-              confirmButtonColor: '#28a745',
-              cancelButtonColor: '#dc3546ff',
-              background: '#1a1a2e',
-              color: '#fff',
-              width: '550px',
-              allowOutsideClick: false,
-              allowEscapeKey: false
-            }).then((result) => {
-              // Send the user's response back to the WebSocket
-              if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-                wsRef.current.send(JSON.stringify({
-                  type: 'DIALOG_RESPONSE',
-                  confirmed: result.isConfirmed // true for Pass, false for Fail
-                }));
-                console.log(`📤 Sent camera dialog response: ${result.isConfirmed ? 'PASS' : 'FAIL'}`);
-              }
-            });
-          }
-        } catch (err) {
-          console.error('❌ WebSocket message parse error:', err);
+            showCancelButton: true,
+            confirmButtonText: '✅ Pass',
+            cancelButtonText: '❌ Fail',
+            confirmButtonColor: '#28a745',
+            cancelButtonColor: '#dc3546ff',
+            background: '#1a1a2e',
+            color: '#fff',
+            width: '550px',
+            allowOutsideClick: false,
+            allowEscapeKey: false
+          }).then((result) => {
+            // Send the user's response back to the WebSocket
+            if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+              wsRef.current.send(JSON.stringify({
+                type: 'DIALOG_RESPONSE',
+                confirmed: result.isConfirmed // true for Pass, false for Fail
+              }));
+              console.log(`📤 Sent camera dialog response: ${result.isConfirmed ? 'PASS' : 'FAIL'}`);
+            }
+          });
         }
-      };
-
-      ws.onerror = (error) => {
-        console.error('❌ WebSocket connection error:', error);
-      };
-
-      ws.onclose = (event) => {
-        console.log(`🔌 WebSocket disconnected (code: ${event.code}, reason: ${event.reason})`);
-        setTimeout(() => {
-          console.log('🔄 Attempting to reconnect WebSocket...');
-          connectWebSocket();
-        }, 3000);
-      };
+      } catch (err) {
+        console.error('❌ WebSocket message parse error:', err);
+      }
     };
 
+    ws.onerror = (error) => {
+      console.error('❌ WebSocket connection error:', error);
+    };
+
+    ws.onclose = (event) => {
+      console.log(
+        `🔌 WebSocket disconnected (code: ${event.code}, reason: ${event.reason})`
+      );
+
+      // Don't reconnect if this was a manual refresh/unmount
+      if (manualCloseRef.current) {
+        console.log("⏹️ Manual WebSocket close - skipping auto reconnect");
+        manualCloseRef.current = false;
+        return;
+      }
+
+      setTimeout(() => {
+        console.log("🔄 Attempting to reconnect WebSocket...");
+        connectWebSocket();
+      }, 3000);
+    };
+  };
+
+  useEffect(() => {
     connectWebSocket();
 
     return () => {
       if (wsRef.current) {
-        console.log('🛑 Closing WebSocket connection');
-        wsRef.current.close(1000, 'Component unmounting');
+        console.log("🛑 Closing WebSocket connection");
+
+        manualCloseRef.current = true;
+
+        wsRef.current.close(1000, "Component unmounting");
+        wsRef.current = null;
       }
     };
   }, []);
@@ -965,6 +985,30 @@ function DashboardView() {
     setPduTestStatus(false);
   };
 
+  const refreshDashboard = () => {
+    console.log("🔄 ===== RECONNECTING WEBSOCKET =====");
+
+    if (wsRef.current) {
+      manualCloseRef.current = true;
+
+      console.log("🛑 Closing existing WebSocket...");
+
+      wsRef.current.close(1000, "Manual dashboard refresh");
+      wsRef.current = null;
+    }
+
+    // Clear current UI data, just like a fresh page load
+    setLiveReading(null);
+    setReadings([]);
+    setSnapshots([]);
+
+    // Reconnect after the old socket is fully closed
+    setTimeout(() => {
+      console.log("🔌 Creating new WebSocket connection...");
+      manualCloseRef.current = false;
+      connectWebSocket();
+    }, 300);
+  };
 
 
   const alarmKeys = [
@@ -1027,7 +1071,7 @@ function DashboardView() {
   return (
     <>
       {/* Logo */}
-      <div className="logo-panel">
+      {/* <div className="logo-panel">
 
         <div
           style={{
@@ -1052,7 +1096,7 @@ function DashboardView() {
             />
           </div>
         </div>
-      </div>
+      </div> */}
 
       {/* TEST PANEL */}
       {/* <div className="test-controls-panel">
@@ -1407,76 +1451,53 @@ function DashboardView() {
       {/* </div> */}
 
       <div className="ats-panel">
-        <div className="ats-header">
 
+        {/* HEADER */}
+        <div className="ats-header">
           <h2>🧪 ATS Test Controls</h2>
 
-          {showATSPanel ? (
-            <button onClick={() => setShowATSPanel(false)}>
-              Hide Details
-            </button>
-          ) : (
-            <button onClick={() => setShowATSPanel(true)}>
-              Show Details
-            </button>
-          )}
-
+          <button
+            className="ats-toggle-btn"
+            onClick={() => setShowATSPanel(!showATSPanel)}
+          >
+            {showATSPanel ? "Hide Details" : "Show Details"}
+          </button>
         </div>
 
-        <div className="live-test-status">
-          <h3>Live Test Status</h3>
+        {/* TEST STATUS - ONLY SHOW WHEN TESTS EXIST */}
+        {testResults.length > 0 && (
+          <div className="live-test-status">
 
-          <table>
-            <thead>
-              <tr>
-                <th>Test</th>
-                <th>Status</th>
-                <th>Time</th>
-              </tr>
-            </thead>
+            <div className="test-status-title">
+              Test Status
+            </div>
 
-            <tbody>
+            <div className="test-status-row">
               {testResults.map((test, index) => (
-                <tr key={index}>
-                  <td>{test.name}</td>
+                <div
+                  key={index}
+                  className={`test-status-name ${test.status}`}
+                  title={`${test.name} - ${test.status}`}
+                >
+                  {test.status === "passed" && "✓ "}
+                  {test.status === "failed" && "✕ "}
+                  {test.status === "running" && "● "}
+                  {test.status === "waiting" && "○ "}
 
-                  <td>
-                    {test.status === "waiting" && (
-                      <span className="status waiting">
-                        ⏳ Waiting
-                      </span>
-                    )}
-
-                    {test.status === "running" && (
-                      <span className="status running">
-                        🔄 Running
-                      </span>
-                    )}
-
-                    {test.status === "passed" && (
-                      <span className="status passed">
-                        ✅ Passed
-                      </span>
-                    )}
-
-                    {test.status === "failed" && (
-                      <span className="status failed">
-                        ❌ Failed
-                      </span>
-                    )}
-                  </td>
-
-                  <td>{test.duration}</td>
-                </tr>
+                  {test.name}
+                </div>
               ))}
-            </tbody>
-          </table>
-        </div>
+            </div>
+
+          </div>
+        )}
 
         {showATSPanel && (
-
           <div className="ats-running-panel">
-            <div className="ats-row">
+
+            {/* TOP CONTROLS */}
+            <div className="ats-top-row">
+
               <select
                 value={selectedProduct}
                 onChange={handleProductChange}
@@ -1498,62 +1519,8 @@ function DashboardView() {
                   <option value="green-pcb">Base PCB Level</option>
                 </select>
               )}
-            </div>
 
-            <div className="ats-grid">
-
-              {testLevel === "green-pcb" ? (
-                <>
-                  <input
-                    className="ats-input"
-                    placeholder="Base PCB Serial Number"
-                    value={basePcbSrNo}
-                    onChange={(e) => setBasePcbSrNo(e.target.value)}
-                  />
-                </>
-              ) : (
-                <>
-                  <input
-                    className="ats-input"
-                    placeholder="iMoni Ass. Serial Number"
-                    value={unitSerialNo}
-                    onChange={(e) => setUnitSerialNo(e.target.value)}
-                  />
-
-                  <input
-                    className="ats-input"
-                    placeholder="CPU Serial Number"
-                    value={cpuSrNo}
-                    onChange={(e) => setCpuSrNo(e.target.value)}
-                  />
-
-                  <input
-                    className="ats-input"
-                    placeholder="Base PCB Serial Number"
-                    value={basePcbSrNo}
-                    onChange={(e) => setBasePcbSrNo(e.target.value)}
-                  />
-
-                  <input
-                    className="ats-input"
-                    placeholder="Camera Serial Number"
-                    value={cameraSrNo}
-                    onChange={(e) => setCameraSrNo(e.target.value)}
-                  />
-
-                  <input
-                    className="ats-input"
-                    placeholder="PSU Serial Number"
-                    value={psuSrNo}
-                    onChange={(e) => setPsuSrNo(e.target.value)}
-                  />
-                </>
-              )}
-
-            </div>
-
-            <div className="ats-actions">
-              <label className="ats-checkbox">
+              <label className="ats-checkbox compact">
                 <input
                   type="checkbox"
                   checked={generateReport}
@@ -1567,14 +1534,66 @@ function DashboardView() {
                 onClick={iMoni_test}
                 disabled={awaitingCommand}
               >
-                {awaitingCommand ? "Running ATS..." : "Run ATS Tests"}
+                {awaitingCommand ? "⏳ Running..." : "▶ Run ATS Tests"}
               </button>
+
             </div>
 
+            {/* SERIAL NUMBERS */}
+            {selectedProduct === "iMoni" && (
+              <div className="ats-serial-row">
+
+                {testLevel === "green-pcb" ? (
+                  <input
+                    className="ats-input"
+                    placeholder="Base PCB Serial Number"
+                    value={basePcbSrNo}
+                    onChange={(e) => setBasePcbSrNo(e.target.value)}
+                  />
+                ) : (
+                  <>
+                    <input
+                      className="ats-input"
+                      placeholder="iMoni Ass. Serial"
+                      value={unitSerialNo}
+                      onChange={(e) => setUnitSerialNo(e.target.value)}
+                    />
+
+                    <input
+                      className="ats-input"
+                      placeholder="CPU Serial"
+                      value={cpuSrNo}
+                      onChange={(e) => setCpuSrNo(e.target.value)}
+                    />
+
+                    <input
+                      className="ats-input"
+                      placeholder="Base PCB Serial"
+                      value={basePcbSrNo}
+                      onChange={(e) => setBasePcbSrNo(e.target.value)}
+                    />
+
+                    <input
+                      className="ats-input"
+                      placeholder="Camera Serial"
+                      value={cameraSrNo}
+                      onChange={(e) => setCameraSrNo(e.target.value)}
+                    />
+
+                    <input
+                      className="ats-input"
+                      placeholder="PSU Serial"
+                      value={psuSrNo}
+                      onChange={(e) => setPsuSrNo(e.target.value)}
+                    />
+                  </>
+                )}
+
+              </div>
+            )}
+
           </div>
-
         )}
-
 
       </div>
 
@@ -1817,11 +1836,33 @@ function DashboardView() {
       {/* </div>
 
       {/* DASHBOARD */}
-      <div className="dashboard">
+      <div className="dashboard" >
         <div className="panel">
-          <h2 className="selected-heading">
-            📟 Selected Rack: {selectedMac && <span> {selectedDevice}</span>}
-          </h2>
+          {/* <h2 className="selected-heading"> */}
+          {/* 📟 Selected Rack: {selectedMac && <span> {selectedDevice}</span>} */}
+
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: "10px"
+            }}
+          >
+            <h2 className="selected-heading">
+              📟 Selected Rack:
+              {selectedMac && <span> {selectedDevice}</span>}
+            </h2>
+
+            <button
+              onClick={refreshDashboard}
+              disabled={refreshing}
+              className="refresh-btn"
+            >
+              {refreshing ? "Refreshing..." : "🔄 Refresh Dashboard"}
+            </button>
+          </div>
+          {/* </h2> */}
           {latestReading && (
             <div>
               <div className="tabs">
@@ -2204,7 +2245,7 @@ function DashboardView() {
                 </div>
               )}
 
-              {activeTab === "snapshots" && (
+              {"snapshots" && (
                 <div className="camera-tab">
                   <div className="snapshots-grid">
                     {snapshots.length > 0 ? (

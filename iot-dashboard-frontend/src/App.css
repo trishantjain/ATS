@@ -1021,102 +1021,219 @@ body {
   margin-top: 20px;
 }
 
-/* ATS PANEL */
+/* =========================================
+   ATS PANEL
+========================================= */
 
 .ats-panel {
-  background: #111111;
-  padding: 20px;
-  margin: 15px;
+  background: #111;
+  border: 1px solid #292929;
   border-radius: 12px;
-  border: 1px solid #333333;
-  box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
+  padding: 12px 16px;
+  margin: 8px 24px;
 }
 
-.ats-select {
-  min-width: 240px;
-  height: 44px;
-  padding: 0 12px;
-  background: #1a1a1a;
-  color: white;
-  border: 1px solid #444444;
+/* Header */
+
+.ats-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.ats-header h2 {
+  margin: 0;
+  font-size: 21px;
+  color: #fff;
+}
+
+.ats-toggle-btn {
+  padding: 5px 10px;
+  font-size: 13px;
+  border-radius: 5px;
+  border: 1px solid #555;
+  background: #222;
+  color: #fff;
+  cursor: pointer;
+}
+
+/* =========================================
+   LIVE TEST STATUS
+========================================= */
+
+.live-test-status {
+  background: #1e293b;
   border-radius: 8px;
+  padding: 7px 10px;
+  margin-bottom: 8px;
+
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.test-status-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  white-space: nowrap;
+}
+
+.test-status-row {
+  display: flex !important;
+  flex-direction: row !important;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 14px;
+  flex: 1;
+}
+
+.test-status-name {
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.test-status-name.waiting {
+  color: #9ca3af;
+}
+
+.test-status-name.running {
+  color: #facc15;
+}
+
+.test-status-name.passed {
+  color: #22c55e;
+}
+
+.test-status-name.failed {
+  color: #ef4444;
+}
+
+/* =========================================
+   ATS CONTROLS
+========================================= */
+
+.ats-running-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Product + Level + Report + Run */
+
+.ats-top-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Dropdown */
+
+.ats-select {
+  height: 38px;
+  padding: 0 12px;
+  min-width: 190px;
+
+  background: #1b1b1b;
+  color: #fff;
+
+  border: 1px solid #444;
+  border-radius: 7px;
+
   font-size: 14px;
-  margin-left: 3px;
-  margin-bottom: 4px;
+  cursor: pointer;
 }
 
 .ats-select:focus {
-  outline: none;
   border-color: #00c8ff;
-  box-shadow: 0 0 8px rgba(0, 200, 255, 0.5);
+  outline: none;
+}
+
+/* =========================================
+   SERIAL INPUTS
+========================================= */
+
+.ats-serial-row {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 7px;
 }
 
 .ats-input {
-  height: 44px;
-  padding: 0 14px;
-  background: #1a1a1a;
-  color: white;
-  border: 1px solid #444444;
-  border-radius: 8px;
-  font-size: 14px;
-  margin-left: 3px;
+  height: 36px;
+  box-sizing: border-box;
+
+  padding: 0 11px;
+
+  background: #1b1b1b;
+  color: #fff;
+
+  border: 1px solid #444;
+  border-radius: 7px;
+
+  font-size: 13px;
 }
 
 .ats-input::placeholder {
-  color: #888888;
+  color: #777;
 }
 
 .ats-input:focus {
   outline: none;
   border-color: #00c8ff;
-  box-shadow: 0 0 10px rgba(0, 200, 255, 0.5);
 }
 
-.ats-input.required {
-  border: 2px solid #00c8ff;
-}
+/* =========================================
+   REPORT CHECKBOX
+========================================= */
 
-.ats-checkbox {
+.ats-checkbox.compact {
   display: flex;
   align-items: center;
-  gap: 10px;
-  color: white;
-  margin-bottom: 18px;
-  font-size: 15px;
+  gap: 5px;
+
+  white-space: nowrap;
+
+  font-size: 13px;
   font-weight: 600;
+  color: #ddd;
+
+  margin-left: auto;
 }
 
-.ats-checkbox input {
-  width: 18px;
-  height: 18px;
-  accent-color: #3b82f6;
+.ats-checkbox.compact input {
+  width: 15px;
+  height: 15px;
+  margin: 0;
 }
+
+/* =========================================
+   RUN BUTTON
+========================================= */
 
 .ats-run-btn {
-  background: linear-gradient(135deg, #2563eb, #1d4ed8);
-  color: white;
+  height: 38px;
+
+  padding: 0 20px;
+
+  background: #2563eb;
+  color: #fff;
+
   border: none;
-  border-radius: 8px;
-  padding: 12px 35px;
-  font-size: 15px;
-  font-weight: 600;
+  border-radius: 7px;
+
+  font-size: 14px;
+  font-weight: 700;
+
   cursor: pointer;
-  transition: 0.2s;
-  height: 54px;
-  min-width: 220px;
+
+  white-space: nowrap;
 }
 
 .ats-run-btn:hover {
-  background: linear-gradient(135deg, #3b82f6, #2563eb);
-  transform: translateY(-1px);
-  box-shadow: 0 0 15px rgba(59, 130, 246, 0.4);
-}
-
-.ats-actions {
-  display: flex;
-  align-items: center;
-  gap: 25px;
-  margin-top: 15px;
+  background: #1d4ed8;
 }
 
 .ats-run-btn:disabled {
