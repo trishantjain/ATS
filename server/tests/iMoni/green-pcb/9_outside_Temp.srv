@@ -1,13 +1,19 @@
-name="Outside Temperature Sensor Test"
+name="Outside Temperature Test"
 type="sensor"
 pass="Outside Temperature successfully completed"
-fail="Outside Temperature Sensor Test failed"
+fail="Outside Temperature Test failed"
 retryCount=0
 
 [step:1]
+type="instruction"
+msg="Prepare Heat Gun"
+waitTime=4
+onPass="Heat gun ready."
+
+[step:2]
 msg="Outside Temperature Sensor test started"
 waitFor="outsideTemperature"
-waitTime=10
+waitTime=25
 increasedBy=5
-onPass="Outside Temperature Sensor successfully tested"
-onFail="Outside Temperature Sensor alarm not turned on"
+onPass="Outside Temperature alarm successfully"
+onFail="Outside Temperature alarm not turned on"

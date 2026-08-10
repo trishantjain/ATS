@@ -1,0 +1,11 @@
+{
+  "watch": ["."],
+  "ignore": [
+    "testResult/**",
+    "Testing/reportCounter.json",
+    "**/*.xlsx",
+    "**/*.csv",
+    "**/*.jpg",
+    "**/*.png"
+  ]
+}

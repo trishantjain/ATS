@@ -6,7 +6,7 @@ retryCount=0
 [step:1]
 msg="Close the Door before starting"
 waitFor="doorStatus"
-waitTime=10
+waitTime=15
 expectedValue="CLOSED"
 onPass="Door is closed, | Ready to test |"
 onFail="Door is still open. Close the door first."
@@ -14,7 +14,7 @@ onFail="Door is still open. Close the door first."
 [step:2]
 msg="Now Open the Door"
 waitFor="doorStatus"
-waitTime=10
+waitTime=12
 expectedValue="OPEN"
 onPass="Door alarm triggered successfully"
 onFail="Door alarm did not trigger within time"
@@ -22,7 +22,7 @@ onFail="Door alarm did not trigger within time"
 [step:3]
 msg="Close the Door again"
 waitFor="doorStatus"
-waitTime=10
+waitTime=15
 expectedValue="CLOSED"
 onPass="Door alarm went off successfully"
 onFail="Door alarm did not go off within time"
