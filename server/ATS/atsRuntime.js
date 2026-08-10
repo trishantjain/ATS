@@ -36,6 +36,11 @@ module.exports = {
     },
 
     clearTestWaitForMAC() {
+        // Keep the MAC active while other tests are waiting
+        if (deviceCommandWaiters.length > 0) {
+            return;
+        }
+
         testWaitingForMAC = null;
     },
 

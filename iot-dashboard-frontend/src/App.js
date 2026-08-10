@@ -5,6 +5,7 @@ import DashboardView from './pages/DashboardView';
 // import AdminDashboard from './pages/AdminDashboard';
 // import PrivateRoute from './components/PrivateRoute';
 import OfflinePrompt from './components/OfflinePrompt';
+import DashboardViewTest from './pages/DashboardViewTest';
 // import DashboardTest from './pages/DashboardTest';
 
 function App() {
@@ -37,7 +38,8 @@ function App() {
           path="/"
           element={
             // <PrivateRoute allowedRoles={['user', 'block', 'gp']}>
-              <DashboardView />
+              // <DashboardView />
+              <DashboardViewTest />
             // </PrivateRoute>
           }
         />

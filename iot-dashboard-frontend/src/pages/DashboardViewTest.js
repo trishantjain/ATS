@@ -60,6 +60,96 @@ function DashboardViewTest() {
 
   const isTestRunning = awaitingCommand || fanTestStatus || pduTestStatus;
 
+
+  const TEST_COLORS = {
+    "Fan Test": "#3B82F6",              // Blue
+    "Limit Switch Test": "#F59E0B",     // Orange
+
+    // Add exact names from your .srv files later
+    "Leakage Test": "#06B6D4",          // Cyan
+    "Logging Test": "#8B5CF6",           // Purple
+
+    "Fan Fail Test": "#EC4899",         // Pink
+    "Fire Alarm Test": "#EF4444",       // Red
+
+    "Humidity Test": "#22C55E",         // Green
+    "Outside Temperature Test": "#EAB308", // Yellow
+
+    "Camera Test": "#14B8A6",           // Teal
+
+    "Lock EMS Test": "#F472B6",         // Light Pink
+    "Lock Rack Test": "#6366F1"         // Indigo
+  };
+
+  const getTestColor = (message) => {
+    // First try exact test name from .srv
+    if (message.name && TEST_COLORS[message.name]) {
+      return TEST_COLORS[message.name];
+    }
+
+    // Fallback based on test file
+    const testFile = message.testFile || "";
+
+    if (testFile.includes("Fans")) {
+      return TEST_COLORS["Fan Test"];
+    }
+
+    if (testFile.includes("Door")) {
+      return TEST_COLORS["Limit Switch Test"];
+    }
+
+    if (testFile.includes("Leakage")) {
+      return TEST_COLORS["Leakage Test"];
+    }
+
+    if (testFile.includes("Logging")) {
+      return TEST_COLORS["Logging Test"];
+    }
+
+    if (testFile.includes("Fan_Fail") || testFile.includes("Fan Fail")) {
+      return TEST_COLORS["Fan Fail Test"];
+    }
+
+    if (testFile.includes("Fire")) {
+      return TEST_COLORS["Fire Alarm Test"];
+    }
+
+    if (testFile.includes("Humidity")) {
+      return TEST_COLORS["Humidity Test"];
+    }
+
+    if (
+      testFile.includes("Outside") ||
+      testFile.includes("Temperature")
+    ) {
+      return TEST_COLORS["Outside Temperature Test"];
+    }
+
+    if (testFile.includes("Camera")) {
+      return TEST_COLORS["Camera Test"];
+    }
+
+    return "#64748B";
+  };
+
+  const getTestBackground = (color) => {
+    const backgrounds = {
+      "#3B82F6": "#0F2342", // Fan - dark blue
+      "#F59E0B": "#3A2A0A", // Door - dark orange
+      "#06B6D4": "#0A3038", // Leakage - dark cyan
+      "#8B5CF6": "#21163D", // Logging - dark purple
+      "#EC4899": "#12050c", // Fan Fail - dark pink
+      "#EF4444": "#3A1212", // Fire - dark red
+      "#22C55E": "#102F1B", // Humidity - dark green
+      "#EAB308": "#352D08", // Outside temp - dark yellow
+      "#14B8A6": "#0B302B", // Camera - dark teal
+      "#F472B6": "#3A1729", // Lock EMS
+      "#6366F1": "#171B3D"  // Lock Rack
+    };
+
+    return backgrounds[color] || "#1A1F26";
+  };
+
   //Map and marker refs
   // const mapRef = useRef(null);
   const wsRef = useRef(null);
@@ -385,7 +475,8 @@ function DashboardViewTest() {
                 title: `Test: ${message.name}`,
                 pre: message.pre || '',
                 message: message.message || '',
-                type: 'info'
+                type: 'info',
+                testColor: getTestColor(message)
               }
             }));
 
@@ -447,7 +538,8 @@ function DashboardViewTest() {
               title: `${message.name} - Step ${message.stepNumber}/${message.totalSteps}`,
               message: stepMsg,
               type: 'info',
-              waitTime: currentWaitTime
+              waitTime: currentWaitTime,
+              testColor: getTestColor(message)
             }
           }));
 
@@ -486,8 +578,11 @@ function DashboardViewTest() {
             ...prev,
             [testId]: {
               title: `${message.name} - Step ${message.stepNumber}/${message.totalSteps}`,
-              message: `${stepResult} ${message.message || (isPassed ? 'Step passed' : 'Step failed')}`,
-              type: isPassed ? 'success' : 'error'
+              message: `${stepResult} ${message.message ||
+                (isPassed ? 'Step passed' : 'Step failed')
+                }`,
+              type: isPassed ? 'success' : 'error',
+              testColor: getTestColor(message)
             }
           }));
 
@@ -1215,20 +1310,11 @@ function DashboardViewTest() {
             <div
               key={testId}
               style={{
-                backgroundColor:
-                  notification.type === 'success'
-                    ? '#1a3a2a'
-                    : notification.type === 'error'
-                      ? '#3a1a1a'
-                      : '#1a3a3a',
-
-                border:
-                  `2px solid ${notification.type === 'success'
-                    ? '#00cc66'
-                    : notification.type === 'error'
-                      ? '#cc3333'
-                      : '#00cccc'
-                  }`,
+backgroundColor: getTestBackground(
+  notification.testColor
+),
+                border: `1px solid ${notification.testColor || "#64748B"}`,
+                borderLeft: `4px solid ${notification.testColor || "#64748B"}`,
 
                 borderRadius: '8px',
                 padding: '12px 16px',
@@ -1252,12 +1338,7 @@ function DashboardViewTest() {
                 <h4
                   style={{
                     margin: '0 0 5px 0',
-                    color:
-                      notification.type === 'success'
-                        ? '#00cc66'
-                        : notification.type === 'error'
-                          ? '#cc3333'
-                          : '#00cccc',
+                    color: notification.testColor || "#64748B",
                     fontSize: '16px'
                   }}
                 >
@@ -1307,13 +1388,7 @@ function DashboardViewTest() {
                 style={{
                   background: 'transparent',
                   border: 'none',
-                  color:
-                    notification.type === 'success'
-                      ? '#00cc66'
-                      : notification.type === 'error'
-                        ? '#cc3333'
-                        : '#00cccc',
-                  fontSize: '18px',
+                  color: notification.testColor || "#64748B", fontSize: '18px',
                   cursor: 'pointer',
                   marginLeft: '12px',
                   padding: '0 5px'

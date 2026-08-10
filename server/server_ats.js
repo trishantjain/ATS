@@ -46,7 +46,8 @@ let latestReadings = [];
 app.use(bodyParser.json());
 const cors = require("cors");
 const { isDeepStrictEqual } = require("util");
-const { runTests } = require("./ATS/atsRunner");
+const { runTests } = require("./ATS/atsRunner2");
+// const { runTests } = require("./ATS/atsRunner");
 const { reportWriter } = require("./ATS/reportWriter");
 app.use(cors());
 
@@ -586,6 +587,7 @@ app.post("/api/tests/run", async (req, res) => {
 
   // const testPath = path.join(__dirname, "tests/iMoni", selectedTests);
   // const baseDir = path.join(__dirname, "tests/iMoni");
+  console.log("Got test level: ", testLevel)
   const baseDir = getIMoniTestDir(testLevel);
 
 
@@ -1223,7 +1225,7 @@ const tcpServer = net.createServer((socket) => {
 
         const packetTimestamp = new Date();
 
-        // console.log("BAT Volt: ", hupsBatVolt);
+        console.log("BAT Volt: ", batteryBackup);
         // console.log("DV Current: ", hupsDVC);
 
 
@@ -1635,16 +1637,44 @@ const tcpServer = net.createServer((socket) => {
         if (latestReadings.length > 400) latestReadings.shift();
 
         // Notify waiting test ASYNC - don't block reading flow
-        if (atsRuntime.testWaitingForMAC && mac === atsRuntime.testWaitingForMAC && atsRuntime.deviceCommandWaiters.length > 0) {
+        if (
+          atsRuntime.testWaitingForMAC &&
+          mac === atsRuntime.testWaitingForMAC &&
+          atsRuntime.deviceCommandWaiters.length > 0
+        ) {
           setImmediate(() => {
-            if (atsRuntime.deviceCommandWaiters.length > 0) {
-              const waiter = atsRuntime.deviceCommandWaiters[0];
-              const shouldResolve = waiter(reading);
-              if (shouldResolve) {
-                atsRuntime.deviceCommandWaiters.shift();
-                console.log(`✅ Test waiter resolved for MAC ${mac}`);
+            // if (atsRuntime.deviceCommandWaiters.length > 0) {
+            //   const waiter = atsRuntime.deviceCommandWaiters[0];
+            //   const shouldResolve = waiter(reading);
+            //   if (shouldResolve) {
+            //     atsRuntime.deviceCommandWaiters.shift();
+            //     console.log(`✅ Test waiter resolved for MAC ${mac}`);
+            //   }
+            // }
+
+            const remainingWaiters = [];
+
+            for (const waiter of atsRuntime.deviceCommandWaiters) {
+
+              let resolved = false;
+
+              try {
+                resolved = waiter(reading);
+              } catch (err) {
+                console.error("Waiter error:", err);
+                resolved = true; // remove broken waiter
+              }
+
+              if (resolved) {
+                console.log(`✅ One test waiter resolved for MAC ${mac}`);
+              } else {
+                remainingWaiters.push(waiter);
               }
             }
+
+            atsRuntime.deviceCommandWaiters.length = 0;
+            atsRuntime.deviceCommandWaiters.push(...remainingWaiters);
+
           });
         }
         socket.buffer = socket.buffer.slice(PACKET_LEN);

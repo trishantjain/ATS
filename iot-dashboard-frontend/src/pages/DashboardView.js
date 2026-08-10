@@ -72,7 +72,6 @@ function DashboardView() {
 
   const [refreshing, setRefreshing] = useState(false);
 
-
   const isTestRunning = awaitingCommand || fanTestStatus || pduTestStatus;
 
   //Map and marker refs
