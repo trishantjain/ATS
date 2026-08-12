@@ -1742,36 +1742,30 @@ const TEST_GROUPS = [
     [
         "1_Fans.srv",
         "2_Door.srv",
+        "4_Leakage.srv",
+        "5_Logging.srv"
+
     ],
 
     // Group 2
-    [
-        "4_Leakage.srv",
-        "5_Logging.srv"
-    ],
-
-    // Group 3
     [
         "11_fan_fail.srv",
         "3_Fire.srv",
     ],
 
-    // Group 4
+    // Group 3
     [
+        "7_Lock_Rack.srv",
         "9_outside_Temp.srv"
     ],
 
-    // Group 5
+    // Group 4
     [
+        "8_humidity.srv",
         "10_camera.srv",
         "6_Lock_eMS.srv"
     ],
 
-    // Group 6
-    [
-        "7_Lock_Rack.srv",
-        "8_humidity.srv",
-    ]
 ];
 
 const runTests = async (options) => {
