@@ -265,12 +265,12 @@ const debug = {
 
 
 // 🔌 DB connection
-mongoose
-  .connect(process.env.MONGO_URI)
-  .then(() => console.log("MongoDB connected"))
-  .catch((err) => console.error("MongoDB connection error:", err.message));
+// mongoose
+//   .connect(process.env.MONGO_URI)
+//   .then(() => console.log("MongoDB connected"))
+//   .catch((err) => console.error("MongoDB connection error:", err.message));
 
-fs.appendFileSync(logFile, "Mongo connected\n");
+// fs.appendFileSync(logFile, "Mongo connected\n");
 
 
 
