@@ -230,9 +230,63 @@ async function executeSingleTest({
                     if (step.type === "instruction") {
                         console.log(`📖 Instruction Step ${stepNumber}`);
 
-                        await new Promise(resolve =>
-                            setTimeout(resolve, (step.waitTime || 10) * 1000)
-                        );
+                        const instructionResult = await new Promise((resolve) => {
+
+                            let finished = false;
+
+                            const stopResolver = () => {
+
+                                if (finished) return;
+
+                                finished = true;
+
+                                clearTimeout(timer);
+
+                                console.log(
+                                    `🛑 Instruction step ${stepNumber} stopped by user`
+                                );
+
+                                atsRuntime.unregisterStopResolver(
+                                    stopResolver
+                                );
+
+                                resolve({
+                                    stopped: true
+                                });
+                            };
+
+                            const timer = setTimeout(() => {
+
+                                if (finished) return;
+
+                                finished = true;
+
+                                atsRuntime.unregisterStopResolver(
+                                    stopResolver
+                                );
+
+                                resolve({
+                                    stopped: false
+                                });
+
+                            }, (step.waitTime || 10) * 1000);
+
+                            atsRuntime.registerStopResolver(
+                                stopResolver
+                            );
+                        });
+
+                        // 🛑 User stopped during instruction
+                        if (instructionResult.stopped) {
+
+                            return {
+                                testFile,
+                                status: "stopped",
+                                output: "Test stopped by user",
+                                passed: false,
+                                stepResults
+                            };
+                        }
 
                         stepResults.push({
                             step: stepNumber,
@@ -260,12 +314,63 @@ async function executeSingleTest({
                         const requiredIncrease = step.increasedBy || 0;
                         console.log("    🎯 Required Increase in current sensor test: ", requiredIncrease);
 
-                        const timeout = setTimeout(() => {
+                        let currentStepHandler = null;
+                        let finished = false;
+
+                        const cleanup = () => {
+                            clearTimeout(timeout);
+                            // clearInterval(stopWatcher);
+
                             if (currentStepHandler) {
-                                const idx = atsRuntime.deviceCommandWaiters.indexOf(currentStepHandler);
-                                if (idx > -1) atsRuntime.deviceCommandWaiters.splice(idx, 1);
+                                const idx =
+                                    atsRuntime.deviceCommandWaiters.indexOf(
+                                        currentStepHandler
+                                    );
+
+                                if (idx > -1) {
+                                    atsRuntime.deviceCommandWaiters.splice(idx, 1);
+                                }
                             }
+
                             atsRuntime.clearTestWaitForMAC();
+
+                            atsRuntime.unregisterStopResolver(stopResolver);
+                        };
+
+                        // 🛑 Global STOP handler
+                        const stopResolver = () => {
+                            if (finished) return;
+
+                            finished = true;
+
+                            console.log(
+                                `🛑 Sensor step stopped by user: ${testFile}`
+                            );
+
+                            cleanup();
+
+                            resolve({
+                                success: false,
+                                reason: "STOP_REQUESTED"
+                            });
+                        };
+
+                        // ⏱️ Normal timeout
+                        const timeout = setTimeout(() => {
+                            if (finished) return;
+
+                            finished = true;
+
+                            console.log(
+                                `❌ Sensor step timeout: value did not increase by ${requiredIncrease}`
+                            );
+
+                            cleanup();
+                            // if (currentStepHandler) {
+                            //     const idx = atsRuntime.deviceCommandWaiters.indexOf(currentStepHandler);
+                            //     if (idx > -1) atsRuntime.deviceCommandWaiters.splice(idx, 1);
+                            // }
+                            // atsRuntime.clearTestWaitForMAC();
                             resolve({
                                 success: false,
                                 reason: `TIMEOUT - Value did not increase by ${requiredIncrease} within ${step.waitTime}s`,
@@ -273,31 +378,34 @@ async function executeSingleTest({
                             });
                         }, (step.waitTime || 20) * 1000);
 
-                        const stopWatcher = setInterval(() => {
-                            if (atsRuntime.testStopRequested) {
-                                if (currentStepHandler) {
-                                    const idx = atsRuntime.deviceCommandWaiters.indexOf(currentStepHandler);
+                        // Register this sensor step with global STOP
+                        atsRuntime.registerStopResolver(stopResolver);
 
-                                    if (idx > -1) {
-                                        atsRuntime.deviceCommandWaiters.splice(idx, 1);
-                                    }
-                                }
-                                clearTimeout(timeout);
-                                clearInterval(stopWatcher);
+                        // const stopWatcher = setInterval(() => {
+                        //     if (atsRuntime.testStopRequested) {
+                        //         if (currentStepHandler) {
+                        //             const idx = atsRuntime.deviceCommandWaiters.indexOf(currentStepHandler);
 
-                                atsRuntime.clearTestWaitForMAC();
+                        //             if (idx > -1) {
+                        //                 atsRuntime.deviceCommandWaiters.splice(idx, 1);
+                        //             }
+                        //         }
+                        //         clearTimeout(timeout);
+                        //         clearInterval(stopWatcher);
 
-                                resolve({
-                                    success: false,
-                                    reason: "STOP_REQUESTED"
-                                });
-                            }
-                        }, 100);
+                        //         atsRuntime.clearTestWaitForMAC();
+
+                        //         resolve({
+                        //             success: false,
+                        //             reason: "STOP_REQUESTED"
+                        //         });
+                        //     }
+                        // }, 100);
 
 
                         atsRuntime.setTestWaitForMAC(testDeviceMAC);
 
-                        let currentStepHandler = null;
+                        // let currentStepHandler = null;
 
                         // Handler to check sensor presence for Green PCB, or increase for full controller
                         const stepHandler = (reading) => {
@@ -315,20 +423,25 @@ async function executeSingleTest({
                                 return false;
                             }
 
+                            // ==========================================
+                            // GREEN PCB
+                            // ==========================================
                             if (testLevel === "green-pcb") {
-                                clearTimeout(timeout);
-                                clearInterval(stopWatcher);
-                                const idx = atsRuntime.deviceCommandWaiters.indexOf(stepHandler);
-                                if (idx > -1) atsRuntime.deviceCommandWaiters.splice(idx, 1);
-                                atsRuntime.clearTestWaitForMAC();
+                                finished = true;
+
+                                cleanup();
+
                                 resolve({
                                     success: true,
                                     received: `${step.waitFor}=${currentValue}`
                                 });
+
                                 return true;
                             }
 
-                            // Capture initial value on first reading
+                            // ==========================================
+                            // FIRST SENSOR READING
+                            // ==========================================
                             if (initialSensorValue === null) {
                                 initialSensorValue = currentValue;
                                 console.log(`   📊 Initial ${step.waitFor} value: ${initialSensorValue}`);
@@ -336,20 +449,24 @@ async function executeSingleTest({
                                 return false;  // Keep waiting for subsequent readings
                             }
 
+                            // ==========================================
+                            // CHECK SENSOR INCREASE
+                            // ==========================================
                             const currentIncrease = currentValue - initialSensorValue;
                             console.log(`   🔍 Checking: ${step.waitFor} = ${currentValue} (initial: ${initialSensorValue}, increase: ${currentIncrease.toFixed(2)}, required: ${requiredIncrease})`);
 
-                            // Check if value has increased by required amount
+                            // ==========================================
+                            // REQUIRED INCREASE REACHED
+                            // ==========================================
                             if (currentIncrease >= requiredIncrease) {
-                                clearTimeout(timeout);
-                                clearInterval(stopWatcher);
-                                const idx = atsRuntime.deviceCommandWaiters.indexOf(stepHandler);
-                                if (idx > -1) atsRuntime.deviceCommandWaiters.splice(idx, 1);
-                                atsRuntime.clearTestWaitForMAC();
+                                finished = true;
+                                cleanup();
+
                                 resolve({
                                     success: true,
                                     received: `${currentValue} (increased by ${currentIncrease.toFixed(2)} from ${initialSensorValue})`
                                 });
+
                                 return true;
                             }
 
@@ -365,6 +482,22 @@ async function executeSingleTest({
                         );
 
                     });
+
+                    // 🛑 User stopped the test
+                    if (stepResult.reason === "STOP_REQUESTED") {
+
+                        console.log(
+                            `🛑 ${testFile} stopped by user`
+                        );
+
+                        return {
+                            testFile,
+                            status: "stopped",
+                            output: "Test stopped by user",
+                            passed: false,
+                            stepResults
+                        };
+                    }
 
                     // Process step result
                     if (stepResult.success) {
@@ -518,6 +651,9 @@ async function executeSingleTest({
                             }
 
                             await new Promise((resolve, reject) => {
+
+                                let finished = false;
+
                                 const child = spawn(exePath, args, {
                                     windowsHide: true,
                                     stdio: ["ignore", "pipe", "pipe"]
@@ -525,6 +661,36 @@ async function executeSingleTest({
 
                                 let stdout = "";
                                 let stderr = "";
+
+                                const stopResolver = () => {
+
+                                    if (finished) return;
+
+                                    finished = true;
+
+                                    console.log(
+                                        `🛑 Camera test stopped by user`
+                                    );
+
+                                    clearTimeout(timer);
+
+                                    try {
+                                        child.kill();
+                                    } catch (err) {
+                                        console.log(
+                                            "⚠️ Could not kill ReadImage process:",
+                                            err.message
+                                        );
+                                    }
+
+                                    atsRuntime.unregisterStopResolver(
+                                        stopResolver
+                                    );
+
+                                    resolve({
+                                        stopped: true
+                                    });
+                                };
 
                                 child.stdout.on("data", (data) => {
                                     stdout += data.toString();
@@ -534,14 +700,36 @@ async function executeSingleTest({
                                     stderr += data.toString();
                                 });
 
-                                child.on("error", reject);
+                                child.on("error", (err) => {
+
+                                    if (finished) return;
+
+                                    finished = true;
+
+                                    clearTimeout(timer);
+
+                                    atsRuntime.unregisterStopResolver(
+                                        stopResolver
+                                    );
+
+                                    reject(err);
+                                });
 
                                 const timer = setTimeout(() => {
+
+                                    if (finished) return;
+
+                                    finished = true;
+
                                     try {
                                         child.kill();
                                     } catch {
-                                        // ignore kill failure
+                                        // ignore
                                     }
+
+                                    atsRuntime.unregisterStopResolver(
+                                        stopResolver
+                                    );
 
                                     reject(
                                         new Error(
@@ -549,24 +737,51 @@ async function executeSingleTest({
                                             `(exe=${exePath}, ip=${cameraIp}, out=${outputPath})`
                                         )
                                     );
+
                                 }, Number.isFinite(timeoutMs) ? timeoutMs : 45000);
 
+                                atsRuntime.registerStopResolver(
+                                    stopResolver
+                                );
+
                                 child.on("close", (code) => {
+
+                                    if (finished) return;
+
+                                    finished = true;
+
                                     clearTimeout(timer);
 
-                                    if (code === 0) {
-                                        return resolve();
-                                    }
-
-                                    reject(
-                                        new Error(
-                                            `ReadImage exited with code ${code}` +
-                                            `${stderr ? `: ${stderr.trim()}` : ""}` +
-                                            `${stdout ? ` | stdout: ${stdout.trim()}` : ""}`
-                                        )
+                                    atsRuntime.unregisterStopResolver(
+                                        stopResolver
                                     );
+
+                                    if (code === 0) {
+                                        resolve({
+                                            stopped: false
+                                        });
+
+                                    } else {
+                                        reject(
+                                            new Error(
+                                                `ReadImage exited with code ${code}` +
+                                                `${stderr ? `: ${stderr.trim()}` : ""}` +
+                                                `${stdout ? ` | stdout: ${stdout.trim()}` : ""}`
+                                            )
+                                        );
+                                    }
                                 });
                             });
+
+                            if (atsRuntime.testStopRequested) {
+                                return {
+                                    testFile,
+                                    status: "stopped",
+                                    output: "Test stopped by user",
+                                    passed: false,
+                                    stepResults
+                                };
+                            }
 
                             let stat;
                             try {
@@ -585,20 +800,83 @@ async function executeSingleTest({
                             console.log(`    Image saved at: ${outputPath}`);
 
                             const dialogPromise = new Promise((resolve) => {
-                                const timeout = setTimeout(() => {
-                                    console.log(`    Dialog timeout after ${step.waitTime || 60}s`);
+
+                                let finished = false;
+
+                                const stopResolver = () => {
+
+                                    if (finished) return;
+
+                                    finished = true;
+
+                                    clearTimeout(timeout);
+
                                     atsRuntime.setDialogResolver(null);
-                                    resolve({ confirmed: false, reason: "TIMEOUT" });
+
+                                    atsRuntime.unregisterStopResolver(
+                                        stopResolver
+                                    );
+
+                                    console.log(
+                                        `🛑 Camera confirmation stopped by user`
+                                    );
+
+                                    resolve({
+                                        confirmed: false,
+                                        reason: "STOP_REQUESTED"
+                                    });
+                                };
+
+                                const timeout = setTimeout(() => {
+
+                                    if (finished) return;
+
+                                    finished = true;
+
+                                    atsRuntime.setDialogResolver(null);
+
+                                    atsRuntime.unregisterStopResolver(
+                                        stopResolver
+                                    );
+
+                                    console.log(
+                                        `    Dialog timeout after ${step.waitTime || 60}s`
+                                    );
+
+                                    resolve({
+                                        confirmed: false,
+                                        reason: "TIMEOUT"
+                                    });
+
                                 }, (step.waitTime || 60) * 1000);
 
+                                atsRuntime.registerStopResolver(
+                                    stopResolver
+                                );
+
                                 atsRuntime.setDialogResolver((confirmed) => {
-                                    console.log(`    Dialog response received: ${confirmed}`);
+
+                                    if (finished) return;
+
+                                    finished = true;
+
+                                    console.log(
+                                        `    Dialog response received: ${confirmed}`
+                                    );
+
                                     clearTimeout(timeout);
+
                                     atsRuntime.setDialogResolver(null);
+
+                                    atsRuntime.unregisterStopResolver(
+                                        stopResolver
+                                    );
 
                                     resolve({
                                         confirmed,
-                                        reason: confirmed ? "USER_CONFIRMED" : "USER_CANCELLED"
+                                        reason: confirmed
+                                            ? "USER_CONFIRMED"
+                                            : "USER_CANCELLED"
                                     });
                                 });
                             });
@@ -619,6 +897,16 @@ async function executeSingleTest({
                             console.log("   Waiting for user confirmation...");
 
                             const dialogResult = await dialogPromise;
+
+                            if (dialogResult.reason === "STOP_REQUESTED") {
+                                return {
+                                    testFile,
+                                    status: "stopped",
+                                    output: "Test stopped by user",
+                                    passed: false,
+                                    stepResults
+                                };
+                            }
 
                             if (dialogResult.confirmed) {
                                 stepResults.push({
@@ -817,13 +1105,64 @@ async function executeSingleTest({
                     const stepResult = await new Promise((resolve) => {
                         let isCurrentlyMatching = false;
                         let lastReceivedValue = null;
+                        let finished = false;
+                        let currentStepHandler = null;
+
+                        // 🧹 Cleanup everything belonging to this step
+                        const cleanup = () => {
+
+                            clearTimeout(timeout);
+
+                            if (currentStepHandler) {
+                                const idx =
+                                    atsRuntime.deviceCommandWaiters.indexOf(
+                                        currentStepHandler
+                                    );
+
+                                if (idx > -1) {
+                                    atsRuntime.deviceCommandWaiters.splice(idx, 1);
+                                }
+                            }
+
+                            atsRuntime.clearTestWaitForMAC();
+
+                            atsRuntime.unregisterStopResolver(stopResolver);
+                        };
+
+                        // 🛑 GLOBAL STOP
+                        const stopResolver = () => {
+
+                            if (finished) return;
+
+                            finished = true;
+
+                            console.log(
+                                `🛑 ${testFile} Step ${stepNumber} stopped by user`
+                            );
+
+                            cleanup();
+
+                            resolve({
+                                success: false,
+                                reason: "STOP_REQUESTED",
+                                received: lastReceivedValue
+                            });
+                        };
+
+                        // atsRuntime.registerStopResolver(stopResolver);
 
                         const timeout = setTimeout(() => {
-                            if (currentStepHandler) {
-                                const idx = atsRuntime.deviceCommandWaiters.indexOf(currentStepHandler);
-                                if (idx > -1) atsRuntime.deviceCommandWaiters.splice(idx, 1);
-                            }
-                            atsRuntime.clearTestWaitForMAC();
+                            if (finished) return;
+
+                            finished = true;
+
+                            cleanup();
+
+                            // if (currentStepHandler) {
+                            //     const idx = atsRuntime.deviceCommandWaiters.indexOf(currentStepHandler);
+                            //     if (idx > -1) atsRuntime.deviceCommandWaiters.splice(idx, 1);
+                            // }
+                            // atsRuntime.clearTestWaitForMAC();
                             if (isCurrentlyMatching) {
                                 console.log("✅ Step passed after full waitTime");
 
@@ -851,17 +1190,26 @@ async function executeSingleTest({
                         //     resolve({ success: false, reason: 'TIMEOUT', received: null });
                         // }, (step.waitTime || 20) * 1000);
 
+                        // Register this step for immediate STOP
+                        atsRuntime.registerStopResolver(stopResolver);
+
                         atsRuntime.setTestWaitForMAC(testDeviceMAC);  //Setting device for testing so it can wait for device readings 
 
-                        let currentStepHandler = null;
+                        // let currentStepHandler = null;
 
                         // Handler wait for expecting outputs inside the steps
                         const stepHandler = (reading) => {
+                            if (finished) {
+                                return false;
+                            }
+
                             if (!reading || typeof reading !== 'object') {
                                 return false;
                             }
 
-                            // Check if multi-property (contains semicolons)
+                            // ==========================================
+                            // PROPERTY CHECKING CODE
+                            // ==========================================
                             const isMultiProperty = step.waitFor.includes(';');
 
                             if (isMultiProperty) {
@@ -945,6 +1293,22 @@ async function executeSingleTest({
                             });
                         }
                     });
+
+                    // 🛑 User stopped the test
+                    if (stepResult.reason === "STOP_REQUESTED") {
+
+                        console.log(
+                            `🛑 ${testFile} stopped by user`
+                        );
+
+                        return {
+                            testFile,
+                            status: "stopped",
+                            output: "Test stopped by user",
+                            passed: false,
+                            stepResults
+                        };
+                    }
 
                     // Process step result
                     if (stepResult.success) {
@@ -1048,16 +1412,84 @@ async function executeSingleTest({
                 let currentHandler = null;
 
                 // Create a promise that resolves only when the expected condition is met
+                let eoStopped = false;
+
                 const waitForResponse = new Promise((resolve) => {
-                    const timeout = setTimeout(() => {
-                        // Cleanup handler on timeout
+
+                    const stopResolver = () => {
+
+                        if (eoStopped) return;
+
+                        eoStopped = true;
+
+                        console.log(
+                            `🛑 EO test stopped by user: ${testFile}`
+                        );
+
+                        clearTimeout(timeout);
+
                         if (currentHandler) {
-                            const idx = atsRuntime.deviceCommandWaiters.indexOf(currentHandler);
-                            if (idx > -1) atsRuntime.deviceCommandWaiters.splice(idx, 1);
+
+                            const idx =
+                                atsRuntime.deviceCommandWaiters.indexOf(
+                                    currentHandler
+                                );
+
+                            if (idx > -1) {
+                                atsRuntime.deviceCommandWaiters.splice(
+                                    idx,
+                                    1
+                                );
+                            }
                         }
+
                         atsRuntime.clearTestWaitForMAC();
+
+                        atsRuntime.unregisterStopResolver(
+                            stopResolver
+                        );
+
+                        resolve("STOP_REQUESTED");
+                    };
+
+                    const timeout = setTimeout(() => {
+
+                        if (eoStopped) return;
+
+                        eoStopped = true;
+
+                        if (currentHandler) {
+
+                            const idx =
+                                atsRuntime.deviceCommandWaiters.indexOf(
+                                    currentHandler
+                                );
+
+                            if (idx > -1) {
+                                atsRuntime.deviceCommandWaiters.splice(
+                                    idx,
+                                    1
+                                );
+                            }
+                        }
+
+                        atsRuntime.clearTestWaitForMAC();
+
+                        atsRuntime.unregisterStopResolver(
+                            stopResolver
+                        );
+
                         resolve("TIMEOUT");
-                    }, 20000); // 20 second timeout
+
+                    }, 20000);
+
+                    atsRuntime.registerStopResolver(
+                        stopResolver
+                    );
+
+                    atsRuntime.setTestWaitForMAC(
+                        testDeviceMAC
+                    );
 
                     // Set this MAC as the one we're waiting for
                     atsRuntime.setTestWaitForMAC(testDeviceMAC);
@@ -1094,8 +1526,14 @@ async function executeSingleTest({
                                 testPassed = true;
                                 console.log(`✅ ALL properties matched!`);
                                 clearTimeout(timeout);
-                                // Cleanup handler on success
-                                const idx = atsRuntime.deviceCommandWaiters.indexOf(responseHandler);
+
+                                atsRuntime.unregisterStopResolver(
+                                    stopResolver
+                                );
+
+                                const idx = atsRuntime.deviceCommandWaiters.indexOf(
+                                    responseHandler
+                                );
                                 if (idx > -1) atsRuntime.deviceCommandWaiters.splice(idx, 1);
                                 atsRuntime.clearTestWaitForMAC();
                                 resolve(reading);
@@ -1121,8 +1559,14 @@ async function executeSingleTest({
                                 if (normalizedReceived === normalizedExpected) {
                                     testPassed = true;
                                     clearTimeout(timeout);
-                                    // Cleanup handler on success
-                                    const idx = atsRuntime.deviceCommandWaiters.indexOf(responseHandler);
+
+                                    atsRuntime.unregisterStopResolver(
+                                        stopResolver
+                                    );
+
+                                    const idx = atsRuntime.deviceCommandWaiters.indexOf(
+                                        responseHandler
+                                    );
                                     if (idx > -1) atsRuntime.deviceCommandWaiters.splice(idx, 1);
                                     atsRuntime.clearTestWaitForMAC();
                                     resolve(reading);
@@ -1134,9 +1578,14 @@ async function executeSingleTest({
 
                         // Fallback: any object response resolves for numeric EO cases
                         clearTimeout(timeout);
-                        // Cleanup handler on fallback
-                        const idx = atsRuntime.deviceCommandWaiters.indexOf(responseHandler);
-                        if (idx > -1) atsRuntime.deviceCommandWaiters.splice(idx, 1);
+
+                        atsRuntime.unregisterStopResolver(
+                            stopResolver
+                        );
+
+                        const idx = atsRuntime.deviceCommandWaiters.indexOf(
+                            responseHandler
+                        ); if (idx > -1) atsRuntime.deviceCommandWaiters.splice(idx, 1);
                         atsRuntime.clearTestWaitForMAC();
                         resolve(reading);
                         return true;
@@ -1149,6 +1598,21 @@ async function executeSingleTest({
                 });
 
                 deviceResponse = await waitForResponse;
+
+                // 🛑 User stopped EO test
+                if (deviceResponse === "STOP_REQUESTED") {
+
+                    console.log(
+                        `🛑 ${testFile} stopped by user`
+                    );
+
+                    return {
+                        testFile,
+                        status: "stopped",
+                        output: "Test stopped by user",
+                        passed: false
+                    };
+                }
 
                 if (deviceResponse === "TIMEOUT") {
                     testResult.receivedOutcome = "TIMEOUT";
@@ -1311,6 +1775,9 @@ const TEST_GROUPS = [
 ];
 
 const runTests = async (options) => {
+    // 🔄 Reset stop state for a NEW ATS execution
+    atsRuntime.resetStop();
+
     const results = [];
 
     const selectedTests = options.testFiles || [];
@@ -1362,10 +1829,15 @@ const runTests = async (options) => {
         // Add this group's results
         results.push(...groupResults);
 
-        console.log("\n----------------------------------------");
-        console.log(
-            `✅ TEST GROUP ${groupIndex + 1} COMPLETED`
-        );
+        if (atsRuntime.testStopRequested) {
+            console.log(
+                `🛑 TEST GROUP ${groupIndex + 1} STOPPED BY USER`
+            );
+        } else {
+            console.log(
+                `✅ TEST GROUP ${groupIndex + 1} COMPLETED`
+            );
+        }
         console.log("Group results:", groupResults);
         console.log("----------------------------------------\n");
     }

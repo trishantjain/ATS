@@ -4,6 +4,7 @@ let pendingDialogResolver = null;
 
 
 const deviceCommandWaiters = [];
+const stopResolvers = new Set();
 
 const connectedDevices = new Map();
 
@@ -22,12 +23,37 @@ module.exports = {
 
     requestStop() {
         testStopRequested = true;
+
+        console.log("🛑 STOP REQUESTED - resolving active test waiters");
+
+        for (const resolve of stopResolvers) {
+            try {
+                resolve({
+                    success: false,
+                    reason: "STOP_REQUESTED"
+                });
+            } catch (err) {
+                console.error("❌ Error resolving stopped test:", err);
+            }
+        }
+
+        stopResolvers.clear();
+    },
+
+    registerStopResolver(resolve) {
+        stopResolvers.add(resolve);
+    },
+
+    unregisterStopResolver(resolve) {
+        stopResolvers.delete(resolve);
     },
 
     resetStop() {
         testStopRequested = false;
         testWaitingForMAC = null;
         deviceCommandWaiters.length = 0;
+        stopResolvers.clear();
+        console.log("🔄 ATS stop state reset");
     },
 
     // MAC handling
