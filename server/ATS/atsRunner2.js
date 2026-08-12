@@ -1278,7 +1278,6 @@ const TEST_GROUPS = [
     [
         "1_Fans.srv",
         "2_Door.srv",
-        "3_Fire.srv"
     ],
 
     // Group 2
@@ -1290,7 +1289,7 @@ const TEST_GROUPS = [
     // Group 3
     [
         "11_fan_fail.srv",
-        "8_humidity.srv",
+        "3_Fire.srv",
     ],
 
     // Group 4
@@ -1306,7 +1305,8 @@ const TEST_GROUPS = [
 
     // Group 6
     [
-        "7_Lock_Rack.srv"
+        "7_Lock_Rack.srv",
+        "8_humidity.srv",
     ]
 ];
 

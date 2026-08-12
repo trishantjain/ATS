@@ -6,7 +6,7 @@ retryCount=0
 
 [step:1]
 type="instruction"
-msg="Prepare Heat Gun"
+msg="Prepare for Humidity Test"
 waitTime=10
 onPass="Heat gun ready."
 
