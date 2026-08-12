@@ -104,7 +104,12 @@ async function executeSingleTest({
                     if (line.startsWith('msg=')) {
                         currentStep.msg = line.substring(4).replace(/["\']/g, '');
                     } else if (line.startsWith('action=')) {
-                        currentStep.action = line.substring(7).replace(/["\']/g, '') + getFormattedDateTime() + "$";
+                        currentStep.action = line
+                            .substring(7)
+                            .replace(/["']/g, '')
+                            .split(',')
+                            .map(cmd => cmd.trim())
+                            .filter(Boolean);
                     } else if (line.startsWith('waitFor=')) {
                         currentStep.waitFor = line.substring(8).replace(/["\']/g, '');
                     } else if (line.startsWith('waitTime=')) {
@@ -1284,13 +1289,30 @@ async function executeSingleTest({
                         if (step.action) {
                             console.log("🚀 Sending command:", step.action);
 
-                            testResult.commands.push(step.action);
+                            const commands = Array.isArray(step.action)
+                                ? step.action
+                                : [step.action];
 
-                            fetch("http://localhost:5000/command", {
-                                method: "POST",
-                                headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({ mac: connectedMACs, command: step.action }),
-                            });
+                            for (const command of commands) {
+
+                                const finalCommand =
+                                    command + getFormattedDateTime() + "$";
+
+                                console.log("🚀 Sending command:", finalCommand);
+
+                                testResult.commands.push(finalCommand);
+
+                                fetch("http://localhost:5000/command", {
+                                    method: "POST",
+                                    headers: {
+                                        "Content-Type": "application/json"
+                                    },
+                                    body: JSON.stringify({
+                                        mac: connectedMACs,
+                                        command: finalCommand
+                                    }),
+                                });
+                            }
                         }
                     });
 
