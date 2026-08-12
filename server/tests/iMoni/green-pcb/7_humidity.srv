@@ -5,6 +5,12 @@ fail="Humidity sensor Test failed"
 retryCount=0
 
 [step:1]
+type="instruction"
+msg="Prepare for Humidity Test"
+waitTime=4
+onPass="Make Wet Cloth Ready"
+
+[step:1]
 msg="Humidity Sensor test started"
 waitFor="humidity"
 waitTime=30

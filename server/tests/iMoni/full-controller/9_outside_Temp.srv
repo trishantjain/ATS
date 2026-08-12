@@ -8,7 +8,7 @@ retryCount=0
 type="instruction"
 msg="Prepare Heat Gun"
 waitTime=4
-onPass="Heat gun ready."
+onPass="Heat gun ready"
 
 [step:2]
 msg="Outside Temperature Sensor test started"

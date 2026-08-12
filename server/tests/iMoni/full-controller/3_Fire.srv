@@ -6,7 +6,7 @@ retryCount=0
 [step:1]
 msg="No Fire alarm should not appear now"
 waitFor="fireAlarm"
-waitTime=15
+waitTime=10
 expectedValue="0"
 onPass="Fire alarm is off, ready to test"
 onFail="Fire Alarm already ON"

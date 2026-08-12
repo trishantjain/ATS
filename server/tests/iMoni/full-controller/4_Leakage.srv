@@ -6,7 +6,7 @@ retryCount=0
 [step:1]
 msg="No Water Leakage alarm should not appear now"
 waitFor="waterLeakage"
-waitTime=15
+waitTime=10
 expectedValue="false"
 onPass="No Water Leakage alarm | Ready to start"
 onFail="Water Leakage already ON"
@@ -14,7 +14,7 @@ onFail="Water Leakage already ON"
 [step:2]
 msg="Start testing Water Leakage Sensor"
 waitFor="waterLeakage"
-waitTime=15
+waitTime=10
 expectedValue="true"
 onPass="Water Leakage alarm successfully"
 onFail="Water Leakage alarm not turned on"
@@ -22,7 +22,7 @@ onFail="Water Leakage alarm not turned on"
 [step:3]
 msg="Wipe off water from sensor"
 waitFor="waterLeakage"
-waitTime=15
+waitTime=10
 expectedValue="false"
 onPass="Water Leakage alarm off successfully"
 onFail="Water Leakage alarm not turned off"

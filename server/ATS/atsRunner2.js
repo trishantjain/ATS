@@ -1759,36 +1759,66 @@ async function executeSingleTest({
 }
 
 // TEST GROUP
-const TEST_GROUPS = [
-    // Group 1
-    [
-        "1_Fans.srv",
-        "2_Door.srv",
-        "4_Leakage.srv",
-        "5_Logging.srv"
+const TEST_GROUPS = {
+    "full-controller": [
+        // Group 1
+        [
+            "1_Fans.srv",
+            "2_Door.srv",
+            "4_Leakage.srv",
+            "5_Logging.srv"
 
+        ],
+
+        // Group 2
+        [
+            "11_fan_fail.srv",
+            "3_Fire.srv",
+        ],
+
+        // Group 3
+        [
+            "7_Lock_Rack.srv",
+            "9_outside_Temp.srv"
+        ],
+
+        // Group 4
+        [
+            "8_humidity.srv",
+            "10_camera.srv",
+            "6_Lock_eMS.srv"
+        ]
     ],
 
-    // Group 2
-    [
-        "11_fan_fail.srv",
-        "3_Fire.srv",
-    ],
+    "green-pcb": [
+        // Group 1
+        [
+            "1_Fans.srv",
+            "2_Door.srv",
+        ],
 
-    // Group 3
-    [
-        "7_Lock_Rack.srv",
-        "9_outside_Temp.srv"
-    ],
+        [
+            "4_Leakage.srv",
+            "5_Logging.srv"
+        ],
 
-    // Group 4
-    [
-        "8_humidity.srv",
-        "10_camera.srv",
-        "6_Lock_eMS.srv"
-    ],
+        // Group 2
+        [
+            "3_Fire.srv",
+            "8_humidity.srv",
+        ],
 
-];
+        // Group 3
+        [
+            "7_Lock_Rack.srv",
+        ],
+
+        [
+            "9_outside_Temp.srv"
+        ]
+    ]
+
+};
 
 const runTests = async (options) => {
     // 🔄 Reset stop state for a NEW ATS execution
@@ -1803,7 +1833,11 @@ const runTests = async (options) => {
     console.log("Selected tests:", selectedTests);
     console.log("========================================\n");
 
-    for (let groupIndex = 0; groupIndex < TEST_GROUPS.length; groupIndex++) {
+    const groups =
+        TEST_GROUPS[options.testLevel] ||
+        TEST_GROUPS["full-controller"];
+
+    for (let groupIndex = 0; groupIndex < groups.length; groupIndex++) {
 
         // Stop before starting another group
         if (atsRuntime.testStopRequested) {
@@ -1813,7 +1847,7 @@ const runTests = async (options) => {
             break;
         }
 
-        const group = TEST_GROUPS[groupIndex];
+        const group = groups[groupIndex];
 
         // Only take tests selected by the user
         const testsInGroup = group.filter(testFile =>

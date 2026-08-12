@@ -6,7 +6,7 @@ retryCount=0
 [step:1]
 msg="No Water Logging alarm should not appear now"
 waitFor="waterLogging"
-waitTime=20
+waitTime=12
 expectedValue="false"
 onPass="No Water Logging alarm | Ready to test"
 onFail="Water Logging already ON"
@@ -14,7 +14,7 @@ onFail="Water Logging already ON"
 [step:2]
 msg="Start testing Water Logging Sensor"
 waitFor="waterLogging"
-waitTime=20
+waitTime=12
 expectedValue="true"
 onPass="Water Logging alarm successfully"
 onFail="Water Logging alarm not turned on"
@@ -22,7 +22,7 @@ onFail="Water Logging alarm not turned on"
 [step:3]
 msg="Wipe off water from Logging sensor"
 waitFor="waterLogging"
-waitTime=25
+waitTime=12
 expectedValue="false"
 onPass="Water Logging alarm off successfully"
 onFail="Water Logging alarm not turned off"

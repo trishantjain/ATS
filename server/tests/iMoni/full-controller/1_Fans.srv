@@ -44,7 +44,7 @@ msg="Turning Fan Group 3 OFF & Fan Group 4 ON"
 waitFor="fanLevel1Running;fanLevel2Running;fanLevel3Running;fanLevel4Running;fan1Status;fan2Status;fan3Status;fan4Status;fan5Status;fan6Status"
 action=%R03F,%R04N
 waitTime=12
-expectedValue="false;false;false;false;0;0;0;0;0;0"
+expectedValue="false;false;false;true;0;0;0;0;0;1"
 onPass="Fan Group 3 turned off successfully"
 onFail="Fan Group 3 not turned off"
 
