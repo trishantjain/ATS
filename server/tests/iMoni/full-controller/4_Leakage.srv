@@ -20,7 +20,7 @@ onPass="Water Leakage alarm successfully"
 onFail="Water Leakage alarm not turned on"
 
 [step:3]
-msg="Wipe off water from sensor"
+msg="No Water Leakage alarm"
 waitFor="waterLeakage"
 waitTime=10
 expectedValue="false"

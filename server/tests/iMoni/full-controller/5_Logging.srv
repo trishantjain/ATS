@@ -20,7 +20,7 @@ onPass="Water Logging alarm successfully"
 onFail="Water Logging alarm not turned on"
 
 [step:3]
-msg="Wipe off water from Logging sensor"
+msg="No Water Logging alarm"
 waitFor="waterLogging"
 waitTime=12
 expectedValue="false"

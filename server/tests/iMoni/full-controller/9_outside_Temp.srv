@@ -11,7 +11,7 @@ waitTime=4
 onPass="Heat gun ready"
 
 [step:2]
-msg="Outside Temperature Sensor test started"
+msg="HEAT GUN | Outside Temperature Sensor test started "
 waitFor="outsideTemperature"
 waitTime=25
 increasedBy=5

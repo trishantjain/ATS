@@ -4,7 +4,7 @@ fail="Lock test Test failed"
 retryCount=0
 
 [step:1]
-msg="Door should be locked"
+msg="No Lock alarm"
 waitFor="lockStatus"
 waitTime=10
 expectedValue="CLOSED"
@@ -20,7 +20,7 @@ onPass="Door opened successfully"
 onFail="Door not opened"
 
 [step:3]
-msg="Wait for closing the door"
+msg="Wait for closing the Lock Alarm"
 waitFor="lockStatus"
 waitTime=18
 expectedValue="CLOSED"

@@ -20,7 +20,7 @@ onPass="Fire alarm turned on successfully"
 onFail="Fire Alarm not turned on"
 
 [step:3]
-msg="Remove Fire from near sensor"
+msg="No Fire from near sensor"
 waitFor="fireAlarm"
 waitTime=8
 expectedValue="0"

@@ -14,6 +14,7 @@ onFail="Door is already open"
 [step:2]
 msg="Enter admin password through eMS to open Lock"
 waitFor="lockStatus"
+action=%L00O
 waitTime=20
 expectedValue="OPEN"
 onPass="Door opened successfully"

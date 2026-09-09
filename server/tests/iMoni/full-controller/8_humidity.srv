@@ -11,7 +11,7 @@ waitTime=4
 onPass="Make Wet Cloth Ready"
 
 [step:2]
-msg="Humidity Sensor test started"
+msg="Start Humidity Sensor test"
 waitFor="humidity"
 waitTime=25
 increasedBy=5

@@ -1,4 +1,4 @@
-name="Limit Switch Test"
+name="Door Test"
 pass="Limit Switch successfully completed"
 fail="Limit Switch failed"
 retryCount=0
