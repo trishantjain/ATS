@@ -4,8 +4,9 @@ fail="Fan-Fail Test failed"
 retryCount=0
 
 [step:1]
-msg="Turn on FG 1"
+msg="Turning on FG 1"
 waitFor="fanLevel1Running;fanLevel2Running;fanLevel3Running;fanLevel4Running;fan1Status;fan2Status;fan3Status;fan4Status;fan5Status;fan6Status"
+action=%R01N
 waitTime=15
 expectedValue="true;false;false;false;1;1;0;0;0;0"
 onPass="Fan 1 & 2 is On"
