@@ -88,6 +88,7 @@ while True:
         print(tn.read_very_eager().decode(errors="ignore"))
 
         # Send commands
+        type_command(tn, "srmsiti")
         type_command(tn, f"cfg myip 192 168 0 {serial}")
 
         # Change SYSID
