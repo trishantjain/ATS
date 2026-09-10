@@ -1215,55 +1215,46 @@ async function executeSingleTest({
               const isMultiProperty = step.waitFor.includes(";");
 
               if (isMultiProperty) {
-                // Multi-property check: ALL properties must match
                 const properties = step.waitFor.split(";").map((p) => p.trim());
                 const expectedValues = step.expectedValue
                   .split(";")
                   .map((v) => v.trim());
 
-                let allMatch = true;
+                lastReceivedValue = reading;
 
-                // Checking values defined in single step
-                for (let j = 0; j < properties.length; j++) {
-                  const prop = properties[j];
-                  const expectedVal = expectedValues[j] || expectedValues[0];
-                  const receivedVal = String(reading[prop])
+                const allMatch = properties.every((property, index) => {
+                  const expected = (expectedValues[index] || expectedValues[0])
                     .toUpperCase()
                     .trim();
-                  const normalizedExpected = String(expectedVal)
+
+                  const received = String(reading[property])
                     .toUpperCase()
                     .trim();
 
                   console.log(
-                    `   🔍 Checking: ${prop} = "${reading[prop]}" (expected: "${expectedVal}")`,
+                    `   🔍 Checking: ${property} = "${reading[property]}" (expected: "${expected}")`,
                   );
 
-                  // if (receivedVal !== normalizedExpected) {
-                  //     allMatch = false;
-                  // }
+                  return received === expected;
+                });
 
-                  isCurrentlyMatching = properties.every((prop, i) => {
-                    const expected = (expectedValues[i] || expectedValues[0])
-                      .toUpperCase()
-                      .trim();
-                    const received = String(reading[prop]).toUpperCase().trim();
-                    return received === expected;
+                isCurrentlyMatching = allMatch;
+
+                if (allMatch) {
+                  finished = true;
+                  clearTimeout(timeout);
+                  cleanup();
+
+                  resolve({
+                    success: true,
+                    received: reading,
                   });
 
-                  lastReceivedValue = reading;
+                  return true;
                 }
 
-                // if (allMatch) {
-                //     clearTimeout(timeout);
-                //     atsRuntime.clearTestWaitForMAC();
-                //     const idx = atsRuntime.deviceCommandWaiters.indexOf(stepHandler);
-                //     if (idx > -1) atsRuntime.deviceCommandWaiters.splice(idx, 1);
-                //     resolve({ success: true, received: 'All properties matched' });
-                //     return true;
-                // }
-
                 console.log(
-                  `⏳ Not all properties matched yet, continuing to wait...`,
+                  "⏳ Not all properties matched yet, continuing to wait...",
                 );
                 return false;
               } else {
@@ -1850,20 +1841,20 @@ const runTests = async (options) => {
     console.log("Tests:", testsInGroup);
     console.log("========================================\n");
 
-    /*
-     * All tests in this group run simultaneously.
-     */
-    const groupResults = await Promise.all(
-      testsInGroup.map((testFile) =>
-        executeSingleTest({
-          ...options,
-          testFile,
-        }),
-      ),
-    );
+    const groupResults = [];
 
-    // Add this group's results
-    results.push(...groupResults);
+    for (const testFile of testsInGroup) {
+      if (atsRuntime.testStopRequested) {
+        break;
+      }
+
+      const result = await executeSingleTest({
+        ...options,
+        testFile,
+      });
+
+      groupResults.push(result);
+    }
 
     if (atsRuntime.testStopRequested) {
       console.log(`🛑 TEST GROUP ${groupIndex + 1} STOPPED BY USER`);
