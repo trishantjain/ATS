@@ -1150,9 +1150,21 @@ async function executeSingleTest({
             let finished = false;
             let currentStepHandler = null;
 
+            // Expected value must remain valid for this long
+            const CONFIRMATION_TIME = 2000;
+
+            let confirmationTimer = null;
+            let confirmationStartedAt = null;
+            let originalDeadline = Date.now() + (step.waitTime || 20) * 1000;
+
             // 🧹 Cleanup everything belonging to this step
             const cleanup = () => {
               clearTimeout(timeout);
+
+              if (confirmationTimer) {
+                clearTimeout(confirmationTimer);
+                confirmationTimer = null;
+              }
 
               if (currentStepHandler) {
                 const idx =
@@ -1277,15 +1289,63 @@ async function executeSingleTest({
 
                 isCurrentlyMatching = allMatch;
 
-                if (allMatch) {
-                  finished = true;
-                  clearTimeout(timeout);
-                  cleanup();
+                if (!allMatch) {
+                  // If we were in the 2-second confirmation period,
+                  // cancel it because the expected value changed.
+                  if (confirmationTimer) {
+                    console.log(
+                      "⚠️ Expected value changed during confirmation - cancelling confirmation",
+                    );
 
-                  resolve({
-                    success: true,
-                    received: reading,
-                  });
+                    clearTimeout(confirmationTimer);
+                    confirmationTimer = null;
+                    confirmationStartedAt = null;
+
+                    // Continue waiting for the expected value again
+                  }
+
+                  isCurrentlyMatching = false;
+
+                  console.log(
+                    "⏳ Expected values not continuously matching, continuing to wait...",
+                  );
+
+                  return false;
+                }
+
+                if (allMatch) {
+                  // Already confirming - keep checking subsequent readings
+                  if (confirmationTimer) {
+                    console.log(
+                      "✅ Expected values still matching during confirmation...",
+                    );
+                    return false;
+                  }
+
+                  console.log(
+                    `🎯 Expected values matched! Starting ${CONFIRMATION_TIME / 1000}s confirmation...`,
+                  );
+
+                  confirmationStartedAt = Date.now();
+
+                  confirmationTimer = setTimeout(() => {
+                    if (finished) {
+                      return;
+                    }
+
+                    finished = true;
+
+                    console.log(
+                      `✅ Expected values remained stable for ${CONFIRMATION_TIME / 1000}s - STEP PASSED`,
+                    );
+
+                    cleanup();
+
+                    resolve({
+                      success: true,
+                      received: lastReceivedValue,
+                    });
+                  }, CONFIRMATION_TIME);
 
                   return true;
                 }
@@ -1311,6 +1371,56 @@ async function executeSingleTest({
                 );
 
                 isCurrentlyMatching = normalizedReceived === normalizedExpected;
+
+                if (isCurrentlyMatching) {
+                  if (confirmationTimer) {
+                    console.log(
+                      "✅ Expected value still matching during confirmation...",
+                    );
+                    return false;
+                  }
+
+                  console.log(
+                    `🎯 Expected value "${step.expectedValue}" received! Starting ${CONFIRMATION_TIME / 1000}s confirmation...`,
+                  );
+
+                  confirmationStartedAt = Date.now();
+
+                  confirmationTimer = setTimeout(() => {
+                    if (finished) {
+                      return;
+                    }
+
+                    finished = true;
+
+                    console.log(
+                      `✅ Expected value remained "${step.expectedValue}" for ${CONFIRMATION_TIME / 1000}s - STEP PASSED`,
+                    );
+
+                    cleanup();
+
+                    resolve({
+                      success: true,
+                      received: lastReceivedValue,
+                    });
+                  }, CONFIRMATION_TIME);
+                } else {
+                  if (confirmationTimer) {
+                    console.log(
+                      `⚠️ Expected value changed during confirmation: "${receivedValue}" - cancelling confirmation`,
+                    );
+
+                    clearTimeout(confirmationTimer);
+                    confirmationTimer = null;
+                    confirmationStartedAt = null;
+                  }
+
+                  console.log(
+                    "⏳ Expected value not matching, continuing to wait...",
+                  );
+                }
+
+                return false;
                 // Checking expected Value
                 // if (normalizedReceived === normalizedExpected) {
                 //     clearTimeout(timeout);
@@ -1912,22 +2022,18 @@ const runTests = async (options) => {
     console.log("Tests:", testsInGroup);
     console.log("========================================\n");
 
-    const groupResults = [];
+    // Run all tests in this group in parallel
+    const groupResults = await Promise.all(
+      testsInGroup.map((testFile) =>
+        executeSingleTest({
+          ...options,
+          testFile,
+        }),
+      ),
+    );
 
-    for (const testFile of testsInGroup) {
-      if (atsRuntime.testStopRequested) {
-        break;
-      }
-
-      const result = await executeSingleTest({
-        ...options,
-        mac: requestedMAC,
-        testFile,
-      });
-
-      groupResults.push(result);
-      results.push(result);
-    }
+    // Add this group's results
+    results.push(...groupResults);
 
     if (atsRuntime.testStopRequested) {
       console.log(`🛑 TEST GROUP ${groupIndex + 1} STOPPED BY USER`);
