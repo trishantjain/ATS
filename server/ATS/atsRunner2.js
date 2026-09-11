@@ -196,7 +196,43 @@ async function executeSingleTest({
       // Get the first connected device MAC to wait for
       const connectedMACs = Array.from(atsRuntime.connectedDevices.keys());
 
+      const requestedMAC = mac ? String(mac).trim().toLowerCase() : null;
+
+      console.log("📱 Connected devices:", connectedMACs);
+      console.log("🎯 Requested test device:", requestedMAC || "NONE");
+
+      let testDeviceMAC = null;
+
       if (connectedMACs.length === 0) {
+        testResult.output = "❌ Test FAILED: No connected devices available";
+        testResult.status = "failed";
+        testResult.passed = false;
+      } else if (requestedMAC) {
+        // IMPORTANT:
+        // Do NOT silently run the test on another device if the
+        // requested device is not connected.
+        if (!atsRuntime.connectedDevices.has(requestedMAC)) {
+          console.error(`❌ Requested device ${requestedMAC} is not connected`);
+
+          testResult.output = `❌ Test FAILED: Selected device ${requestedMAC} is not connected`;
+
+          testResult.status = "failed";
+          testResult.passed = false;
+        } else {
+          testDeviceMAC = requestedMAC;
+
+          console.log(`✅ Using selected test device: ${testDeviceMAC}`);
+        }
+      } else {
+        // Backward-compatible fallback when no device was selected.
+        testDeviceMAC = connectedMACs[0];
+
+        console.log(
+          `⚠️ No device selected. Falling back to first connected device: ${testDeviceMAC}`,
+        );
+      }
+
+      if (!testDeviceMAC) {
         testResult.output = "❌ Test FAILED: No connected devices available";
         testResult.status = "failed";
         testResult.passed = false;
@@ -205,7 +241,7 @@ async function executeSingleTest({
       else if (testConfig.type === "sensor") {
         console.log(`           📟 Sensor test detected in test type`);
         console.log(`           🔄 Running sensor code part`);
-        const testDeviceMAC = connectedMACs[0];
+        console.log(`📡 Sensor test device: ${testDeviceMAC}`);
         let allStepsPassed = true;
         const stepResults = [];
 
@@ -998,7 +1034,8 @@ async function executeSingleTest({
       }
       // ========== STEP-BASED TEST EXECUTION ==========
       else if (testConfig.steps.length > 0) {
-        const testDeviceMAC = connectedMACs[0];
+        // Use the selected device from the device-selection logic above.
+        console.log(`📡 Step-based test device: ${testDeviceMAC}`);
         let allStepsPassed = true;
         const stepResults = [];
 
@@ -1311,7 +1348,8 @@ async function executeSingleTest({
                     "Content-Type": "application/json",
                   },
                   body: JSON.stringify({
-                    mac: connectedMACs,
+                    // mac: connectedMACs,
+                    mac: testDeviceMAC,
                     command: finalCommand,
                   }),
                 });
@@ -1412,7 +1450,8 @@ async function executeSingleTest({
       }
       // ========== EO-BASED TEST EXECUTION (Original Logic) ==========
       else {
-        const testDeviceMAC = connectedMACs[0]; // Wait for first connected device
+        // Use the selected device from the device-selection logic above.
+        console.log(`📡 Step-based test device: ${testDeviceMAC}`);
 
         let deviceResponse = null;
 
@@ -1775,7 +1814,7 @@ const TEST_GROUPS = {
     ["11_fan_fail.srv", "3_Fire.srv"],
 
     // Group 3
-    ["7_Lock_Rack.srv"],
+    ["7_Keypad_test.srv"],
 
     // Group 4
     ["8_humidity.srv", "2_Door.srv", "6_Lock_eMS.srv"],
@@ -1794,7 +1833,7 @@ const TEST_GROUPS = {
     ["3_Fire.srv", "7_humidity.srv"],
 
     // Group 3
-    ["6_Lock_Rack.srv"],
+    ["6_Keypad_test.srv"],
 
     // Group 4
     ["8_outside_Temp.srv"],
@@ -1809,10 +1848,42 @@ const runTests = async (options) => {
 
   const selectedTests = options.testFiles || [];
 
+  const requestedMAC = options.mac
+    ? String(options.mac).trim().toLowerCase()
+    : null;
+
   console.log("\n========================================");
   console.log("🚀 ATS GROUPED TEST EXECUTION");
   console.log("Selected tests:", selectedTests);
+  console.log("Selected device:", requestedMAC || "NONE");
+  console.log("Test level:", options.testLevel);
   console.log("========================================\n");
+
+  // Validate selected device before starting tests
+  const connectedMACs = Array.from(atsRuntime.connectedDevices.keys());
+
+  console.log("📱 Currently connected devices:", connectedMACs);
+
+  if (requestedMAC && !atsRuntime.connectedDevices.has(requestedMAC)) {
+    console.error(`❌ Selected device ${requestedMAC} is not connected`);
+
+    return {
+      summary: {
+        total: 0,
+        passed: 0,
+        failed: 1,
+        stopped: 0,
+      },
+      results: [
+        {
+          testFile: null,
+          status: "failed",
+          output: `Selected device ${requestedMAC} is not connected`,
+          passed: false,
+        },
+      ],
+    };
+  }
 
   const groups =
     TEST_GROUPS[options.testLevel] || TEST_GROUPS["full-controller"];
@@ -1850,10 +1921,12 @@ const runTests = async (options) => {
 
       const result = await executeSingleTest({
         ...options,
+        mac: requestedMAC,
         testFile,
       });
 
       groupResults.push(result);
+      results.push(result);
     }
 
     if (atsRuntime.testStopRequested) {

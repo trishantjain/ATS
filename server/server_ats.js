@@ -368,32 +368,61 @@ app.get("/api/devices-info", async (req, res) => {
 
 // ✅ Command endpoint
 app.post("/command", (req, res) => {
-  const { mac, command } = req.body;
-  if (!mac || !command)
-    return res.status(400).json({ message: "mac and command required" });
-  const normalizedMac = String(mac).toLowerCase();
-  const device = atsRuntime.connectedDevices.get(normalizedMac);
+  try {
+    const { mac, command } = req.body;
 
-  if (!device || device.destroyed) {
-    atsRuntime.connectedDevices.delete(normalizedMac);
-    // atsRuntime.connectedDevices.delete(socket.deviceId);
-    return res
-      .status(404)
-      .json({ message: `Device ${normalizedMac} not connected` });
-  }
+    if (!mac || !command)
+      return res.status(400).json({ message: "mac and command required" });
 
-  const buffer = Buffer.from(command, "utf-8");
-  // deviceSocket.write(buffer, (err) => {
-  device.socket.write(buffer, (err) => {
-    if (err) {
-      console.error(`Failed to send command to ${normalizedMac}:`, err.message);
-      return res
-        .status(500)
-        .json({ message: `Error sending command to ${normalizedMac}` });
+    // Command must target ONE device
+    if (Array.isArray(mac)) {
+      return res.status(400).json({
+        message: "mac must be a single device MAC/IP, not an array",
+      });
     }
-    console.log(`Sent command "${command}" to ${normalizedMac}`);
-    res.json({ message: `Command sent to ${normalizedMac}` });
-  });
+
+    const normalizedMac = String(mac).trim().toLowerCase();
+    const device = atsRuntime.connectedDevices.get(normalizedMac);
+
+    if (!device || !device.socket || device.socket.destroyed) {
+      // Only delete if this entry really belongs to a dead socket
+      if (device?.socket?.destroyed) {
+        atsRuntime.connectedDevices.delete(normalizedMac);
+      }
+
+      return res.status(404).json({
+        message: `Device ${normalizedMac} not connected`,
+      });
+    }
+
+    const socket = device.socket;
+
+    const buffer = Buffer.from(String(command), "utf-8");
+
+    // const buffer = Buffer.from(command, "utf-8");
+    // deviceSocket.write(buffer, (err) => {
+    socket.write(buffer, (err) => {
+      if (err) {
+        console.error(
+          `Failed to send command to ${normalizedMac}:`,
+          err.message,
+        );
+
+        return res
+          .status(500)
+          .json({ message: `Error sending command to ${normalizedMac}` });
+      }
+
+      console.log(`Sent command "${command}" to ${normalizedMac}`);
+      res.json({ message: `Command sent to ${normalizedMac}` });
+    });
+  } catch (err) {
+    console.error("❌ /command error:", err);
+
+    return res.status(500).json({
+      message: `Command error: ${err.message}`,
+    });
+  }
 });
 
 // ✅ Get connected MACs
@@ -646,6 +675,7 @@ app.post("/api/tests/run", async (req, res) => {
       onStatus: broadcastTestStatus,
       testLevel,
       testDir: baseDir,
+      mac: selectedMac ? String(selectedMac).toLowerCase() : null,
     });
 
     console.log("Test execution completed.", testResult);
@@ -774,6 +804,7 @@ app.post("/api/tests/run-all", async (req, res) => {
       onStatus: broadcastTestStatus,
       testDir,
       testLevel,
+      mac: mac ? String(mac).toLowerCase() : null,
     });
 
     let mergedResults = [];
@@ -1739,30 +1770,94 @@ const tcpServer = net.createServer((socket) => {
     }
   });
 
+  // const removeConnectedDevice = () => {
+  //   for (const [mac, device] of atsRuntime.connectedDevices.entries()) {
+  //     if (device?.socket === socket) {
+  //       atsRuntime.connectedDevices.delete(mac);
+  //       console.log(`Device ${mac} disconnected`);
+  //     }
+  //   }
+  // };
+
+  // socket.on("end", removeConnectedDevice);
+  // socket.on("close", removeConnectedDevice);
+
+  // socket.on("error", (err) => {
+  //   removeConnectedDevice();
+
+  //   if (err.code !== "ECONNRESET") {
+  //     console.error("Socket error:", err.message);
+  //   }
+  // });
+
+  // socket.on("error", (err) => {
+  //   if (err.code !== "ECONNRESET") {
+  //     console.error("Socket error:", err.message);
+  //   }
+  // });
+
+  // ============================================================
+  // DEVICE SOCKET CLEANUP
+  // ============================================================
+
+  let deviceCleanupDone = false;
+
   const removeConnectedDevice = () => {
+    // Prevent cleanup from running multiple times
+    if (deviceCleanupDone) {
+      return;
+    }
+
+    deviceCleanupDone = true;
+
     for (const [mac, device] of atsRuntime.connectedDevices.entries()) {
+      // IMPORTANT:
+      // Only remove the device if the stored socket is THIS socket.
+      //
+      // This prevents an old socket from deleting a newer connection
+      // for the same device.
       if (device?.socket === socket) {
         atsRuntime.connectedDevices.delete(mac);
-        console.log(`Device ${mac} disconnected`);
+
+        console.log(`🔌 Device disconnected: ${mac}`);
+
+        console.log(
+          `📱 Remaining connected devices:`,
+          Array.from(atsRuntime.connectedDevices.keys()),
+        );
       }
+    }
+
+    // If the socket was the device currently being tested,
+    // clear the test waiting MAC.
+    if (
+      atsRuntime.testWaitingForMAC &&
+      socket.deviceId === atsRuntime.testWaitingForMAC
+    ) {
+      console.log(`⚠️ Test device disconnected: ${socket.deviceId}`);
+
+      atsRuntime.clearTestWaitForMAC();
     }
   };
 
-  socket.on("end", removeConnectedDevice);
-  socket.on("close", removeConnectedDevice);
+  socket.on("end", () => {
+    console.log(`🔌 TCP socket ended: ${clientInfo}`);
 
-  socket.on("error", (err) => {
     removeConnectedDevice();
+  });
 
-    if (err.code !== "ECONNRESET") {
-      console.error("Socket error:", err.message);
-    }
+  socket.on("close", () => {
+    console.log(`🔌 TCP socket closed: ${clientInfo}`);
+
+    removeConnectedDevice();
   });
 
   socket.on("error", (err) => {
     if (err.code !== "ECONNRESET") {
-      console.error("Socket error:", err.message);
+      console.error(`❌ TCP socket error ${clientInfo}:`, err.message);
     }
+
+    removeConnectedDevice();
   });
 });
 
