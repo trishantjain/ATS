@@ -1011,6 +1011,55 @@ app.get("/api/tests/:testType", async (req, res) => {
   }
 });
 
+app.post("/run-python", (req, res) => {
+  const { cpu, ip } = req.body;
+  console.log("CPU:", cpu);
+  console.log("IP:", ip);
+
+  const pythonProcess = spawn("python", [
+    "-u",
+    "./Testing/CPU-Programming.py",
+    cpu,
+    ip,
+  ]);
+
+  console.log("Running Python process...");
+
+  let output = "";
+  let error = "";
+
+  pythonProcess.stdout.on("data", (data) => {
+    const text = data.toString();
+    output += text;
+
+    console.log("PYTHON:", text);
+  });
+
+  pythonProcess.stderr.on("data", (data) => {
+    const text = data.toString();
+    error += text;
+
+    console.error("PYTHON ERROR:", text);
+  });
+
+  pythonProcess.on("close", (code) => {
+    console.log("Python process finished. Code:", code);
+
+    if (code === 0) {
+      res.json({
+        success: true,
+        output: output,
+      });
+    } else {
+      res.status(500).json({
+        success: false,
+        error: error,
+        output: output,
+      });
+    }
+  });
+});
+
 const eMS_LOGS = process.env.eMS_LOGS === "true";
 console.log(`[BOOT] eMS_LOGS is`, eMS_LOGS);
 
@@ -1151,7 +1200,7 @@ const tcpServer = net.createServer((socket) => {
       // debug.bufferStats.discardedBytes.totalBytes += data.length;
 
       // console.log(`Raw data received ${data.toString('hex')} with length (${data.length} bytes) from`, clientInfo);
-      fs.appendFileSync(logFile, "Data received\n");
+      // fs.appendFileSync(logFile, "Data received\n");
 
       // console.log(`Raw data hex preview:`, data.toString('hex').substring(0, 100) + '...');
 
@@ -1263,28 +1312,29 @@ const tcpServer = net.createServer((socket) => {
         const waterLogging = !!packet[31]; // "!!" -> converts true/false to 1/0
         const waterLeakage = !!packet[32];
 
-        const output = +packet.readInt16LE(33).toFixed(2);
-        const outputVoltage = output / 100;
+        const outputVoltage = +packet.readInt16LE(33).toFixed(2) / 100;
         const hupsDVC = +packet.readInt16LE(35).toFixed(2) / 100;
-        const input = +packet.readInt16LE(37).toFixed(2);
-        const inputVoltage = input / 100;
+        const inputVoltage = +packet.readInt16LE(37).toFixed(2) / 100;
         const hupsBatVolt = packet.readInt16LE(39);
         const batteryBackup = +packet.readFloatLE(41).toFixed(2);
 
         const alarmActive = !!packet[45];
+
+        // 0 -> No alarm | 1 -> Fire | 2 -> Smoke
         const fireAlarm = packet[46];
         const fanLevel1Running = !!packet[47];
         const fanLevel2Running = !!packet[48];
         const fanLevel3Running = !!packet[49];
         const fanLevel4Running = !!packet[50];
 
+        // console.log("Load current: ")
         const padding = packet[51]; // unused
         const fanStatusBits = packet.readUInt16LE(52);
 
         const pwsFailCount = packet[54]; // Password Failure Count
-        const hupsStat = packet[55]; // unused
-        const hupsRes = packet[56]; // unused
-        const failMask = packet[57]; // unused
+        const hupsStat = packet[55];
+        const hupsRes = packet[56];
+        const failMask = packet[57];
 
         const packetTimestamp = new Date();
 
@@ -1304,6 +1354,7 @@ const tcpServer = net.createServer((socket) => {
         }
 
         // console.log("HUPS Alarms: ", hupsAlarms);
+        console.log("Fire alarm:", fireAlarm);
 
         /*
           Extracting Individual Fan Status from 'fanStatusBits' using bitwise operations. 

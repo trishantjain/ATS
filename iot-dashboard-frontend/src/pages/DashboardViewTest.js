@@ -26,12 +26,12 @@ function DashboardViewTest() {
   const [currentTestStep, setCurrentTestStep] = useState(0);
   const [testCommandInput, setTestCommandInput] = useState("");
   const [notifications, setNotifications] = useState({});
-  const [liveReading, setLiveReading] = useState(null);  // Separate state for immediate UI updates
+  const [liveReading, setLiveReading] = useState(null); // Separate state for immediate UI updates
 
   const [showATSPanel, setShowATSPanel] = useState(true);
 
   // const notificationTimeoutRef = useRef(null);  // Track notification auto-dismiss timeout
-  const notificationTimeoutRefs = useRef({});  // Track notification auto-dismiss timeout
+  const notificationTimeoutRefs = useRef({}); // Track notification auto-dismiss timeout
 
   const [selectedProduct, setSelectedProduct] = useState("");
 
@@ -41,10 +41,11 @@ function DashboardViewTest() {
   const [basePcbSrNo, setBasePcbSrNo] = useState("");
   const [cameraSrNo, setCameraSrNo] = useState("");
   const [psuSrNo, setPsuSrNo] = useState("");
-  // const [controllerId, setControllerId] = useState("");
+  const [pythonCpu, setPythonCpu] = useState("");
+  const [pythonIp, setPythonIp] = useState(""); // const [controllerId, setControllerId] = useState("");
 
   // States for Test Lists
-  const [selectedTests, setSelectedTests] = useState([]);  // Stores selected tests
+  const [selectedTests, setSelectedTests] = useState([]); // Stores selected tests
   const [fetchedTestList, setFetchedTestList] = useState([]); // Stores Fetched tests from backend
 
   const [awaitingCommand, setAwaitingCommand] = useState(false); // Waiting for ATS Execution
@@ -57,28 +58,26 @@ function DashboardViewTest() {
 
   const [refreshing, setRefreshing] = useState(false);
 
-
   const isTestRunning = awaitingCommand || fanTestStatus || pduTestStatus;
 
-
   const TEST_COLORS = {
-    "Fan Test": "#3B82F6",              // Blue
-    "Limit Switch Test": "#F59E0B",     // Orange
+    "Fan Test": "#3B82F6", // Blue
+    "Limit Switch Test": "#F59E0B", // Orange
 
     // Add exact names from your .srv files later
-    "Leakage Test": "#06B6D4",          // Cyan
-    "Logging Test": "#8B5CF6",           // Purple
+    "Leakage Test": "#06B6D4", // Cyan
+    "Logging Test": "#8B5CF6", // Purple
 
-    "Fan Fail Test": "#EC4899",         // Pink
-    "Fire Alarm Test": "#EF4444",       // Red
+    "Fan Fail Test": "#EC4899", // Pink
+    "Fire Alarm Test": "#EF4444", // Red
 
-    "Humidity Test": "#22C55E",         // Green
+    "Humidity Test": "#22C55E", // Green
     "Outside Temperature Test": "#EAB308", // Yellow
 
-    "Camera Test": "#14B8A6",           // Teal
+    "Camera Test": "#14B8A6", // Teal
 
-    "Lock EMS Test": "#F472B6",         // Light Pink
-    "Lock Rack Test": "#6366F1"         // Indigo
+    "Lock EMS Test": "#F472B6", // Light Pink
+    "Lock Rack Test": "#6366F1", // Indigo
   };
 
   const getTestColor = (message) => {
@@ -118,10 +117,7 @@ function DashboardViewTest() {
       return TEST_COLORS["Humidity Test"];
     }
 
-    if (
-      testFile.includes("Outside") ||
-      testFile.includes("Temperature")
-    ) {
+    if (testFile.includes("Outside") || testFile.includes("Temperature")) {
       return TEST_COLORS["Outside Temperature Test"];
     }
 
@@ -144,7 +140,7 @@ function DashboardViewTest() {
       "#EAB308": "#352D08", // Outside temp - dark yellow
       "#14B8A6": "#0B302B", // Camera - dark teal
       "#F472B6": "#3A1729", // Lock EMS
-      "#6366F1": "#171B3D"  // Lock Rack
+      "#6366F1": "#171B3D", // Lock Rack
     };
 
     return backgrounds[color] || "#1A1F26";
@@ -167,11 +163,14 @@ function DashboardViewTest() {
 
   const selectedDeviceMeta = deviceMeta.find((d) => d.mac === selectedMac);
   // Use liveReading if available, otherwise fall back to readings array
-  const latestReading = liveReading?.mac === selectedMac ? liveReading : readings.find((r) => r.mac === selectedMac);
+  const latestReading =
+    liveReading?.mac === selectedMac
+      ? liveReading
+      : readings.find((r) => r.mac === selectedMac);
 
   // UseEffect for fetching Data
   useEffect(() => {
-    console.log('🚨Starting data fetch interval (5s)🚨');
+    console.log("🚨Starting data fetch interval (5s)🚨");
     // const interval = setInterval(fetchData, 2000);
 
     // fetchData();
@@ -179,13 +178,10 @@ function DashboardViewTest() {
     // console.log('🚨Fetching Data🚨')
     // return () => clearInterval(interval);
     return () => {
-      console.log('🛑Clearing data fetch interval');
+      console.log("🛑Clearing data fetch interval");
       // clearInterval(interval);
     };
-
   }, []);
-
-
 
   // added by vats
   // A synchronous function to format the date and time.
@@ -261,14 +257,10 @@ function DashboardViewTest() {
       sendToLog(
         `Fan Group ${level} clicked ${isActive ? "off" : "on "}`,
         "",
-        command
+        command,
       );
     } else {
-      sendToLog(
-        `LOAD Clicked ${isActive ? "off" : "on "}`,
-        "",
-        command
-      );
+      sendToLog(`LOAD Clicked ${isActive ? "off" : "on "}`, "", command);
     }
     sendCommand(command);
 
@@ -285,9 +277,7 @@ function DashboardViewTest() {
     // );
     if (level === 5) {
       setActiveFanBtns((prev) =>
-        prev.includes(5)
-          ? prev.filter((l) => l !== 5)
-          : [...prev, 5]
+        prev.includes(5) ? prev.filter((l) => l !== 5) : [...prev, 5],
       );
     }
   };
@@ -308,54 +298,102 @@ function DashboardViewTest() {
       width: "20em",
     });
 
-    if (password) {
-      if (password === "admin123") {
-        sendCommand(`%L00O${getFormattedDateTime()}$`);
-        sendToLog("Password Open Button Clicked");
-        setStatus("Lock opened successfully!");
-      } else {
-        setStatus("Wrong password!");
-      }
-    }
+    // if (password) {
+    // if (password === "admin123") {
+    sendCommand(`%L00O${getFormattedDateTime()}$`);
+    sendToLog("Password Open Button Clicked");
+    setStatus("Lock opened successfully!");
+    // } else {
+    // setStatus("Wrong password!");
+    // }
+    // }
   };
 
   const handleResetLock = () => {
-    const pwd = window.prompt("Enter admin password to reset lock:");
-    if (pwd === "admin123") {
-      const newLock = window.prompt("Enter new lock value:");
+    // const pwd = window.prompt("Enter admin password to reset lock:");
+    // if (pwd === "admin123") {
+    const newLock = window.prompt("Enter new lock value:");
 
-      if (/^\d{9}$/.test(newLock)) {
-        if (newLock && newLock.trim() !== "") {
-          sendToLog(`Lock Reset ${newLock} clicked`);
-          sendCommand(`%L00R${newLock}${getFormattedDateTime()}$$`);
-          setStatus(`New password ${newLock} `)
-        } else {
-          setStatus("New lock value cannot be empty!");
-        }
+    if (/^\d{9}$/.test(newLock)) {
+      if (newLock && newLock.trim() !== "") {
+        sendToLog(`Lock Reset ${newLock} clicked`);
+        sendCommand(`%L00R${newLock}${getFormattedDateTime()}$$`);
+        setStatus(`New password ${newLock} `);
       } else {
-        alert("Enter Numeric Password of 9 Digits")
+        setStatus("New lock value cannot be empty!");
       }
     } else {
-      setStatus("Wrong password for resetting lock!");
+      alert("Enter Numeric Password of 9 Digits");
     }
+    // } else {
+    //   setStatus("Wrong password for resetting lock!");
+    // }
   };
 
   // Function
   const openPassword = () => {
-    const pwd = window.prompt("Enter admin password to Open Lock:");
+    // const pwd = window.prompt("Enter admin password to Open Lock:");
     // const today = new Date();
-    if (pwd === "admin123") sendCommand(`%L00P${getFormattedDateTime()}$`);
-    else setStatus("Wrong password for opening lock!");
+    // if (pwd === "admin123")
+    sendCommand(`%L00P${getFormattedDateTime()}$`);
+    // else setStatus("Wrong password for opening lock!");
   };
 
+  const testMode = () => {
+    // sendCommand(`%T003${getFormattedDateTime()}$`);
+    console.log(`%T003${getFormattedDateTime()}$`);
+    alert("command sent");
+  };
 
+  const runPython = async () => {
+    if (!cpuSrNo.trim() || !pythonIp.trim()) {
+      swal.fire({
+        icon: "warning",
+        title: "Missing Input",
+        text: "Please enter CPU Serial Number and IP.",
+      });
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `${process.env.REACT_APP_API_URL}/run-python`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            cpu: pythonCpu.trim(),
+            ip: pythonIp.trim(),
+          }),
+        },
+      );
+
+      const data = await response.json();
+
+      if (data.success) {
+        console.log("Python completed successfully");
+        console.log(data.output);
+
+        // Refresh browser
+        window.location.reload();
+      } else {
+        console.error("Python failed:", data.error);
+      }
+
+      console.log("Python output:", data.output);
+    } catch (error) {
+      console.error("Error:", error);
+    }
+  };
 
   const fetchSnapshots = async (selectedMac) => {
     try {
       // setActiveTab("snapshots");
       if (selectedMac) {
         let response = await fetch(
-          `${process.env.REACT_APP_API_URL}/api/snapshots/?mac=${selectedMac}`
+          `${process.env.REACT_APP_API_URL}/api/snapshots/?mac=${selectedMac}`,
         );
         const snapshotFiles = await response.json();
         setSnapshots(snapshotFiles);
@@ -367,14 +405,14 @@ function DashboardViewTest() {
     }
   };
 
-
   // CAMERA TEST DIALOG BOX
   const showCameraDialog = ({ imagePath, message, onConfirm, onCancel }) => {
-    swal.fire({
-      title: '📷 Camera Test',
-      html: `
+    swal
+      .fire({
+        title: "📷 Camera Test",
+        html: `
       <div style="text-align: center;">
-        <p style="margin-bottom: 15px; font-size: 16px;">${message || 'Camera image captured. Please verify.'}</p>
+        <p style="margin-bottom: 15px; font-size: 16px;">${message || "Camera image captured. Please verify."}</p>
         <div style="background: #2a2a3a; padding: 15px; border-radius: 8px; margin: 15px 0;">
           <p style="color: #00cccc; font-size: 14px; margin: 0;">📁 Image saved at:</p>
           <p style="color: #ffcc00; font-size: 18px; font-family: monospace; margin: 10px 0; word-break: break-all;">
@@ -384,23 +422,24 @@ function DashboardViewTest() {
         <p style="color: #aaa; font-size: 14px;">Please open the file to verify the image and confirm the result.</p>
       </div>
     `,
-      showCancelButton: true,
-      confirmButtonText: '✅ Pass',
-      cancelButtonText: '❌ Fail',
-      confirmButtonColor: '#28a745',
-      cancelButtonColor: '#dc3545',
-      background: '#1a1a2e',
-      color: '#fff',
-      width: '550px',
-      allowOutsideClick: false,
-      allowEscapeKey: false
-    }).then((result) => {
-      if (result.isConfirmed) {
-        onConfirm();
-      } else {
-        onCancel();
-      }
-    });
+        showCancelButton: true,
+        confirmButtonText: "✅ Pass",
+        cancelButtonText: "❌ Fail",
+        confirmButtonColor: "#28a745",
+        cancelButtonColor: "#dc3545",
+        background: "#1a1a2e",
+        color: "#fff",
+        width: "550px",
+        allowOutsideClick: false,
+        allowEscapeKey: false,
+      })
+      .then((result) => {
+        if (result.isConfirmed) {
+          onConfirm();
+        } else {
+          onCancel();
+        }
+      });
   };
 
   const connectWebSocket = () => {
@@ -409,7 +448,7 @@ function DashboardViewTest() {
     const wsUrl =
       process.env.NODE_ENV === "production"
         ? `wss://${window.location.host}`
-        : (process.env.REACT_APP_WS_URL || "ws://localhost:8080");
+        : process.env.REACT_APP_WS_URL || "ws://localhost:8080";
 
     const ws = new WebSocket(wsUrl);
 
@@ -433,51 +472,55 @@ function DashboardViewTest() {
         console.log("PARSED:", JSON.stringify(message, null, 2));
 
         // Getting New Reading from Socket
-        if (message.type === 'NEW_READING') {
+        if (message.type === "NEW_READING") {
           const newReading = message.data;
-          setSelectedMac(prev => prev || newReading.mac);
-          setSelectedDevice(prev => prev || newReading.locationId || newReading.mac);
+          setSelectedMac((prev) => prev || newReading.mac);
+          setSelectedDevice(
+            (prev) => prev || newReading.locationId || newReading.mac,
+          );
           // Update live reading immediately for current device
-          setLiveReading(prev => {
+          setLiveReading((prev) => {
             if (!prev || prev.mac === newReading.mac) return newReading;
             return prev;
           });
           //! Also update readings array for history
-          setReadings(prev => {
-            const filtered = prev.filter(r => r.mac !== newReading.mac);
+          setReadings((prev) => {
+            const filtered = prev.filter((r) => r.mac !== newReading.mac);
             return [...filtered, newReading].slice(-400);
           });
         }
 
-
-        if (message.type === 'TEST_STARTED') {
+        if (message.type === "TEST_STARTED") {
           const testId = message.testFile || message.name;
 
           setTestStatus(
-            `🏁 ${message.pre || message.message || 'Test started'}`
+            `🏁 ${message.pre || message.message || "Test started"}`,
           );
 
-          setTestResults(prev =>
-            prev.map(t =>
+          setTestResults((prev) =>
+            prev.map((t) =>
               t.id === message.testFile
                 ? {
-                  ...t,
-                  status: "running"
-                }
-                : t
-            )
+                    ...t,
+                    status: "running",
+                  }
+                : t,
+            ),
           );
 
-          if (message.pre || (message.message && message.message !== "No message")) {
-            setNotifications(prev => ({
+          if (
+            message.pre ||
+            (message.message && message.message !== "No message")
+          ) {
+            setNotifications((prev) => ({
               ...prev,
               [testId]: {
                 title: `Test: ${message.name}`,
-                pre: message.pre || '',
-                message: message.message || '',
-                type: 'info',
-                testColor: getTestColor(message)
-              }
+                pre: message.pre || "",
+                message: message.message || "",
+                type: "info",
+                testColor: getTestColor(message),
+              },
             }));
 
             // Give this test its own timeout
@@ -486,7 +529,7 @@ function DashboardViewTest() {
             }
 
             notificationTimeoutRefs.current[testId] = setTimeout(() => {
-              setNotifications(prev => {
+              setNotifications((prev) => {
                 const updated = { ...prev };
                 delete updated[testId];
                 return updated;
@@ -497,28 +540,27 @@ function DashboardViewTest() {
           }
         }
 
-        if (message.type === 'TEST_COMPLETED') {
-          setTestStatus(`${message.status === 'passed' ? '✅' : '❌'} ${message.name}: ${message.output}`);
+        if (message.type === "TEST_COMPLETED") {
+          setTestStatus(
+            `${message.status === "passed" ? "✅" : "❌"} ${message.name}: ${message.output}`,
+          );
 
           console.log("Message: ", message);
 
-          setTestResults(prev =>
-            prev.map(t =>
+          setTestResults((prev) =>
+            prev.map((t) =>
               t.id === message.testFile
                 ? {
-                  ...t,
-                  status:
-                    message.status === "passed"
-                      ? "passed"
-                      : "failed",
-                  duration: message.duration || "-"
-                }
-                : t
-            )
+                    ...t,
+                    status: message.status === "passed" ? "passed" : "failed",
+                    duration: message.duration || "-",
+                  }
+                : t,
+            ),
           );
         }
 
-        if (message.type === 'STEP_STARTED') {
+        if (message.type === "STEP_STARTED") {
           const testId = message.testFile || message.name;
 
           const stepMsg =
@@ -526,21 +568,19 @@ function DashboardViewTest() {
               ? message.message
               : `Step ${message.stepNumber}/${message.totalSteps}`;
 
-          setTestStatus(
-            `🔄 ${message.name} - ${stepMsg}`
-          );
+          setTestStatus(`🔄 ${message.name} - ${stepMsg}`);
 
           const currentWaitTime = message.waitTime || 20;
 
-          setNotifications(prev => ({
+          setNotifications((prev) => ({
             ...prev,
             [testId]: {
               title: `${message.name} - Step ${message.stepNumber}/${message.totalSteps}`,
               message: stepMsg,
-              type: 'info',
+              type: "info",
               waitTime: currentWaitTime,
-              testColor: getTestColor(message)
-            }
+              testColor: getTestColor(message),
+            },
           }));
 
           // Clear only THIS test's previous timeout
@@ -549,7 +589,7 @@ function DashboardViewTest() {
           }
 
           notificationTimeoutRefs.current[testId] = setTimeout(() => {
-            setNotifications(prev => {
+            setNotifications((prev) => {
               const updated = { ...prev };
               delete updated[testId];
               return updated;
@@ -559,14 +599,14 @@ function DashboardViewTest() {
           }, currentWaitTime * 1000);
         }
 
-        if (message.type === 'STEP_COMPLETED') {
+        if (message.type === "STEP_COMPLETED") {
           const testId = message.testFile || message.name;
 
-          const isPassed = message.status === 'passed';
-          const stepResult = isPassed ? '✅' : '❌';
+          const isPassed = message.status === "passed";
+          const stepResult = isPassed ? "✅" : "❌";
 
           setTestStatus(
-            `${stepResult} ${message.name} - Step ${message.stepNumber}/${message.totalSteps} ${isPassed ? 'PASSED' : 'FAILED'}`
+            `${stepResult} ${message.name} - Step ${message.stepNumber}/${message.totalSteps} ${isPassed ? "PASSED" : "FAILED"}`,
           );
 
           // Clear only this test's previous timeout
@@ -574,21 +614,21 @@ function DashboardViewTest() {
             clearTimeout(notificationTimeoutRefs.current[testId]);
           }
 
-          setNotifications(prev => ({
+          setNotifications((prev) => ({
             ...prev,
             [testId]: {
               title: `${message.name} - Step ${message.stepNumber}/${message.totalSteps}`,
-              message: `${stepResult} ${message.message ||
-                (isPassed ? 'Step passed' : 'Step failed')
-                }`,
-              type: isPassed ? 'success' : 'error',
-              testColor: getTestColor(message)
-            }
+              message: `${stepResult} ${
+                message.message || (isPassed ? "Step passed" : "Step failed")
+              }`,
+              type: isPassed ? "success" : "error",
+              testColor: getTestColor(message),
+            },
           }));
 
           // Auto-dismiss only THIS test's notification
           notificationTimeoutRefs.current[testId] = setTimeout(() => {
-            setNotifications(prev => {
+            setNotifications((prev) => {
               const updated = { ...prev };
               delete updated[testId];
               return updated;
@@ -598,14 +638,15 @@ function DashboardViewTest() {
           }, 3000);
         }
 
-        if (message.type === 'CAMERA_IMAGE_CAPTURED') {
-          console.log('📷 Camera image captured:', message);
+        if (message.type === "CAMERA_IMAGE_CAPTURED") {
+          console.log("📷 Camera image captured:", message);
 
-          swal.fire({
-            title: '📷 Camera Test',
-            html: `
+          swal
+            .fire({
+              title: "📷 Camera Test",
+              html: `
       <div style="text-align: center;">
-        <p style="margin-bottom: 15px; font-size: 16px;">${message.message || 'Camera image captured. Please verify.'}</p>
+        <p style="margin-bottom: 15px; font-size: 16px;">${message.message || "Camera image captured. Please verify."}</p>
         <div style="background: #2a2a3a; padding: 15px; border-radius: 8px; margin: 15px 0;">
           <p style="color: #00cccc; font-size: 14px; margin: 0;">📁 Image saved at:</p>
           <p style="color: #ffcc00; font-size: 18px; font-family: monospace; margin: 10px 0; word-break: break-all;">
@@ -615,39 +656,47 @@ function DashboardViewTest() {
         <p style="color: #aaa; font-size: 14px;">Please open the file to verify and confirm the result.</p>
       </div>
     `,
-            showCancelButton: true,
-            confirmButtonText: '✅ Pass',
-            cancelButtonText: '❌ Fail',
-            confirmButtonColor: '#28a745',
-            cancelButtonColor: '#dc3546ff',
-            background: '#1a1a2e',
-            color: '#fff',
-            width: '550px',
-            allowOutsideClick: false,
-            allowEscapeKey: false
-          }).then((result) => {
-            // Send the user's response back to the WebSocket
-            if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-              wsRef.current.send(JSON.stringify({
-                type: 'DIALOG_RESPONSE',
-                confirmed: result.isConfirmed // true for Pass, false for Fail
-              }));
-              console.log(`📤 Sent camera dialog response: ${result.isConfirmed ? 'PASS' : 'FAIL'}`);
-            }
-          });
+              showCancelButton: true,
+              confirmButtonText: "✅ Pass",
+              cancelButtonText: "❌ Fail",
+              confirmButtonColor: "#28a745",
+              cancelButtonColor: "#dc3546ff",
+              background: "#1a1a2e",
+              color: "#fff",
+              width: "550px",
+              allowOutsideClick: false,
+              allowEscapeKey: false,
+            })
+            .then((result) => {
+              // Send the user's response back to the WebSocket
+              if (
+                wsRef.current &&
+                wsRef.current.readyState === WebSocket.OPEN
+              ) {
+                wsRef.current.send(
+                  JSON.stringify({
+                    type: "DIALOG_RESPONSE",
+                    confirmed: result.isConfirmed, // true for Pass, false for Fail
+                  }),
+                );
+                console.log(
+                  `📤 Sent camera dialog response: ${result.isConfirmed ? "PASS" : "FAIL"}`,
+                );
+              }
+            });
         }
       } catch (err) {
-        console.error('❌ WebSocket message parse error:', err);
+        console.error("❌ WebSocket message parse error:", err);
       }
     };
 
     ws.onerror = (error) => {
-      console.error('❌ WebSocket connection error:', error);
+      console.error("❌ WebSocket connection error:", error);
     };
 
     ws.onclose = (event) => {
       console.log(
-        `🔌 WebSocket disconnected (code: ${event.code}, reason: ${event.reason})`
+        `🔌 WebSocket disconnected (code: ${event.code}, reason: ${event.reason})`,
       );
 
       // Don't reconnect if this was a manual refresh/unmount
@@ -679,15 +728,21 @@ function DashboardViewTest() {
     };
   }, []);
 
-  const confirmDialogBox = async ({ title, text, cancelBtn, confirmBtn, cancelText }) => {
+  const confirmDialogBox = async ({
+    title,
+    text,
+    cancelBtn,
+    confirmBtn,
+    cancelText,
+  }) => {
     return await swal.fire({
       title: title,
       text: text,
       showCancelButton: cancelBtn,
       confirmButtonText: confirmBtn,
       cancelButtonText: cancelText,
-    })
-  }
+    });
+  };
 
   // SNAPSHOT FETCHING USEEFFECT
   useEffect(() => {
@@ -701,24 +756,25 @@ function DashboardViewTest() {
   }, [selectedMac]);
   // Run ATS: Frontend dialogs first, then server tests
 
-
   const handleProductChange = async (e) => {
     setSelectedProduct(e.target.value);
-  }
+  };
 
   // FETCHING TEST LIST BASED ON SELECTED PRODUCT
   useEffect(() => {
     const fetchTests = async () => {
       try {
         if (selectedProduct !== "pdu") {
-          const res = await fetch(`${process.env.REACT_APP_API_URL}/api/tests/${selectedProduct}?testLevel=${testLevel}`);
+          const res = await fetch(
+            `${process.env.REACT_APP_API_URL}/api/tests/${selectedProduct}?testLevel=${testLevel}`,
+          );
           const tests = await res.json();
           setFetchedTestList(tests);
           setSelectedTests(tests);
         }
         // Auto-select all tests when fetched
       } catch (err) {
-        console.error('Error fetching tests:', err);
+        console.error("Error fetching tests:", err);
       }
     };
 
@@ -738,22 +794,22 @@ function DashboardViewTest() {
     initialResults.push({
       name: "Visual Test",
       status: "waiting",
-      duration: "-"
+      duration: "-",
     });
 
     initialResults.push({
       name: "Burn-In Test",
       status: "waiting",
-      duration: "-"
+      duration: "-",
     });
 
     // Backend tests
-    selectedTests.forEach(test => {
+    selectedTests.forEach((test) => {
       initialResults.push({
         id: test,
         name: test.replace(".srv", ""),
         status: "waiting",
-        duration: "-"
+        duration: "-",
       });
     });
 
@@ -764,7 +820,7 @@ function DashboardViewTest() {
         swal.fire({
           icon: "warning",
           title: "Base PCB Serial Number Required",
-          text: "Please enter Base PCB Serial Number before starting ATS"
+          text: "Please enter Base PCB Serial Number before starting ATS",
         });
         setAwaitingCommand(false);
         return;
@@ -774,7 +830,7 @@ function DashboardViewTest() {
         swal.fire({
           icon: "warning",
           title: "Unit Serial Number Required",
-          text: "Please enter Unit Serial Number before starting ATS"
+          text: "Please enter Unit Serial Number before starting ATS",
         });
         setAwaitingCommand(false);
         setShowATSPanel(true);
@@ -787,49 +843,52 @@ function DashboardViewTest() {
     console.log("Selected Tests Length: ", selectedTests.length);
 
     if (fetchedTestList.length === selectedTests.length) {
-
       // 1. Visual Test (frontend dialog)
       const v = await swal.fire({
-        title: 'Visual Test',
-        text: 'Is Visual inspection passed?',
+        title: "Visual Test",
+        text: "Is Visual inspection passed?",
         showCancelButton: true,
-        confirmButtonText: 'Pass',
-        cancelButtonText: 'Fail'
+        confirmButtonText: "Pass",
+        cancelButtonText: "Fail",
       });
 
       const visualPassed = v.isConfirmed;
 
-      setTestResults(prev =>
-        prev.map(t =>
+      setTestResults((prev) =>
+        prev.map((t) =>
           t.name === "Visual Test"
             ? {
-              ...t,
-              status: visualPassed ? "passed" : "failed"
-            }
-            : t
-        )
+                ...t,
+                status: visualPassed ? "passed" : "failed",
+              }
+            : t,
+        ),
       );
 
       frontendResults.push({
-        name: 'Visual Test',
-        status: v.isConfirmed ? 'passed' : 'failed',
+        name: "Visual Test",
+        status: v.isConfirmed ? "passed" : "failed",
         passed: v.isConfirmed,
-        output: v.isConfirmed ? 'Visual inspection passed successfully' : 'Visual inspection failed'
+        output: v.isConfirmed
+          ? "Visual inspection passed successfully"
+          : "Visual inspection failed",
       });
 
-      // 2. Burn-In Test (frontend dialog)  
+      // 2. Burn-In Test (frontend dialog)
       const b = await swal.fire({
-        title: 'Burn-In Test',
-        text: 'Is Burn-In test passed?',
+        title: "Burn-In Test",
+        text: "Is Burn-In test passed?",
         showCancelButton: true,
-        confirmButtonText: 'Pass',
-        cancelButtonText: 'Fail'
+        confirmButtonText: "Pass",
+        cancelButtonText: "Fail",
       });
       frontendResults.push({
-        name: 'Burn-In Test',
-        status: b.isConfirmed ? 'passed' : 'failed',
+        name: "Burn-In Test",
+        status: b.isConfirmed ? "passed" : "failed",
         passed: b.isConfirmed,
-        output: b.isConfirmed ? 'Burn-In test passed successfully' : 'Burn-In test failed'
+        output: b.isConfirmed
+          ? "Burn-In test passed successfully"
+          : "Burn-In test failed",
       });
 
       console.log("Frontend Results: ", frontendResults);
@@ -837,50 +896,59 @@ function DashboardViewTest() {
       try {
         // if()
 
-        const resp = await fetch(`${process.env.REACT_APP_API_URL}/api/tests/run-all`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            mac: selectedMac,
-            skipFrontendTests: true,
-            frontendResults,
-            cpuSrNo: cpuSrNo.trim(),
-            basePcbSrNo: basePcbSrNo.trim(),
-            cameraSrNo: cameraSrNo.trim(),
-            psuSrNo: psuSrNo.trim(),
-            unitSerialNo: unitSerialNo.trim(),
-            generateReport,
-            testLevel
-          })
-        });
+        const resp = await fetch(
+          `${process.env.REACT_APP_API_URL}/api/tests/run-all`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              mac: selectedMac,
+              skipFrontendTests: true,
+              frontendResults,
+              cpuSrNo: cpuSrNo.trim(),
+              basePcbSrNo: basePcbSrNo.trim(),
+              cameraSrNo: cameraSrNo.trim(),
+              psuSrNo: psuSrNo.trim(),
+              unitSerialNo: unitSerialNo.trim(),
+              generateReport,
+              testLevel,
+            }),
+          },
+        );
         const data = await resp.json();
-        setTestStatus(`Done: ${data.summary.passed} passed, ${data.summary.failed} failed`);
+        setTestStatus(
+          `Done: ${data.summary.passed} passed, ${data.summary.failed} failed`,
+        );
       } catch (err) {
         setTestStatus(`Error: ${err.message}`);
       }
     } else {
       console.log("Selected Test code runs ...", selectedTests);
 
-
       try {
-        const resp = await fetch(`${process.env.REACT_APP_API_URL}/api/tests/run`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            mac: selectedMac,
-            selectedProduct,
-            selectedTests,
-            unitSerialNo: unitSerialNo.trim(),
-            cpuSrNo: cpuSrNo.trim(),
-            basePcbSrNo: basePcbSrNo.trim(),
-            cameraSrNo: cameraSrNo.trim(),
-            psuSrNo: psuSrNo.trim(),
-            generateReport,
-            testLevel
-          })
-        });
+        const resp = await fetch(
+          `${process.env.REACT_APP_API_URL}/api/tests/run`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              mac: selectedMac,
+              selectedProduct,
+              selectedTests,
+              unitSerialNo: unitSerialNo.trim(),
+              cpuSrNo: cpuSrNo.trim(),
+              basePcbSrNo: basePcbSrNo.trim(),
+              cameraSrNo: cameraSrNo.trim(),
+              psuSrNo: psuSrNo.trim(),
+              generateReport,
+              testLevel,
+            }),
+          },
+        );
         const data = await resp.json();
-        setTestStatus(`Done: ${data.summary.passed} passed, ${data.summary.failed} failed`);
+        setTestStatus(
+          `Done: ${data.summary.passed} passed, ${data.summary.failed} failed`,
+        );
       } catch (err) {
         setTestStatus(`Error: ${err.message}`);
       }
@@ -895,16 +963,21 @@ function DashboardViewTest() {
 
     try {
       console.log("Calling /fan-test API...");
-      const resp = await fetch(`${process.env.REACT_APP_API_URL}/api/tests/fan-test`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mac: selectedMac })
-      });
+      const resp = await fetch(
+        `${process.env.REACT_APP_API_URL}/api/tests/fan-test`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ mac: selectedMac }),
+        },
+      );
 
-      console.log("...API Called")
+      console.log("...API Called");
       const data = await resp.json();
       console.log("Data: ", data);
-      setTestStatus(`Done: ${data.summary.passed} passed, ${data.summary.failed} failed`);
+      setTestStatus(
+        `Done: ${data.summary.passed} passed, ${data.summary.failed} failed`,
+      );
     } catch (err) {
       setTestStatus(`Error: ${err.message}`);
     }
@@ -925,24 +998,24 @@ function DashboardViewTest() {
         imageUrl: step.image,
         imageWidth: 800,
         imageHeight: 300,
-        width: '900px',
+        width: "900px",
         showCancelButton: true,
         showDenyButton: true,
-        confirmButtonText: 'PASS',
-        denyButtonText: 'FAIL',
-        cancelButtonText: '🛑 Cancel Test',
+        confirmButtonText: "PASS",
+        denyButtonText: "FAIL",
+        cancelButtonText: "🛑 Cancel Test",
         allowOutsideClick: false,
         allowEscapeKey: false,
         cancelButton: true,
         didOpen: () => {
-          const image = document.querySelector('.swal2-image');
+          const image = document.querySelector(".swal2-image");
           if (image) {
-            image.style.width = '800px';
-            image.style.height = '300px';
-            image.style.objectFit = 'contain';
-            image.style.maxWidth = '100%';
+            image.style.width = "800px";
+            image.style.height = "300px";
+            image.style.objectFit = "contain";
+            image.style.maxWidth = "100%";
           }
-        }
+        },
       });
 
       // 🛑 Cancel test completely
@@ -955,31 +1028,37 @@ function DashboardViewTest() {
         step: step.step,
         message: step.msg,
         image: step.image,
-        passed: r.isConfirmed
+        passed: r.isConfirmed,
       });
     }
 
     try {
       console.log("Calling /pdu-test API...");
-      const resp = await fetch(`${process.env.REACT_APP_API_URL}/api/tests/pdu-test`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          mac: selectedMac, frontendPDUResults,
-          cancelled: testCancelled
-        })
-      });
+      const resp = await fetch(
+        `${process.env.REACT_APP_API_URL}/api/tests/pdu-test`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            mac: selectedMac,
+            frontendPDUResults,
+            cancelled: testCancelled,
+          }),
+        },
+      );
 
-      console.log("...API Called")
+      console.log("...API Called");
       const data = await resp.json();
       console.log("Data: ", data);
-      setTestStatus(`Done: ${data.summary.passed} passed, ${data.summary.failed} failed`);
+      setTestStatus(
+        `Done: ${data.summary.passed} passed, ${data.summary.failed} failed`,
+      );
     } catch (err) {
       setTestStatus(`Error: ${err.message}`);
     }
 
     setPduTestStatus(false);
-  };
+  }
 
   const refreshDashboard = () => {
     console.log("🔄 ===== RECONNECTING WEBSOCKET =====");
@@ -1005,7 +1084,6 @@ function DashboardViewTest() {
       connectWebSocket();
     }, 300);
   };
-
 
   const alarmKeys = [
     {
@@ -1067,11 +1145,27 @@ function DashboardViewTest() {
   return (
     <>
       <div className="ats-panel">
-
         {/* HEADER */}
         <div className="ats-header">
           <h2>🧪 ATS Test Controls</h2>
 
+          <button onClick={testMode}>test</button>
+
+          <input
+            className="ats-input"
+            placeholder="CPU"
+            value={pythonCpu}
+            onChange={(e) => setPythonCpu(e.target.value)}
+          />
+
+          <input
+            className="ats-input"
+            placeholder="IP"
+            value={pythonIp}
+            onChange={(e) => setPythonIp(e.target.value)}
+          />
+
+          <button onClick={runPython}>Run Python</button>
           <button
             className="ats-toggle-btn"
             onClick={() => setShowATSPanel(!showATSPanel)}
@@ -1083,10 +1177,7 @@ function DashboardViewTest() {
         {/* TEST STATUS - ONLY SHOW WHEN TESTS EXIST */}
         {testResults.length > 0 && (
           <div className="live-test-status">
-
-            <div className="test-status-title">
-              Test Status
-            </div>
+            <div className="test-status-title">Test Status</div>
 
             <div className="test-status-row">
               {testResults.map((test, index) => (
@@ -1104,16 +1195,13 @@ function DashboardViewTest() {
                 </div>
               ))}
             </div>
-
           </div>
         )}
 
         {showATSPanel && (
           <div className="ats-running-panel">
-
             {/* TOP CONTROLS */}
             <div className="ats-top-row">
-
               <select
                 value={selectedProduct}
                 onChange={handleProductChange}
@@ -1152,13 +1240,11 @@ function DashboardViewTest() {
               >
                 {awaitingCommand ? "⏳ Running..." : "▶ Run ATS Tests"}
               </button>
-
             </div>
 
             {/* SERIAL NUMBERS */}
             {selectedProduct === "iMoni" && (
               <div className="ats-serial-row">
-
                 {testLevel === "green-pcb" ? (
                   <input
                     className="ats-input"
@@ -1204,13 +1290,10 @@ function DashboardViewTest() {
                     />
                   </>
                 )}
-
               </div>
             )}
-
           </div>
         )}
-
       </div>
 
       {/* STOP TEST BUTTON */}
@@ -1220,39 +1303,38 @@ function DashboardViewTest() {
           onClick={async () => {
             try {
               await fetch(`${process.env.REACT_APP_API_URL}/api/tests/stop`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
               });
-              setTestStatus('🛑 Tests stopped by user');
-              setNotifications(prev => ({
+              setTestStatus("🛑 Tests stopped by user");
+              setNotifications((prev) => ({
                 ...prev,
                 system: {
-                  title: 'Tests Stopped',
-                  message: 'Testing process was stopped by user',
-                  type: 'error'
-                }
-              }));              // Set states to false AFTER the API call completes
+                  title: "Tests Stopped",
+                  message: "Testing process was stopped by user",
+                  type: "error",
+                },
+              })); // Set states to false AFTER the API call completes
               setAwaitingCommand(false);
               setFanTestStatus(false);
               setPduTestStatus(false);
             } catch (err) {
-              console.error('Failed to stop tests:', err);
+              console.error("Failed to stop tests:", err);
               // Still reset states even on error
               setAwaitingCommand(false);
               setFanTestStatus(false);
               setPduTestStatus(false);
             }
-          }
-          }
+          }}
           style={{
-            backgroundColor: '#cc3333',
-            color: 'white',
-            border: 'none',
-            padding: '10px 20px',
-            borderRadius: '5px',
-            cursor: 'pointer',
-            marginLeft: '10px',
-            fontWeight: 'bold'
+            backgroundColor: "#cc3333",
+            color: "white",
+            border: "none",
+            padding: "10px 20px",
+            borderRadius: "5px",
+            cursor: "pointer",
+            marginLeft: "10px",
+            fontWeight: "bold",
           }}
         >
           🛑 Stop Test
@@ -1266,80 +1348,79 @@ function DashboardViewTest() {
           onClick={async () => {
             try {
               await fetch(`${process.env.REACT_APP_API_URL}/api/tests/stop`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
               });
               setFanTestStatus(false);
-              setTestStatus('🛑 Tests stopped by user');
-              setNotifications(prev => ({
+              setTestStatus("🛑 Tests stopped by user");
+              setNotifications((prev) => ({
                 ...prev,
                 system: {
-                  title: 'Tests Stopped',
-                  message: 'Testing process was stopped by user',
-                  type: 'error'
-                }
+                  title: "Tests Stopped",
+                  message: "Testing process was stopped by user",
+                  type: "error",
+                },
               }));
             } catch (err) {
-              console.error('Failed to stop tests:', err);
+              console.error("Failed to stop tests:", err);
             }
           }}
           style={{
-            backgroundColor: '#cc3333',
-            color: 'white',
-            border: 'none',
-            padding: '10px 20px',
-            borderRadius: '5px',
-            cursor: 'pointer',
-            marginLeft: '10px',
-            fontWeight: 'bold'
+            backgroundColor: "#cc3333",
+            color: "white",
+            border: "none",
+            padding: "10px 20px",
+            borderRadius: "5px",
+            cursor: "pointer",
+            marginLeft: "10px",
+            fontWeight: "bold",
           }}
         >
           🛑 Stop Test
         </button>
       )}
 
-
       {Object.entries(notifications).length > 0 && (
-        <div style={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '10px',
-          marginBottom: '16px'
-        }}>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: "10px",
+            marginBottom: "16px",
+          }}
+        >
           {Object.entries(notifications).map(([testId, notification]) => (
             <div
               key={testId}
               style={{
-backgroundColor: getTestBackground(
-  notification.testColor
-),
+                backgroundColor: getTestBackground(notification.testColor),
                 border: `1px solid ${notification.testColor || "#64748B"}`,
                 borderLeft: `4px solid ${notification.testColor || "#64748B"}`,
 
-                borderRadius: '8px',
-                padding: '12px 16px',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'flex-start',
-                color: '#fff',
+                borderRadius: "8px",
+                padding: "12px 16px",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "flex-start",
+                color: "#fff",
 
-                boxShadow:
-                  `0 4px 12px ${notification.type === 'success'
-                    ? 'rgba(0, 204, 102, 0.3)'
-                    : notification.type === 'error'
-                      ? 'rgba(204, 51, 51, 0.3)'
-                      : 'rgba(0, 204, 204, 0.3)'
-                  }`,
+                boxShadow: `0 4px 12px ${
+                  notification.type === "success"
+                    ? "rgba(0, 204, 102, 0.3)"
+                    : notification.type === "error"
+                      ? "rgba(204, 51, 51, 0.3)"
+                      : "rgba(0, 204, 204, 0.3)"
+                }`,
 
-                animation: 'slideIn 0.3s ease-out'
+                animation: "slideIn 0.3s ease-out",
               }}
             >
               <div style={{ flex: 1 }}>
                 <h4
                   style={{
-                    margin: '0 0 5px 0',
+                    margin: "0 0 5px 0",
                     color: notification.testColor || "#64748B",
-                    fontSize: '16px'
+                    fontSize: "16px",
                   }}
                 >
                   {notification.title}
@@ -1348,10 +1429,10 @@ backgroundColor: getTestBackground(
                 {notification.pre && (
                   <p
                     style={{
-                      margin: '0 0 5px 0',
-                      color: '#ffcc00',
-                      fontSize: '13px',
-                      fontWeight: 'bold'
+                      margin: "0 0 5px 0",
+                      color: "#ffcc00",
+                      fontSize: "13px",
+                      fontWeight: "bold",
                     }}
                   >
                     ⚠️ {notification.pre}
@@ -1361,9 +1442,9 @@ backgroundColor: getTestBackground(
                 <p
                   style={{
                     margin: 0,
-                    fontSize: '14px',
-                    lineHeight: '1.4',
-                    fontWeight: '500'
+                    fontSize: "14px",
+                    lineHeight: "1.4",
+                    fontWeight: "500",
                   }}
                 >
                   {notification.message}
@@ -1372,26 +1453,25 @@ backgroundColor: getTestBackground(
 
               <button
                 onClick={() => {
-                  setNotifications(prev => {
+                  setNotifications((prev) => {
                     const updated = { ...prev };
                     delete updated[testId];
                     return updated;
                   });
 
                   if (notificationTimeoutRefs.current[testId]) {
-                    clearTimeout(
-                      notificationTimeoutRefs.current[testId]
-                    );
+                    clearTimeout(notificationTimeoutRefs.current[testId]);
                     delete notificationTimeoutRefs.current[testId];
                   }
                 }}
                 style={{
-                  background: 'transparent',
-                  border: 'none',
-                  color: notification.testColor || "#64748B", fontSize: '18px',
-                  cursor: 'pointer',
-                  marginLeft: '12px',
-                  padding: '0 5px'
+                  background: "transparent",
+                  border: "none",
+                  color: notification.testColor || "#64748B",
+                  fontSize: "18px",
+                  cursor: "pointer",
+                  marginLeft: "12px",
+                  padding: "0 5px",
                 }}
               >
                 ✕
@@ -1408,13 +1488,23 @@ backgroundColor: getTestBackground(
           <div className="test-results-list">
             {testProgress.map((result, index) => (
               <div key={index} className={`test-result ${result.status}`}>
-                <strong>{result.name || result.test}</strong>: {result.status.toUpperCase()}
-                {result.message && <div className="test-message">📝 {result.message}</div>}
+                <strong>{result.name || result.test}</strong>:{" "}
+                {result.status.toUpperCase()}
+                {result.message && (
+                  <div className="test-message">📝 {result.message}</div>
+                )}
                 <div className="test-details">
-                  <div>Expected: {result.expectedOutcome !== null ? result.expectedOutcome : 'N/A'}</div>
-                  <div>Received: {result.receivedOutcome || 'No response'}</div>
+                  <div>
+                    Expected:{" "}
+                    {result.expectedOutcome !== null
+                      ? result.expectedOutcome
+                      : "N/A"}
+                  </div>
+                  <div>Received: {result.receivedOutcome || "No response"}</div>
                 </div>
-                {result.output && <div className="test-output">{result.output}</div>}
+                {result.output && (
+                  <div className="test-output">{result.output}</div>
+                )}
               </div>
             ))}
           </div>
@@ -1423,7 +1513,6 @@ backgroundColor: getTestBackground(
 
       {!isTestRunning && fetchedTestList.length > 0 ? (
         <div className="test-list-panel">
-
           <div className="test-list-header">
             <h4>Selected Tests ({selectedTests.length})</h4>
 
@@ -1432,17 +1521,13 @@ backgroundColor: getTestBackground(
                 Select All
               </button>
 
-              <button onClick={() => setSelectedTests([])}>
-                Clear
-              </button>
+              <button onClick={() => setSelectedTests([])}>Clear</button>
             </div>
           </div>
 
           <div className="test-list">
-
             {fetchedTestList.map((test) => (
               <label key={test} className="test-item">
-
                 <input
                   type="checkbox"
                   checked={selectedTests.includes(test)}
@@ -1450,33 +1535,25 @@ backgroundColor: getTestBackground(
                     if (e.target.checked) {
                       setSelectedTests([...selectedTests, test]);
                     } else {
-                      setSelectedTests(
-                        selectedTests.filter(t => t !== test)
-                      );
+                      setSelectedTests(selectedTests.filter((t) => t !== test));
                     }
                   }}
                 />
 
                 <span>{test.replace(".srv", "")}</span>
-
               </label>
             ))}
-
           </div>
-
         </div>
       ) : (
         <p>No Tests found</p>
       )}
 
-      {pduTestStatus && (
-        <img className="pdu-image" src="./pdu/ch1.png">
-        </img>
-      )}
+      {pduTestStatus && <img className="pdu-image" src="./pdu/ch1.png"></img>}
       {/* </div>
 
       {/* DASHBOARD */}
-      <div className="dashboard" >
+      <div className="dashboard">
         <div className="panel">
           {/* <h2 className="selected-heading"> */}
           {/* 📟 Selected Rack: {selectedMac && <span> {selectedDevice}</span>} */}
@@ -1486,7 +1563,7 @@ backgroundColor: getTestBackground(
               display: "flex",
               justifyContent: "space-between",
               alignItems: "center",
-              marginBottom: "10px"
+              marginBottom: "10px",
             }}
           >
             <h2 className="selected-heading">
@@ -1505,7 +1582,6 @@ backgroundColor: getTestBackground(
           {/* </h2> */}
           {latestReading && (
             <div>
-
               {/* ============================== TAB : GAUGES ============================== */}
               <button
                 className="tabs-button"
@@ -1525,7 +1601,7 @@ backgroundColor: getTestBackground(
                   />
                   <Gauge
                     label="Outside Temp"
-                    value={(latestReading.outsideTemperature).toFixed(2)}
+                    value={latestReading.outsideTemperature.toFixed(2)}
                     max={100}
                     color="#fca311"
                     alarm={latestReading.outsideTemperatureAlarm}
@@ -1539,14 +1615,14 @@ backgroundColor: getTestBackground(
                   />
                   <Gauge
                     label="Input Volt"
-                    value={(latestReading.inputVoltage).toFixed(2)}
+                    value={latestReading.inputVoltage.toFixed(2)}
                     max={5}
                     color="#06d6a0"
                     alarm={latestReading.inputVoltageAlarm}
                   />
                   <Gauge
                     label="Output Volt"
-                    value={(latestReading.outputVoltage).toFixed(2)}
+                    value={latestReading.outputVoltage.toFixed(2)}
                     max={5}
                     color="#118ab2"
                     alarm={latestReading.outputVoltageAlarm}
@@ -1567,28 +1643,29 @@ backgroundColor: getTestBackground(
                   />
                   <Gauge
                     label="Battery(Hours)"
-                    value={(latestReading.hupsBatVolt).toFixed(2)}
+                    value={latestReading.hupsBatVolt.toFixed(2)}
                     max={120}
                     color="#ffc107"
                     alarm={latestReading.batteryBackupAlarm}
                   />
-                  {latestReading.batteryBackup <= 10 ?
+                  {latestReading.batteryBackup <= 10 ? (
                     <Gauge
                       label="LockBat(Left Hours)"
                       value={0}
                       max={12}
                       color="#ffc107"
                       alarm={latestReading.batteryBackupAlarm}
-                    /> :
+                    />
+                  ) : (
                     <Gauge
                       label="LockBat(Left Hours)"
-                      value={Math.floor(((latestReading.batteryBackup - 9) * 4))}
+                      value={Math.floor((latestReading.batteryBackup - 9) * 4)}
                       // value={6}
                       max={12}
                       color="#ffc107"
                       alarm={latestReading.batteryBackupAlarm}
                     />
-                  }
+                  )}
                 </div>
               )}
 
@@ -1601,12 +1678,9 @@ backgroundColor: getTestBackground(
               </button>
               <span>SysId: {selectedMac.slice(8)}</span>
               {"status" && (
-
                 <div className="status-layout">
-
                   {/* LEFT */}
                   <div className="status-left">
-
                     {/* Fan Running code */}
                     <div className="status-card">
                       <h4>Fan Running Status</h4>
@@ -1625,7 +1699,9 @@ backgroundColor: getTestBackground(
                           // console.log(statusClass);
                           return (
                             <div key={i} className="fan-light">
-                              <div className={`fan-light-circle ${statusClass}`} />
+                              <div
+                                className={`fan-light-circle ${statusClass}`}
+                              />
                               <div className="fan-label">F{i + 1}</div>
                             </div>
                           );
@@ -1640,16 +1716,20 @@ backgroundColor: getTestBackground(
                         {[1, 2, 3, 4, 5].map((level) => (
                           <div key={level} className="fan-light">
                             <button
-                              className={`power-btn ${activeFanBtns.includes(level) ||
+                              className={`power-btn ${
+                                activeFanBtns.includes(level) ||
                                 (latestReading &&
-                                  latestReading[`fanLevel${level}Running`] === true)
-                                ? "active"
-                                : ""
-                                }`}
+                                  latestReading[`fanLevel${level}Running`] ===
+                                    true)
+                                  ? "active"
+                                  : ""
+                              }`}
                               onClick={() => handleFanClick(level)}
                             />
                             <div className="fan-label">
-                              {level >= 1 && level <= 4 ? `FG ${level}` : "NON-CRITICAL LOAD"}
+                              {level >= 1 && level <= 4
+                                ? `FG ${level}`
+                                : "NON-CRITICAL LOAD"}
                             </div>
                           </div>
                         ))}
@@ -1660,7 +1740,10 @@ backgroundColor: getTestBackground(
                           <div className="fan-label">Lock</div>
                         </div>
                         <div className="fan-light">
-                          <button className="lock-btn" onClick={handleResetLock}>
+                          <button
+                            className="lock-btn"
+                            onClick={handleResetLock}
+                          >
                             🔐
                           </button>
                           <div className="fan-label">Reset</div>
@@ -1672,26 +1755,27 @@ backgroundColor: getTestBackground(
                           <div className="fan-label">Open PWD</div>
                         </div>
                       </div>
-
+                      {status && <p>{status}</p>}
                     </div>
-
                   </div>
-
 
                   {/* RIGHT */}
                   <div className="status-right">
-
                     <div className="status-card">
                       <h4>Alarms</h4>
 
                       <div className="status-grid">
                         {/* Alarm map */}
                         {alarmKeys.map((alarm, i) => (
-
                           <div key={i} className="status-box">
                             <div
-                              className={`alarm-led ${latestReading[alarm.key] === 87 ? "wait" : latestReading[alarm.key] ? "active" : ""
-                                }`}
+                              className={`alarm-led ${
+                                latestReading[alarm.key] === 87
+                                  ? "wait"
+                                  : latestReading[alarm.key]
+                                    ? "active"
+                                    : ""
+                              }`}
                             />
                             <div className="status-title">{alarm.Name}</div>
                           </div>
@@ -1701,10 +1785,11 @@ backgroundColor: getTestBackground(
                             return (
                               <div key={i} className="alarm-indicator">
                                 <div
-                                  className={`alarm-led ${latestReading[status.key] === "OPEN"
-                                    ? "active"
-                                    : ""
-                                    }`}
+                                  className={`alarm-led ${
+                                    latestReading[status.key] === "OPEN"
+                                      ? "active"
+                                      : ""
+                                  }`}
                                 />
                                 <div className="alarm-label">{status.Name}</div>
                               </div>
@@ -1716,17 +1801,22 @@ backgroundColor: getTestBackground(
                                   {/* <div className={`alarm-led ${latestReading[status.key] === 1 ? 'active' : ''}`} /> */}
                                   <div
                                     className={`alarm-led
-                              ${latestReading[status.key] === 1
-                                        ? "pass-danger"
-                                        : latestReading[status.key] === 2
-                                          ? "pass-warn"
-                                          : latestReading[status.key] === 3
-                                            ? "pass-active"
-                                            : ""
-                                      }`}
+                              ${
+                                latestReading[status.key] === 1
+                                  ? "pass-danger"
+                                  : latestReading[status.key] === 2
+                                    ? "pass-warn"
+                                    : latestReading[status.key] === 3
+                                      ? "pass-active"
+                                      : ""
+                              }`}
                                   />
-                                  <div className="alarm-label">{status.Name}</div>
-                                  <div className="alarm-attempt">{3 - latestReading[status.key]} Attempt Left</div>
+                                  <div className="alarm-label">
+                                    {status.Name}
+                                  </div>
+                                  <div className="alarm-attempt">
+                                    {3 - latestReading[status.key]} Attempt Left
+                                  </div>
                                 </div>
                               </>
                             );
@@ -1743,19 +1833,16 @@ backgroundColor: getTestBackground(
                         {hupsKeys.map((hups, i) => (
                           <div key={i} className="status-box">
                             <div
-                              className={`alarm-led ${latestReading[hups.key] ? "" : "active"
-                                }`}
+                              className={`alarm-led ${
+                                latestReading[hups.key] ? "" : "active"
+                              }`}
                             />
-                            <div className="status-title">
-                              {hups.Name}
-                            </div>
+                            <div className="status-title">{hups.Name}</div>
                           </div>
                         ))}
                       </div>
                     </div>
-
                   </div>
-
                 </div>
               )}
 
@@ -1785,7 +1872,7 @@ backgroundColor: getTestBackground(
                       {snapshots.findIndex(
                         (img) =>
                           `${process.env.REACT_APP_API_URL}/api/snapshots/${img}?mac=${selectedMac}` ===
-                          selectedImage
+                          selectedImage,
                       ) + 1}{" "}
                       of {snapshots.length})
                     </div>
@@ -1801,13 +1888,13 @@ backgroundColor: getTestBackground(
                           const currentIndex = snapshots.findIndex(
                             (img) =>
                               `${process.env.REACT_APP_API_URL}/api/snapshots/${img}?mac=${selectedMac}` ===
-                              selectedImage
+                              selectedImage,
                           );
                           const prevIndex =
                             (currentIndex - 1 + snapshots.length) %
                             snapshots.length;
                           setSelectedImage(
-                            `${process.env.REACT_APP_API_URL}/api/snapshots/${snapshots[prevIndex]}?mac=${selectedMac}`
+                            `${process.env.REACT_APP_API_URL}/api/snapshots/${snapshots[prevIndex]}?mac=${selectedMac}`,
                           );
                         }}
                       >
@@ -1820,12 +1907,12 @@ backgroundColor: getTestBackground(
                           const currentIndex = snapshots.findIndex(
                             (img) =>
                               `${process.env.REACT_APP_API_URL}/api/snapshots/${img}?mac=${selectedMac}` ===
-                              selectedImage
+                              selectedImage,
                           );
                           const nextIndex =
                             (currentIndex + 1) % snapshots.length;
                           setSelectedImage(
-                            `${process.env.REACT_APP_API_URL}/api/snapshots/${snapshots[nextIndex]}?mac=${selectedMac}`
+                            `${process.env.REACT_APP_API_URL}/api/snapshots/${snapshots[nextIndex]}?mac=${selectedMac}`,
                           );
                         }}
                       >
@@ -1854,7 +1941,7 @@ backgroundColor: getTestBackground(
                           className="snapshot-item"
                           onClick={() =>
                             setSelectedImage(
-                              `${process.env.REACT_APP_API_URL}/api/snapshots/${filename}?mac=${selectedMac}`
+                              `${process.env.REACT_APP_API_URL}/api/snapshots/${filename}?mac=${selectedMac}`,
                             )
                           }
                         >
@@ -1902,7 +1989,5 @@ function Gauge({ label, value, max, color, alarm = false }) {
     </div>
   );
 }
-
-
 
 export default DashboardViewTest;
