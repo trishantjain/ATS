@@ -42,7 +42,14 @@ function DashboardViewTest() {
   const [cameraSrNo, setCameraSrNo] = useState("");
   const [psuSrNo, setPsuSrNo] = useState("");
   const [pythonCpu, setPythonCpu] = useState("");
-  const [pythonIp, setPythonIp] = useState(""); // const [controllerId, setControllerId] = useState("");
+  const [pythonIp, setPythonIp] = useState("");
+
+  // Python Programming Status
+  const [pythonStatus, setPythonStatus] = useState(null);
+  const [pythonLogs, setPythonLogs] = useState([]);
+  const [pythonRunning, setPythonRunning] = useState(false);
+
+  // const [controllerId, setControllerId] = useState("");
 
   // States for Test Lists
   const [selectedTests, setSelectedTests] = useState([]); // Stores selected tests
@@ -150,6 +157,8 @@ function DashboardViewTest() {
   // const mapRef = useRef(null);
   const wsRef = useRef(null);
 
+  const pythonLogsRef = useRef(null);
+
   const manualCloseRef = useRef(false);
   // const markerRefs = useRef({});
 
@@ -169,19 +178,22 @@ function DashboardViewTest() {
       : readings.find((r) => r.mac === selectedMac);
 
   // UseEffect for fetching Data
+  // useEffect(() => {
+  //   console.log("🚨Starting data fetch interval (5s)🚨");
+
+  //   return () => {
+  //     console.log("🛑Clearing data fetch interval");
+  //   };
+  // }, []);
+
   useEffect(() => {
-    console.log("🚨Starting data fetch interval (5s)🚨");
-    // const interval = setInterval(fetchData, 2000);
-
-    // fetchData();
-
-    // console.log('🚨Fetching Data🚨')
-    // return () => clearInterval(interval);
-    return () => {
-      console.log("🛑Clearing data fetch interval");
-      // clearInterval(interval);
-    };
-  }, []);
+    if (pythonLogsRef.current) {
+      pythonLogsRef.current.scrollTo({
+        top: pythonLogsRef.current.scrollHeight,
+        behavior: "smooth",
+      });
+    }
+  }, [pythonLogs]);
 
   // added by vats
   // A synchronous function to format the date and time.
@@ -264,17 +276,6 @@ function DashboardViewTest() {
     }
     sendCommand(command);
 
-    // Update UI immediately (optional, for instant feedback)
-    // setActiveFanBtns(
-    //   isActive
-    //     ? activeFanBtns.filter((l) => l !== level)
-    //     : [...activeFanBtns, level]
-    // );
-    // setActiveFanBtns((prev) =>
-    //   isActive
-    //     ? prev.filter((l) => l !== level)
-    //     : [...prev, level]
-    // );
     if (level === 5) {
       setActiveFanBtns((prev) =>
         prev.includes(5) ? prev.filter((l) => l !== 5) : [...prev, 5],
@@ -346,7 +347,7 @@ function DashboardViewTest() {
   };
 
   const runPython = async () => {
-    if (!cpuSrNo.trim() || !pythonIp.trim()) {
+    if (!pythonCpu.trim() || !pythonIp.trim()) {
       swal.fire({
         icon: "warning",
         title: "Missing Input",
@@ -354,6 +355,15 @@ function DashboardViewTest() {
       });
       return;
     }
+
+    // Clear previous Python output
+    setPythonLogs([]);
+    setPythonStatus({
+      status: "started",
+      stage: "initializing",
+      message: `Starting CPU Programming | CPU: ${pythonCpu.trim()} | IP: ${pythonIp.trim()}`,
+    });
+    setPythonRunning(true);
 
     try {
       const response = await fetch(
@@ -372,19 +382,66 @@ function DashboardViewTest() {
 
       const data = await response.json();
 
-      if (data.success) {
-        console.log("Python completed successfully");
-        console.log(data.output);
+      if (response.ok && data.success) {
+        console.log("✅ Python completed successfully");
 
-        // Refresh browser
-        window.location.reload();
-      } else {
-        console.error("Python failed:", data.error);
+        // Add final output to log
+        if (data.output) {
+          setPythonLogs((prev) => [
+            ...prev,
+            ...data.output
+              .split(/\r?\n/)
+              .map((line) => line.trim())
+              .filter(Boolean),
+          ]);
+        }
+
+        setPythonStatus({
+          status: "completed",
+          stage: "completed",
+          message: "CPU Programming completed successfully.",
+        });
+
+        setPythonRunning(false);
+
+        // Give user time to see success message
+        setTimeout(() => {
+          console.log("🔄 Refreshing browser after Python success...");
+          window.location.reload();
+        }, 1500);
+
+        return;
+      }
+
+      setPythonStatus({
+        status: "failed",
+        stage: "error",
+        message: data.error || "CPU Programming failed.",
+      });
+
+      setPythonRunning(false);
+
+      if (data.output) {
+        setPythonLogs((prev) => [
+          ...prev,
+          ...data.output
+            .split(/\r?\n/)
+            .map((line) => line.trim())
+            .filter(Boolean),
+        ]);
       }
 
       console.log("Python output:", data.output);
     } catch (error) {
       console.error("Error:", error);
+
+      setPythonStatus({
+        status: "failed",
+        stage: "error",
+        message: `Unable to run Python: ${error.message}`,
+      });
+
+      setPythonRunning(false);
     }
   };
 
@@ -468,6 +525,56 @@ function DashboardViewTest() {
         console.log("================================");
 
         // const message = JSON.parse(event.data);
+
+        // ==========================================
+        // PYTHON PROGRAMMING STATUS
+        // ==========================================
+        if (message.type === "PYTHON_STATUS") {
+          console.log("🐍 PYTHON STATUS:", message);
+
+          setPythonStatus({
+            status: message.status,
+            stage: message.stage,
+            message: message.message,
+          });
+
+          // Add live output to Python log
+          if (message.message) {
+            setPythonLogs((prev) => {
+              const newLog = message.message;
+
+              // Prevent duplicate consecutive messages
+              if (prev.length > 0 && prev[prev.length - 1] === newLog) {
+                return prev;
+              }
+
+              return [...prev, newLog];
+            });
+          }
+
+          // Python started/running
+          if (
+            message.status === "started" ||
+            message.status === "running" ||
+            message.status === "warning"
+          ) {
+            setPythonRunning(true);
+          }
+
+          // Python completed
+          if (message.status === "completed") {
+            setPythonRunning(false);
+          }
+
+          // Python failed
+          if (message.status === "failed") {
+            setPythonRunning(false);
+          }
+
+          // Important:
+          // Don't let Python messages go through the ATS handlers below.
+          return;
+        }
 
         console.log("PARSED:", JSON.stringify(message, null, 2));
 
@@ -1165,7 +1272,9 @@ function DashboardViewTest() {
             onChange={(e) => setPythonIp(e.target.value)}
           />
 
-          <button onClick={runPython}>Run Python</button>
+          <button onClick={runPython} disabled={pythonRunning}>
+            {pythonRunning ? "⏳ Programming..." : "🐍 Run Python"}
+          </button>
           <button
             className="ats-toggle-btn"
             onClick={() => setShowATSPanel(!showATSPanel)}
@@ -1173,6 +1282,140 @@ function DashboardViewTest() {
             {showATSPanel ? "Hide Details" : "Show Details"}
           </button>
         </div>
+
+        {/* PYTHON PROGRAMMING STATUS */}
+        {pythonStatus && (
+          <div
+            style={{
+              marginTop: "12px",
+              marginBottom: "12px",
+              padding: "14px 16px",
+              borderRadius: "8px",
+              background:
+                pythonStatus.status === "completed"
+                  ? "#102f1b"
+                  : pythonStatus.status === "failed"
+                    ? "#3a1212"
+                    : "#1a1f26",
+              border:
+                pythonStatus.status === "completed"
+                  ? "1px solid #22c55e"
+                  : pythonStatus.status === "failed"
+                    ? "1px solid #ef4444"
+                    : "1px solid #64748b",
+              color: "#fff",
+            }}
+          >
+            {/* HEADER */}
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: "10px",
+              }}
+            >
+              <div
+                style={{
+                  fontWeight: "bold",
+                  fontSize: "15px",
+                }}
+              >
+                {pythonStatus.status === "started" &&
+                  "🚀 Starting CPU Programming"}
+
+                {pythonStatus.status === "running" &&
+                  "🐍 CPU Programming Running"}
+
+                {pythonStatus.status === "warning" && "⚠️ CPU Programming"}
+
+                {pythonStatus.status === "completed" &&
+                  "✅ CPU Programming Completed"}
+
+                {pythonStatus.status === "failed" &&
+                  "❌ CPU Programming Failed"}
+              </div>
+
+              <div
+                style={{
+                  fontSize: "12px",
+                  color: "#aaa",
+                }}
+              >
+                CPU: {pythonCpu} | IP: {pythonIp}
+              </div>
+            </div>
+
+            {/* CURRENT STATUS */}
+            <div
+              style={{
+                fontSize: "13px",
+                marginBottom: "10px",
+                color:
+                  pythonStatus.status === "completed"
+                    ? "#4ade80"
+                    : pythonStatus.status === "failed"
+                      ? "#f87171"
+                      : "#cbd5e1",
+              }}
+            >
+              {pythonStatus.message}
+            </div>
+
+            {/* LIVE PYTHON OUTPUT */}
+            {pythonLogs.length > 0 && (
+              <div
+                ref={pythonLogsRef}
+                style={{
+                  background: "#0b0f14",
+                  border: "1px solid #303640",
+                  borderRadius: "6px",
+                  padding: "10px",
+                  maxHeight: "220px",
+                  overflowY: "auto",
+                  fontFamily: "Consolas, monospace",
+                  fontSize: "12px",
+                  lineHeight: "1.5",
+                  whiteSpace: "pre-wrap",
+                }}
+              >
+                {pythonLogs.map((log, index) => (
+                  <div
+                    key={index}
+                    style={{
+                      color:
+                        log.includes("ERROR") ||
+                        log.includes("FAILED") ||
+                        log.includes("NOT reachable")
+                          ? "#f87171"
+                          : log.includes("SUCCESS") ||
+                              log.includes("reachable") ||
+                              log.includes("successful")
+                            ? "#4ade80"
+                            : "#d1d5db",
+                      marginBottom: "2px",
+                    }}
+                  >
+                    {log}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* RUNNING INDICATOR */}
+            {pythonRunning && (
+              <div
+                style={{
+                  marginTop: "8px",
+                  fontSize: "12px",
+                  color: "#94a3b8",
+                }}
+              >
+                ⏳ Programming in progress...
+              </div>
+            )}
+          </div>
+        )}
 
         {/* TEST STATUS - ONLY SHOW WHEN TESTS EXIST */}
         {testResults.length > 0 && (

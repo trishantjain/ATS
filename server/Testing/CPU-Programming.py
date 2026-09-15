@@ -58,11 +58,9 @@ def ping_ip(ip):
 
 while True:
 
-    # serial = input("\nEnter CPU Serial Number (or q to quit): ").strip()
     serial = sys.argv[1]
     HOST_IP = sys.argv[2]
   
-    # HOST_IP = input("Enter Host IP (or q to quit): ")
     HOST = f"192.168.0.{HOST_IP}"
     
     print(serial, HOST_IP)

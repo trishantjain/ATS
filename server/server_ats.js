@@ -184,6 +184,26 @@ function broadcastTestStatus(payload) {
   });
 }
 
+// BROADCAST PYTHON PROGRAMMING STATUS TO WEB CLIENTS
+function broadcastPythonStatus(payload) {
+  const message = JSON.stringify({
+    type: "PYTHON_STATUS",
+    ...payload,
+    timestamp: getFormattedDateTime(),
+  });
+
+  wsClients.forEach((client) => {
+    if (client.readyState === WebSocket.OPEN) {
+      try {
+        client.send(message);
+      } catch (err) {
+        console.error("Failed to send PYTHON_STATUS:", err);
+        wsClients.delete(client);
+      }
+    }
+  });
+}
+
 // WebSocket status monitoring
 setInterval(() => {
   if (wsClients.size > 0) {
@@ -1016,12 +1036,68 @@ app.post("/run-python", (req, res) => {
   console.log("CPU:", cpu);
   console.log("IP:", ip);
 
-  const pythonProcess = spawn("python", [
-    "-u",
-    "./Testing/CPU-Programming.py",
-    cpu,
-    ip,
-  ]);
+  // Validate input
+  if (cpu === undefined || cpu === null || ip === undefined || ip === null) {
+    return res.status(400).json({
+      success: false,
+      error: "CPU and IP are required",
+    });
+  }
+
+  // Tell frontend that Python programming has started
+  broadcastPythonStatus({
+    status: "started",
+    stage: "initializing",
+    message: `Starting CPU Programming | CPU: ${cpu} | IP: ${ip}`,
+  });
+
+  const pythonScript = path.join(__dirname, "Testing", "CPU-Programming.py");
+
+  console.log("🐍 Python script:", pythonScript);
+
+  // Check script exists
+  if (!fs.existsSync(pythonScript)) {
+    const message = `Python script not found: ${pythonScript}`;
+
+    console.error("❌", message);
+
+    broadcastPythonStatus({
+      status: "failed",
+      stage: "error",
+      message,
+    });
+
+    return res.status(404).json({
+      success: false,
+      error: message,
+    });
+  }
+
+  let pythonProcess;
+
+  try {
+    pythonProcess = spawn(
+      "python",
+      ["-u", pythonScript, String(cpu), String(ip)],
+      {
+        cwd: __dirname,
+        stdio: ["ignore", "pipe", "pipe"],
+      },
+    );
+  } catch (err) {
+    console.error("❌ Failed to spawn Python:", err);
+
+    broadcastPythonStatus({
+      status: "failed",
+      stage: "error",
+      message: `Failed to start Python: ${err.message}`,
+    });
+
+    return res.status(500).json({
+      success: false,
+      error: err.message,
+    });
+  }
 
   console.log("Running Python process...");
 
@@ -1033,6 +1109,13 @@ app.post("/run-python", (req, res) => {
     output += text;
 
     console.log("PYTHON:", text);
+
+    // Send every Python output line to frontend
+    broadcastPythonStatus({
+      status: "running",
+      stage: "python",
+      message: text.trim(),
+    });
   });
 
   pythonProcess.stderr.on("data", (data) => {
@@ -1040,23 +1123,60 @@ app.post("/run-python", (req, res) => {
     error += text;
 
     console.error("PYTHON ERROR:", text);
+
+    broadcastPythonStatus({
+      status: "warning",
+      stage: "python",
+      message: text.trim(),
+    });
+  });
+
+  pythonProcess.on("error", (err) => {
+    console.error("❌ Python process error:", err);
+
+    broadcastPythonStatus({
+      status: "failed",
+      stage: "error",
+      message: `Python process error: ${err.message}`,
+    });
+
+    // If response has not already been sent
+    if (!res.headersSent) {
+      res.status(500).json({
+        success: false,
+        error: err.message,
+        output,
+      });
+    }
   });
 
   pythonProcess.on("close", (code) => {
     console.log("Python process finished. Code:", code);
 
     if (code === 0) {
-      res.json({
-        success: true,
-        output: output,
+      broadcastPythonStatus({
+        status: "completed",
+        stage: "completed",
+        message: "CPU Programming completed successfully.",
       });
-    } else {
-      res.status(500).json({
-        success: false,
-        error: error,
-        output: output,
+
+      return res.json({
+        success: true,
+        output,
       });
     }
+
+    broadcastPythonStatus({
+      status: "failed",
+      stage: "completed",
+      message: error.trim() || `CPU Programming failed. Exit code: ${code}`,
+    });
+
+    return res.status(500).json({
+      success: false,
+      error: error.trim() || `Python process exited with code ${code}`,
+      output,
+    });
   });
 });
 
