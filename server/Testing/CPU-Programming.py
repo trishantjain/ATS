@@ -4,7 +4,6 @@ import subprocess
 import platform
 import sys
 
-HOST = "192.168.0.20"
 PORT = 23
 
 
@@ -52,65 +51,92 @@ def ping_ip(ip):
         return True
     else:
         print(f"❌ {ip} is NOT reachable.")
-        print(result.stdout)
         return False
 
 
-while True:
+# --------------------------------------------------
+# MAIN EXECUTION - RUN ONLY ONCE
+# --------------------------------------------------
 
-    serial = sys.argv[1]
-    HOST_IP = sys.argv[2]
-  
-    HOST = f"192.168.0.{HOST_IP}"
-    
-    print(serial, HOST_IP)
+if len(sys.argv) < 3:
+    print("Usage: python camera_test.py <serial> <host_ip>")
+    sys.exit(1)
 
-    if serial.lower() == "q":
-        break
+serial = sys.argv[1]
+HOST_IP = sys.argv[2]
 
-    if HOST_IP.lower() == "q":
-        break
+if serial.lower() == "q" or HOST_IP.lower() == "q":
+    print("Exiting...")
+    sys.exit(0)
 
-    try:
-        print(f"\nConnecting to {HOST}:{PORT}...")
-        tn = telnetlib.Telnet(HOST, PORT, timeout=10)
+HOST = f"192.168.0.{HOST_IP}"
 
-        # Wait for welcome message
-        time.sleep(2)
+print(f"Serial: {serial}")
+print(f"Host IP: {HOST_IP}")
+print(f"Target: {HOST}:{PORT}")
 
-        print("\n========== Initial Output ==========")
-        print(tn.read_very_eager().decode(errors="ignore"))
+tn = None
 
-        # Press Enter
-        print("\n>>> Sending ENTER")
-        tn.write(b"\r")
+try:
+    print(f"\nConnecting to {HOST}:{PORT}...")
 
-        time.sleep(2)
+    tn = telnetlib.Telnet(HOST, PORT, timeout=10)
 
-        print("\n========== After ENTER ==========")
-        print(tn.read_very_eager().decode(errors="ignore"))
+    # Wait for welcome message
+    time.sleep(2)
 
-        # Send commands
-        type_command(tn, "srmsiti")
-        type_command(tn, f"cfg myip 192 168 0 {serial}")
+    print("\n========== Initial Output ==========")
+    print(tn.read_very_eager().decode(errors="ignore"))
 
-        # Change SYSID
-        type_command(tn, f"cfg sysid 00 17 34 51 68 {serial}")
+    # Press Enter
+    print("\n>>> Sending ENTER")
+    tn.write(b"\r")
 
-        type_command(tn, "cfg save")
+    time.sleep(2)
 
-        # Read configuration
-        cfg_read = type_command(tn, "cfg read")
+    print("\n========== After ENTER ==========")
+    print(tn.read_very_eager().decode(errors="ignore"))
 
-        type_command(tn, "erase reboot yes")
+    # Send commands
+    type_command(tn, "srmsiti")
 
-        print("\nWaiting for reboot...")
-        time.sleep(5)
+    type_command(
+        tn,
+        f"cfg myip 192 168 0 {serial}"
+    )
 
-        new_ip = f"192.168.0.{serial}"
-        ping_ip(new_ip)
+    # Change SYSID
+    type_command(
+        tn,
+        f"cfg sysid 00 17 34 51 68 {serial}"
+    )
 
+    type_command(tn, "cfg save")
+
+    # Read configuration
+    cfg_read = type_command(tn, "cfg read")
+
+    type_command(tn, "erase reboot yes")
+
+    print("\nWaiting for reboot...")
+    time.sleep(5)
+
+    # Check new IP
+    new_ip = f"192.168.0.{serial}"
+
+    ping_ip(new_ip)
+
+    print("\n===================================")
+    print("Camera test execution completed.")
+    print("===================================")
+
+except Exception as e:
+    print("\nERROR:", e)
+
+finally:
+    if tn is not None:
         tn.close()
+        print("\nTelnet connection closed.")
 
-    except Exception as e:
-        print("\nERROR:", e)
+    print("Script finished. Exiting...")
+    sys.exit(0)
