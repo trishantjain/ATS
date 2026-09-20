@@ -1242,6 +1242,66 @@ body {
   cursor: not-allowed;
 }
 
+/* =========================================
+   ALL-PASSED REPORT BUTTON
+========================================= */
+
+.ats-allpassed-btn {
+  height: 38px;
+  padding: 0 16px;
+  margin-left: auto;
+
+  background: #2b2b2b;
+  color: #ddd;
+
+  border: 1px solid #555;
+  border-radius: 7px;
+
+  font-size: 13px;
+  font-weight: 700;
+
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ats-allpassed-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Test completed -> remind user to generate the report */
+.ats-allpassed-btn.highlight {
+  background: #f59e0b;
+  color: #111;
+  border-color: #fbbf24;
+  animation: allPassedPulse 1.4s ease-in-out infinite;
+}
+
+.ats-allpassed-btn.highlight:hover {
+  background: #d97706;
+}
+
+/* Report generated */
+.ats-allpassed-btn.success {
+  opacity: 1;
+  background: #16a34a;
+  color: #fff;
+  border-color: #22c55e;
+  cursor: default;
+  animation: none;
+}
+
+@keyframes allPassedPulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.7);
+  }
+
+  50% {
+    box-shadow: 0 0 0 7px rgba(245, 158, 11, 0);
+  }
+}
+
 .ats-title {
   color: white;
   margin-bottom: 20px;

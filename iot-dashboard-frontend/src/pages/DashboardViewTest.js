@@ -61,7 +61,10 @@ function DashboardViewTest() {
 
   const [testResults, setTestResults] = useState([]);
 
-  const [generateReport, setGenerateReport] = useState(true);
+  // All-Passed report (manual). runId === null -> no completed run to report on.
+  // status: idle | generating | success | error
+  const [allPassed, setAllPassed] = useState({ runId: null, status: "idle" });
+  const allPassedInFlightRef = useRef(new Set()); // runIds being generated (blocks double clicks)
 
   const [refreshing, setRefreshing] = useState(false);
 
@@ -890,6 +893,67 @@ function DashboardViewTest() {
     }
   }, [selectedProduct, testLevel]);
 
+  // Button is usable (and highlighted) only for a completed run, not while generating/done/testing
+  const allPassedReady =
+    Boolean(allPassed.runId) &&
+    (allPassed.status === "idle" || allPassed.status === "error") &&
+    !isTestRunning;
+
+  // Enables the All-Passed button for the run the backend just reported
+  const markRunCompleted = (data) => {
+    if (data?.runId && data.allPassedEligible) {
+      setAllPassed({ runId: data.runId, status: "idle" });
+    }
+  };
+
+  // GENERATE ALL-PASSED REPORT (only on user click, for the latest completed run)
+  async function generateAllPassedReport() {
+    const runId = allPassed.runId;
+    if (!runId || !allPassedReady) return;
+    if (allPassedInFlightRef.current.has(runId)) return; // double click before re-render
+
+    allPassedInFlightRef.current.add(runId);
+    // Only update UI state if this run is still the current one
+    const updateIfCurrent = (status) =>
+      setAllPassed((prev) => (prev.runId === runId ? { ...prev, status } : prev));
+
+    updateIfCurrent("generating");
+    setNotifications((prev) => {
+      const updated = { ...prev };
+      delete updated.allPassed;
+      return updated;
+    });
+
+    try {
+      const resp = await fetch(
+        `${process.env.REACT_APP_API_URL}/api/tests/generate-all-passed`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ runId }),
+        },
+      );
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok || !data.success) {
+        throw new Error(data.error || `Request failed (${resp.status})`);
+      }
+      updateIfCurrent("success");
+    } catch (err) {
+      updateIfCurrent("error");
+      setNotifications((prev) => ({
+        ...prev,
+        allPassed: {
+          title: "All-Passed Report Failed",
+          message: `${err.message}. Click the button to retry.`,
+          type: "error",
+          testColor: "#EF4444",
+        },
+      }));
+    } finally {
+      allPassedInFlightRef.current.delete(runId);
+    }
+  }
+
   // IMONI TEST FUNCTION
   async function iMoni_test() {
     setAwaitingCommand(true); // Shows 'Running...' state
@@ -944,6 +1008,14 @@ function DashboardViewTest() {
         return;
       }
     }
+
+    // New run starting: previous run's All-Passed button state no longer applies
+    setAllPassed({ runId: null, status: "idle" });
+    setNotifications((prev) => {
+      const updated = { ...prev };
+      delete updated.allPassed;
+      return updated;
+    });
 
     const frontendResults = []; // Stores Visual & Burn-in results
     console.log("Fetched Test List Length: ", fetchedTestList.length);
@@ -1017,7 +1089,6 @@ function DashboardViewTest() {
               cameraSrNo: cameraSrNo.trim(),
               psuSrNo: psuSrNo.trim(),
               unitSerialNo: unitSerialNo.trim(),
-              generateReport,
               testLevel,
             }),
           },
@@ -1026,6 +1097,7 @@ function DashboardViewTest() {
         setTestStatus(
           `Done: ${data.summary.passed} passed, ${data.summary.failed} failed`,
         );
+        markRunCompleted(data);
       } catch (err) {
         setTestStatus(`Error: ${err.message}`);
       }
@@ -1047,7 +1119,6 @@ function DashboardViewTest() {
               basePcbSrNo: basePcbSrNo.trim(),
               cameraSrNo: cameraSrNo.trim(),
               psuSrNo: psuSrNo.trim(),
-              generateReport,
               testLevel,
             }),
           },
@@ -1056,6 +1127,7 @@ function DashboardViewTest() {
         setTestStatus(
           `Done: ${data.summary.passed} passed, ${data.summary.failed} failed`,
         );
+        markRunCompleted(data);
       } catch (err) {
         setTestStatus(`Error: ${err.message}`);
       }
@@ -1467,14 +1539,23 @@ function DashboardViewTest() {
                 </select>
               )}
 
-              <label className="ats-checkbox compact">
-                <input
-                  type="checkbox"
-                  checked={generateReport}
-                  onChange={(e) => setGenerateReport(e.target.checked)}
-                />
-                Generate Report
-              </label>
+              {selectedProduct === "iMoni" && (
+                <button
+                  className={`ats-allpassed-btn${
+                    allPassedReady ? " highlight" : ""
+                  }${allPassed.status === "success" ? " success" : ""}`}
+                  onClick={generateAllPassedReport}
+                  disabled={!allPassedReady}
+                >
+                  {allPassed.status === "generating"
+                    ? "⏳ Generating..."
+                    : allPassed.status === "success"
+                      ? "✓ All-Passed Report Generated"
+                      : allPassed.status === "error"
+                        ? "↻ Retry All-Passed Report"
+                        : "Generate All-Passed Report"}
+                </button>
+              )}
 
               <button
                 className="ats-run-btn"

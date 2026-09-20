@@ -88,7 +88,7 @@ async function reportWriter({
     cameraSrNo = "",
     psuSrNo = "",
     unitSerialNo = "",
-    generateReport,
+    runCompleted = true,
     testLevel = "full-controller"
 }) {
     if (!DESTINATION_MAP[destination]) {
@@ -410,78 +410,156 @@ async function reportWriter({
     // await workbook.xlsx.writeFile(filePath);
     // console.log(`✅ Report Generated: ${fileName}`);
 
-    // ================= GENERATE ALL PASSED REPORT =================
-    if (destination === "iMoni" && generateReport) {
-
-        const allPassedDir = path.join(
-            __dirname,
-            "..",
-            DESTINATION_MAP[destination],
-            REPORT_SUBDIR_MAP[testLevel] || "full-controller",
-            "AllPassed"
-        );
-
-        if (!fs.existsSync(allPassedDir)) {
-            fs.mkdirSync(allPassedDir, { recursive: true });
-        }
-
-        // Select correct All Passed template
-        let allPassedTemplate;
-
-        if (testLevel === "green-pcb") {
-            allPassedTemplate = path.join(
-                __dirname,
-                "./template/green-pcb_allpassed_template.xlsx"
-            );
-        } else {
-            allPassedTemplate = path.join(
-                __dirname,
-                "./template/srms_allpassed_template.xlsx"
-            );
-        }
-
-        const passedWorkbook = new ExcelJS.Workbook();
-        await passedWorkbook.xlsx.readFile(allPassedTemplate);
-
-        const passedWorksheet = passedWorkbook.getWorksheet(1);
-
-        if ((destination === "iMoni") && (testLevel === "green-pcb")) {
-
-            passedWorksheet.getCell("B2").value = reportNo;
-            passedWorksheet.getCell("B3").value = basePcbSrNo || "NA";
-            passedWorksheet.getCell("B4").value = getFormattedDateTime();
-            passedWorksheet.getCell("B5").value = "iMoni Base PCB";
-            // passedWorksheet.getCell("B6").value = runResult.summary.total;
-
-        }
-        else {
-
-            passedWorksheet.getCell("B2").value = reportNo;
-            passedWorksheet.getCell("B3").value = unitSerialNo || "NA";
-            passedWorksheet.getCell("B4").value = getFormattedDateTime();
-            passedWorksheet.getCell("B5").value = "iMoni Assembly";
-            passedWorksheet.getCell("B6").value = mac;
-
-            // passedWorksheet.getCell("B7").value = runResult.summary.total;
-
-            passedWorksheet.getCell("C7").value = cpuSrNo || "NA";
-            passedWorksheet.getCell("D7").value = basePcbSrNo || "NA";
-            passedWorksheet.getCell("E7").value = cameraSrNo || "NA";
-            passedWorksheet.getCell("F7").value = psuSrNo || "NA";
-        }
-
-
-        const allPassedFilePath = path.join(
-            allPassedDir,
-            fileName
-        );
-
-        await passedWorkbook.xlsx.writeFile(allPassedFilePath);
-
-        console.log(`✅ All Passed Report Generated: ${fileName}`);
+    // All-Passed report is NOT generated here any more.
+    // It is created only on user request via generateAllPassedReport(runId).
+    // Register this run (runId = reportNo) so the request can be tied to
+    // exactly this run's hardware data / file name.
+    if (destination === "iMoni") {
+        registerRun(reportNo, {
+            testLevel,
+            fileName,
+            mac,
+            unitSerialNo,
+            cpuSrNo,
+            basePcbSrNo,
+            cameraSrNo,
+            psuSrNo,
+            generatedAt: getFormattedDateTime(),
+            eligible: Boolean(runCompleted),
+        });
     }
 
-    return { filePath, fileName };
+    return {
+        filePath,
+        fileName,
+        reportNo,
+        allPassedEligible: destination === "iMoni" && Boolean(runCompleted),
+    };
 }
 
-module.exports = { reportWriter };
+// ================= ALL PASSED REPORT (MANUAL, ONE PER TEST RUN) =================
+// runId === reportNo of the actual report. It is unique (persistent counter),
+// so it identifies one test run. The hardware data used for the All-Passed
+// report is the snapshot saved when that run's actual report was written,
+// not whatever is currently typed in the dashboard.
+
+const MAX_TRACKED_RUNS = 100;
+const runRegistry = new Map(); // runId -> { ...runContext, allPassedPromise }
+
+function registerRun(runId, context) {
+    runRegistry.set(runId, { ...context, allPassedPromise: null });
+
+    // Keep memory bounded (Map keeps insertion order -> drop oldest)
+    while (runRegistry.size > MAX_TRACKED_RUNS) {
+        runRegistry.delete(runRegistry.keys().next().value);
+    }
+}
+
+async function writeAllPassedReport(runId, run) {
+    const {
+        testLevel,
+        fileName,
+        mac,
+        unitSerialNo,
+        cpuSrNo,
+        basePcbSrNo,
+        cameraSrNo,
+        psuSrNo,
+        generatedAt,
+    } = run;
+
+    const allPassedDir = path.join(
+        __dirname,
+        "..",
+        DESTINATION_MAP.iMoni,
+        REPORT_SUBDIR_MAP[testLevel] || "full-controller",
+        "AllPassed"
+    );
+
+    if (!fs.existsSync(allPassedDir)) {
+        fs.mkdirSync(allPassedDir, { recursive: true });
+    }
+
+    // Select correct All Passed template
+    const allPassedTemplate =
+        testLevel === "green-pcb"
+            ? path.join(__dirname, "./template/green-pcb_allpassed_template.xlsx")
+            : path.join(__dirname, "./template/srms_allpassed_template.xlsx");
+
+    const passedWorkbook = new ExcelJS.Workbook();
+    await passedWorkbook.xlsx.readFile(allPassedTemplate);
+
+    const passedWorksheet = passedWorkbook.getWorksheet(1);
+
+    if (testLevel === "green-pcb") {
+        passedWorksheet.getCell("B2").value = runId;
+        passedWorksheet.getCell("B3").value = basePcbSrNo || "NA";
+        passedWorksheet.getCell("B4").value = generatedAt;
+        passedWorksheet.getCell("B5").value = "iMoni Base PCB";
+    } else {
+        passedWorksheet.getCell("B2").value = runId;
+        passedWorksheet.getCell("B3").value = unitSerialNo || "NA";
+        passedWorksheet.getCell("B4").value = generatedAt;
+        passedWorksheet.getCell("B5").value = "iMoni Assembly";
+        passedWorksheet.getCell("B6").value = mac;
+
+        passedWorksheet.getCell("C7").value = cpuSrNo || "NA";
+        passedWorksheet.getCell("D7").value = basePcbSrNo || "NA";
+        passedWorksheet.getCell("E7").value = cameraSrNo || "NA";
+        passedWorksheet.getCell("F7").value = psuSrNo || "NA";
+    }
+
+    // Same file name as this run's actual report (unique because of runId)
+    const allPassedFilePath = path.join(allPassedDir, fileName);
+    const tmpPath = `${allPassedFilePath}.tmp`;
+
+    // Write to a temp file first so a failed write never leaves a partial report
+    try {
+        await passedWorkbook.xlsx.writeFile(tmpPath);
+        await fs.promises.rename(tmpPath, allPassedFilePath);
+    } catch (err) {
+        await fs.promises.unlink(tmpPath).catch(() => { });
+        throw err;
+    }
+
+    console.log(`✅ All Passed Report Generated: ${fileName}`);
+    return { runId, fileName };
+}
+
+/**
+ * Generates the All-Passed report for one test run.
+ * Idempotent: concurrent or repeated calls for the same runId share a single
+ * generation and never write a second file. A failed attempt can be retried.
+ */
+async function generateAllPassedReport(runId) {
+    const run = runRegistry.get(runId);
+
+    if (!run) {
+        throw Object.assign(new Error(`Unknown or expired test run: ${runId}`), {
+            code: "RUN_NOT_FOUND",
+        });
+    }
+
+    if (!run.eligible) {
+        throw Object.assign(
+            new Error("Test run was not completed, All-Passed report not allowed"),
+            { code: "RUN_NOT_ELIGIBLE" }
+        );
+    }
+
+    // Already generated / currently generating -> reuse (check + set has no await in between)
+    if (run.allPassedPromise) {
+        const result = await run.allPassedPromise;
+        return { ...result, alreadyGenerated: true };
+    }
+
+    run.allPassedPromise = writeAllPassedReport(runId, run).catch((err) => {
+        run.allPassedPromise = null; // allow retry after a failure
+        throw err;
+    });
+
+    const result = await run.allPassedPromise;
+    return { ...result, alreadyGenerated: false };
+}
+
+module.exports = { reportWriter, generateAllPassedReport };

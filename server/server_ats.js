@@ -45,7 +45,7 @@ const cors = require("cors");
 const { isDeepStrictEqual } = require("util");
 const { runTests } = require("./ATS/atsRunner2");
 // const { runTests } = require("./ATS/atsRunner");
-const { reportWriter } = require("./ATS/reportWriter");
+const { reportWriter, generateAllPassedReport } = require("./ATS/reportWriter");
 app.use(cors());
 
 // ======= LOGS =======
@@ -588,6 +588,15 @@ app.get("/api/thresholds", (req, res) => {
   res.json(thresholds);
 });
 
+// A run is "completed" only if the user did not stop it.
+// (Stopping between test groups leaves no "stopped" entry, so check the flag too.)
+function isRunCompleted(results = []) {
+  return (
+    !atsRuntime.testStopRequested &&
+    !results.some((r) => r.status === "stopped")
+  );
+}
+
 function getIMoniTestDir(testLevel) {
   if (testLevel === "green-pcb") {
     return path.join(__dirname, "tests/iMoni/green-pcb");
@@ -632,7 +641,6 @@ app.post("/api/tests/run", async (req, res) => {
     basePcbSrNo,
     cameraSrNo,
     psuSrNo,
-    generateReport,
     testLevel = "green-pcb",
   } = req.body;
   console.log("Requested test file:", selectedTests);
@@ -709,7 +717,7 @@ app.post("/api/tests/run", async (req, res) => {
     const firstMac =
       Array.from(atsRuntime.connectedDevices.keys())[0] || "unknown-device";
 
-    await reportWriter({
+    const report = await reportWriter({
       runResult: testResult,
       destination: "iMoni",
       mac: firstMac,
@@ -719,13 +727,15 @@ app.post("/api/tests/run", async (req, res) => {
       basePcbSrNo,
       cameraSrNo,
       psuSrNo,
-      generateReport,
+      runCompleted: isRunCompleted(testResult.results),
       testLevel,
     });
 
     res.json({
       timestamp: getFormattedDateTime(),
       ...testResult,
+      runId: report.reportNo,
+      allPassedEligible: report.allPassedEligible,
     });
   } catch (err) {
     console.error("❌ Error running tests:", err.message, err.stack);
@@ -771,7 +781,6 @@ app.post("/api/tests/run-all", async (req, res) => {
       unitSerialNo,
       testLevel = "full-controller",
       skipFrontendTests,
-      generateReport,
       frontendResults,
     } = req.body;
     // const testDir = path.join(__dirname, "tests/iMoni");
@@ -864,7 +873,7 @@ app.post("/api/tests/run-all", async (req, res) => {
       Array.from(atsRuntime.connectedDevices.keys())[0] ||
       "unknown-device";
 
-    await reportWriter({
+    const report = await reportWriter({
       runResult: response,
       destination: "iMoni",
       mac: reportMac,
@@ -873,9 +882,13 @@ app.post("/api/tests/run-all", async (req, res) => {
       cameraSrNo,
       psuSrNo,
       unitSerialNo,
-      generateReport,
+      runCompleted: isRunCompleted(mergedResults),
       testLevel,
     });
+
+    // Identifies this run for the manual All-Passed report request
+    response.runId = report.reportNo;
+    response.allPassedEligible = report.allPassedEligible;
 
     // ================= FINAL WS EVENT =================
     broadcastTestStatus({
@@ -893,6 +906,37 @@ app.post("/api/tests/run-all", async (req, res) => {
       error: `Failed to run tests: ${err.message}`,
       timestamp: getFormattedDateTime(),
     });
+  }
+});
+
+// ✅ MANUAL ALL-PASSED REPORT (only on user click, once per test run)
+app.post("/api/tests/generate-all-passed", async (req, res) => {
+  const { runId } = req.body || {};
+
+  if (!runId) {
+    return res
+      .status(400)
+      .json({ success: false, error: "runId is required" });
+  }
+
+  try {
+    const result = await generateAllPassedReport(String(runId));
+    return res.json({
+      success: true,
+      ...result,
+      timestamp: getFormattedDateTime(),
+    });
+  } catch (err) {
+    console.error("❌ All-Passed report failed:", err.message);
+    const status =
+      err.code === "RUN_NOT_FOUND"
+        ? 404
+        : err.code === "RUN_NOT_ELIGIBLE"
+          ? 409
+          : 500;
+    return res
+      .status(status)
+      .json({ success: false, code: err.code, error: err.message });
   }
 });
 
