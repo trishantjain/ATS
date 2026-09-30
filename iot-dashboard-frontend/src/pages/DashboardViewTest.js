@@ -1132,9 +1132,9 @@ function DashboardViewTest() {
     }
   }
 
-  function escapeRegex(value) {
-    return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  }
+  // function escapeRegex(value) {
+  //   return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  // }
 
   // Register a completed ATS run in the Tested Controllers collection
   async function registerTestedController(runData) {
@@ -1147,8 +1147,7 @@ function DashboardViewTest() {
       camera: String(cameraSrNo || "").trim(),
 
       // Replace testerName with the variable used by your login/auth system.
-      testedBy: String(testerName || "").trim(),
-
+      testedBy: "ATS Operator",
       remark: "",
       testLevel,
       reportNo: String(runData.runId || ""),
@@ -1341,73 +1340,48 @@ function DashboardViewTest() {
             }),
           },
         );
-        // Register a completed ATS run in the Tested Controllers collection
-        async function registerTestedController(runData) {
-          const payload = {
-            controllerIp: String(selectedMac || "").trim(),
-            assemblyNo: String(unitSerialNo || "").trim(),
-            cpu: String(cpuSrNo || "").trim(),
-            base: String(basePcbSrNo || "").trim(),
-            psu: String(psuSrNo || "").trim(),
-            camera: String(cameraSrNo || "").trim(),
 
-            // Replace testerName with the variable used by your login/auth system.
-            testedBy: String(testerName || "").trim(),
+        const data = await resp.json().catch(() => ({}));
 
-            remark: "",
-            testLevel,
-            reportNo: String(runData.runId || ""),
-            reportPath: String(runData.reportPath || ""),
-          };
+        if (!resp.ok) {
+          throw new Error(data.error || `ATS failed (${resp.status})`);
+        }
 
-          const missing = Object.entries(payload)
-            .filter(
-              ([key, value]) =>
-                [
-                  "controllerIp",
-                  "assemblyNo",
-                  "cpu",
-                  "base",
-                  "psu",
-                  "camera",
-                  "testedBy",
-                ].includes(key) && !value,
-            )
-            .map(([key]) => key);
+        setTestStatus(
+          `Done: ${data.summary?.passed ?? 0} passed, ` +
+            `${data.summary?.failed ?? 0} failed`,
+        );
 
-          if (missing.length) {
-            throw new Error(
-              `Cannot register controller. Missing: ${missing.join(", ")}`,
-            );
-          }
+        markRunCompleted(data);
 
-          const response = await fetch(
-            `${process.env.REACT_APP_API_URL}/api/tested-controllers`,
-            {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify(payload),
-            },
+        try {
+          await registerTestedController(data);
+
+          setTestStatus(
+            `Done: ${data.summary?.passed ?? 0} passed, ` +
+              `${data.summary?.failed ?? 0} failed — Saved to ATS`,
           );
 
-          const result = await response.json().catch(() => ({}));
+          await swal.fire({
+            icon: "success",
+            title: "Test completed",
+            text: "Test results and controller information were saved to ATS.",
+          });
+        } catch (saveError) {
+          console.error("ATS registration failed:", saveError);
 
-          if (!response.ok || !result.success) {
-            throw new Error(
-              result.error ||
-                result.message ||
-                `Controller registration failed (${response.status})`,
-            );
-          }
+          setTestStatus(
+            `Tests completed, but ATS registration failed: ${saveError.message}`,
+          );
 
-          return result;
+          await swal.fire({
+            icon: "warning",
+            title: "Test completed, registration failed",
+            text:
+              `The test report was generated, but the controller was not saved. ` +
+              `${saveError.message}`,
+          });
         }
-        setTestStatus(
-          `Done: ${data.summary.passed} passed, ${data.summary.failed} failed`,
-        );
-        markRunCompleted(data);
       } catch (err) {
         setTestStatus(`Error: ${err.message}`);
       }
@@ -1433,6 +1407,7 @@ function DashboardViewTest() {
             }),
           },
         );
+
         const data = await resp.json().catch(() => ({}));
 
         if (!resp.ok) {
