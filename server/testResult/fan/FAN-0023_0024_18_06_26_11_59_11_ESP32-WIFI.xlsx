@@ -1,0 +1,10 @@
+Report No:,FAN-0023
+Unit Sr No:,0024
+CPU Sr. No.:,NA
+DateTime:,18/06/26 11:59:11
+TestLevel:,SRMS Unit
+DeviceIP:,ESP32-WIFI
+TotalTests:,6
+
+Sr. No.,TestName,Status,FailedStep,TotalSteps,Reason,Remarks
+1,"Fan Tray Assembly Test",*FAILED,1,6,"Fan 1 Pulses=0",

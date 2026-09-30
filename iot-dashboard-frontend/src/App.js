@@ -1,11 +1,17 @@
-import React, { useEffect, useState } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import React, { useEffect, useState } from "react";
+import {
+  BrowserRouter as Router,
+  Routes,
+  Route,
+  Navigate,
+} from "react-router-dom";
 // import Login from './pages/Login';
-import DashboardView from './pages/DashboardView';
+import DashboardView from "./pages/DashboardView";
 // import AdminDashboard from './pages/AdminDashboard';
 // import PrivateRoute from './components/PrivateRoute';
-import OfflinePrompt from './components/OfflinePrompt';
-import DashboardViewTest from './pages/DashboardViewTest';
+import OfflinePrompt from "./components/OfflinePrompt";
+import DashboardViewTest from "./pages/DashboardViewTest";
+import TestedControllers from "./pages/TestedControllers";
 // import DashboardTest from './pages/DashboardTest';
 
 function App() {
@@ -38,8 +44,8 @@ function App() {
           path="/"
           element={
             // <PrivateRoute allowedRoles={['user', 'block', 'gp']}>
-              // <DashboardView />
-              <DashboardViewTest />
+            // <DashboardView />
+            <DashboardViewTest />
             // </PrivateRoute>
           }
         />
@@ -59,6 +65,8 @@ function App() {
             </PrivateRoute>
           }
         /> */}
+
+        <Route path="/tested-controllers" element={<TestedControllers />} />
 
         {/* Fallback route */}
         <Route path="*" element={<Navigate to="/" />} />

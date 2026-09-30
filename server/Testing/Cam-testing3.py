@@ -1,7 +1,7 @@
 import serial
 import re
 
-PORT = "COM19" 
+PORT = "COM11" 
 BAUD = 921600
 
 ser = serial.Serial(PORT, BAUD, timeout=10)
@@ -40,10 +40,10 @@ while True:
                 min(4096, size - len(jpeg_data))
             )
 
-        with open("Sinosin-day.jpg", "wb") as f:
+        with open("Sinosin-day_11.jpg", "wb") as f:
             f.write(jpeg_data[:size])
     
-        print("Saved: Sinosin-day.jpg")
+        print("Saved: Sinosin-day_11.jpg")
         break
 
 ser.close()

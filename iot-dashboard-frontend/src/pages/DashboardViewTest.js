@@ -5,6 +5,31 @@ import "react-circular-progressbar/dist/styles.css";
 import "leaflet/dist/leaflet.css";
 import swal from "sweetalert2";
 import PDU_STEPS from "./pdu_steps";
+import { useNavigate } from "react-router-dom";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  ArrowLeft,
+  Search,
+  SlidersHorizontal,
+  MoreHorizontal,
+  Eye,
+  History,
+  FileSpreadsheet,
+  X,
+  ChevronLeft,
+  ChevronRight,
+  SelectContent,
+  SelectTrigger,
+  SelectValue,
+  Select,
+  SelectItem,
+} from "@/components/ui/select";
+
+import { FileCheck2, Terminal } from "lucide-react";
+
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
 
 function DashboardViewTest() {
   const [readings, setReadings] = useState([]);
@@ -163,6 +188,7 @@ function DashboardViewTest() {
   const pythonLogsRef = useRef(null);
 
   const manualCloseRef = useRef(false);
+  const navigate = useNavigate();
   // const markerRefs = useRef({});
 
   const latestReadingsByMac = {};
@@ -520,14 +546,143 @@ function DashboardViewTest() {
 
     ws.onmessage = (event) => {
       try {
-        console.log("RAW:", event.data);
+        // console.log("RAW:", event.data);
         const message = JSON.parse(event.data);
         console.log("================================");
         console.log("TYPE:", message.type);
-        console.log("MESSAGE:", message);
+        // console.log("MESSAGE:", message);
         console.log("================================");
 
         // const message = JSON.parse(event.data);
+
+        // ==========================================
+        // CURRENT DEVICES STATUS
+        // ==========================================
+        if (message.type === "DEVICES_STATUS") {
+          const connectedDevices = (message.data?.connectedDevices || []).map(
+            (mac) => String(mac).toLowerCase(),
+          );
+
+          console.log("📋 CURRENT CONNECTED DEVICES:", connectedDevices);
+
+          setSelectedMac((prev) => {
+            const currentMac = String(prev || "").toLowerCase();
+
+            // Keep current selection if it is still connected
+            if (currentMac && connectedDevices.includes(currentMac)) {
+              return prev;
+            }
+
+            // Current selection is no longer connected.
+            // Select the currently connected controller.
+            const nextMac = connectedDevices[0] || "";
+
+            console.log(
+              "🔄 Re-syncing selected device:",
+              currentMac,
+              "→",
+              nextMac,
+            );
+
+            if (nextMac) {
+              setSelectedDevice(nextMac);
+            } else {
+              setSelectedDevice("");
+              setLiveReading(null);
+              setReadings([]);
+            }
+
+            return nextMac;
+          });
+
+          return;
+        }
+
+        // ==========================================
+        // DEVICE DISCONNECTED
+        // ==========================================
+        if (message.type === "DEVICE_DISCONNECTED") {
+          const disconnectedMac = String(message.mac).trim().toLowerCase();
+
+          console.log("🔴 DEVICE DISCONNECTED:", disconnectedMac);
+
+          setSelectedMac((prev) => {
+            const currentMac = String(prev || "")
+              .trim()
+              .toLowerCase();
+
+            if (currentMac === disconnectedMac) {
+              return "";
+            }
+
+            return prev;
+          });
+
+          setSelectedDevice((prev) => {
+            if (
+              String(selectedMac || "")
+                .trim()
+                .toLowerCase() === disconnectedMac
+            ) {
+              return "";
+            }
+            return prev;
+          });
+
+          setLiveReading((prev) => {
+            if (
+              prev &&
+              String(prev.mac || "")
+                .trim()
+                .toLowerCase() === disconnectedMac
+            ) {
+              return null;
+            }
+
+            return prev;
+          });
+
+          setReadings((prev) =>
+            prev.filter(
+              (reading) =>
+                String(reading.mac || "")
+                  .trim()
+                  .toLowerCase() !== disconnectedMac,
+            ),
+          );
+
+          return;
+        }
+
+        // ==========================================
+        // DEVICE CONNECTED
+        // ==========================================
+        if (message.type === "DEVICE_CONNECTED") {
+          const connectedMac = String(message.mac).toLowerCase();
+
+          console.log("🟢 DEVICE CONNECTED:", connectedMac);
+
+          setSelectedMac((prev) => {
+            const currentMac = String(prev || "").toLowerCase();
+
+            if (!currentMac) {
+              console.log(
+                "🎯 Automatically selecting newly connected device:",
+                connectedMac,
+              );
+
+              setSelectedDevice(connectedMac);
+              setLiveReading(null);
+              setReadings([]);
+
+              return connectedMac;
+            }
+
+            return prev;
+          });
+
+          return;
+        }
 
         // ==========================================
         // PYTHON PROGRAMMING STATUS
@@ -579,25 +734,46 @@ function DashboardViewTest() {
           return;
         }
 
-        console.log("PARSED:", JSON.stringify(message, null, 2));
+        // console.log("PARSED:", JSON.stringify(message, null, 2));
 
         // Getting New Reading from Socket
         if (message.type === "NEW_READING") {
           const newReading = message.data;
-          setSelectedMac((prev) => prev || newReading.mac);
-          setSelectedDevice(
-            (prev) => prev || newReading.locationId || newReading.mac,
-          );
-          // Update live reading immediately for current device
-          setLiveReading((prev) => {
-            if (!prev || prev.mac === newReading.mac) return newReading;
-            return prev;
-          });
-          //! Also update readings array for history
+          const newMac = String(newReading.mac).toLowerCase();
+
+          console.log("📡 NEW READING:", newMac);
+
+          // Keep latest reading for this device
           setReadings((prev) => {
-            const filtered = prev.filter((r) => r.mac !== newReading.mac);
+            const filtered = prev.filter(
+              (r) => String(r.mac).toLowerCase() !== newMac,
+            );
+
             return [...filtered, newReading].slice(-400);
           });
+
+          setSelectedMac((prev) => {
+            const currentMac = String(prev || "").toLowerCase();
+
+            // No device selected -> select the device that sent the reading
+            if (!currentMac) {
+              console.log("🎯 Selecting device from NEW_READING:", newMac);
+
+              setSelectedDevice(newMac);
+              setLiveReading(newReading);
+
+              return newMac;
+            }
+
+            // Selected device is the one sending the reading
+            if (currentMac === newMac) {
+              setLiveReading(newReading);
+            }
+
+            return prev;
+          });
+
+          return;
         }
 
         if (message.type === "TEST_STARTED") {
@@ -915,7 +1091,9 @@ function DashboardViewTest() {
     allPassedInFlightRef.current.add(runId);
     // Only update UI state if this run is still the current one
     const updateIfCurrent = (status) =>
-      setAllPassed((prev) => (prev.runId === runId ? { ...prev, status } : prev));
+      setAllPassed((prev) =>
+        prev.runId === runId ? { ...prev, status } : prev,
+      );
 
     updateIfCurrent("generating");
     setNotifications((prev) => {
@@ -952,6 +1130,74 @@ function DashboardViewTest() {
     } finally {
       allPassedInFlightRef.current.delete(runId);
     }
+  }
+
+  function escapeRegex(value) {
+    return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  }
+
+  // Register a completed ATS run in the Tested Controllers collection
+  async function registerTestedController(runData) {
+    const payload = {
+      controllerIp: String(selectedMac || "").trim(),
+      assemblyNo: String(unitSerialNo || "").trim(),
+      cpu: String(cpuSrNo || "").trim(),
+      base: String(basePcbSrNo || "").trim(),
+      psu: String(psuSrNo || "").trim(),
+      camera: String(cameraSrNo || "").trim(),
+
+      // Replace testerName with the variable used by your login/auth system.
+      testedBy: String(testerName || "").trim(),
+
+      remark: "",
+      testLevel,
+      reportNo: String(runData.runId || ""),
+      reportPath: String(runData.reportPath || ""),
+    };
+
+    const missing = Object.entries(payload)
+      .filter(
+        ([key, value]) =>
+          [
+            "controllerIp",
+            "assemblyNo",
+            "cpu",
+            "base",
+            "psu",
+            "camera",
+            "testedBy",
+          ].includes(key) && !value,
+      )
+      .map(([key]) => key);
+
+    if (missing.length) {
+      throw new Error(
+        `Cannot register controller. Missing: ${missing.join(", ")}`,
+      );
+    }
+
+    const response = await fetch(
+      `${process.env.REACT_APP_API_URL}/api/tested-controllers`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      },
+    );
+
+    const result = await response.json().catch(() => ({}));
+
+    if (!response.ok || !result.success) {
+      throw new Error(
+        result.error ||
+          result.message ||
+          `Controller registration failed (${response.status})`,
+      );
+    }
+
+    return result;
   }
 
   // IMONI TEST FUNCTION
@@ -1023,6 +1269,7 @@ function DashboardViewTest() {
 
     if (fetchedTestList.length === selectedTests.length) {
       // 1. Visual Test (frontend dialog)
+      // Visual Test
       const v = await swal.fire({
         title: "Visual Test",
         text: "Is Visual inspection passed?",
@@ -1046,14 +1293,14 @@ function DashboardViewTest() {
 
       frontendResults.push({
         name: "Visual Test",
-        status: v.isConfirmed ? "passed" : "failed",
-        passed: v.isConfirmed,
-        output: v.isConfirmed
+        status: visualPassed ? "passed" : "failed",
+        passed: visualPassed,
+        output: visualPassed
           ? "Visual inspection passed successfully"
           : "Visual inspection failed",
       });
 
-      // 2. Burn-In Test (frontend dialog)
+      // Burn-In Test
       const b = await swal.fire({
         title: "Burn-In Test",
         text: "Is Burn-In test passed?",
@@ -1061,6 +1308,7 @@ function DashboardViewTest() {
         confirmButtonText: "Pass",
         cancelButtonText: "Fail",
       });
+
       frontendResults.push({
         name: "Burn-In Test",
         status: b.isConfirmed ? "passed" : "failed",
@@ -1093,7 +1341,69 @@ function DashboardViewTest() {
             }),
           },
         );
-        const data = await resp.json();
+        // Register a completed ATS run in the Tested Controllers collection
+        async function registerTestedController(runData) {
+          const payload = {
+            controllerIp: String(selectedMac || "").trim(),
+            assemblyNo: String(unitSerialNo || "").trim(),
+            cpu: String(cpuSrNo || "").trim(),
+            base: String(basePcbSrNo || "").trim(),
+            psu: String(psuSrNo || "").trim(),
+            camera: String(cameraSrNo || "").trim(),
+
+            // Replace testerName with the variable used by your login/auth system.
+            testedBy: String(testerName || "").trim(),
+
+            remark: "",
+            testLevel,
+            reportNo: String(runData.runId || ""),
+            reportPath: String(runData.reportPath || ""),
+          };
+
+          const missing = Object.entries(payload)
+            .filter(
+              ([key, value]) =>
+                [
+                  "controllerIp",
+                  "assemblyNo",
+                  "cpu",
+                  "base",
+                  "psu",
+                  "camera",
+                  "testedBy",
+                ].includes(key) && !value,
+            )
+            .map(([key]) => key);
+
+          if (missing.length) {
+            throw new Error(
+              `Cannot register controller. Missing: ${missing.join(", ")}`,
+            );
+          }
+
+          const response = await fetch(
+            `${process.env.REACT_APP_API_URL}/api/tested-controllers`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify(payload),
+            },
+          );
+
+          const result = await response.json().catch(() => ({}));
+
+          if (!response.ok || !result.success) {
+            throw new Error(
+              result.error ||
+                result.message ||
+                `Controller registration failed (${response.status})`,
+            );
+          }
+
+          return result;
+        }
         setTestStatus(
           `Done: ${data.summary.passed} passed, ${data.summary.failed} failed`,
         );
@@ -1123,7 +1433,47 @@ function DashboardViewTest() {
             }),
           },
         );
-        const data = await resp.json();
+        const data = await resp.json().catch(() => ({}));
+
+        if (!resp.ok) {
+          throw new Error(data.error || `ATS failed (${resp.status})`);
+        }
+
+        setTestStatus(
+          `Done: ${data.summary?.passed ?? 0} passed, ` +
+            `${data.summary?.failed ?? 0} failed`,
+        );
+
+        markRunCompleted(data);
+
+        try {
+          await registerTestedController(data);
+
+          setTestStatus(
+            `Done: ${data.summary?.passed ?? 0} passed, ` +
+              `${data.summary?.failed ?? 0} failed — Saved to ATS`,
+          );
+
+          await swal.fire({
+            icon: "success",
+            title: "Test completed",
+            text: "Test results and controller information were saved to ATS.",
+          });
+        } catch (saveError) {
+          console.error("ATS registration failed:", saveError);
+
+          setTestStatus(
+            `Tests completed, but ATS registration failed: ${saveError.message}`,
+          );
+
+          await swal.fire({
+            icon: "warning",
+            title: "Test completed, registration failed",
+            text:
+              `The test report was generated, but the controller was not saved. ` +
+              `${saveError.message}`,
+          });
+        }
         setTestStatus(
           `Done: ${data.summary.passed} passed, ${data.summary.failed} failed`,
         );
@@ -1323,297 +1673,383 @@ function DashboardViewTest() {
 
   return (
     <>
-      <div className="ats-panel">
+      {/* ATS PANEL */}
+      <div className="border shadow-lg rounded-xl border-slate-700/70 bg-slate-950 text-slate-100">
         {/* HEADER */}
-        <div className="ats-header">
-          <h2>🧪 ATS Test Controls</h2>
+        <div className="flex items-center justify-between px-5 py-3 border-b border-slate-800">
+          <div>
+            <div className="flex items-center gap-2">
+              <div className="flex items-center justify-center w-8 h-8 text-blue-400 rounded-lg bg-blue-500/10">
+                🧪
+              </div>
 
-          <button onClick={testMode}>test</button>
+              <div>
+                <h2 className="text-sm font-semibold">ATS Testing</h2>
+                <p className="text-[11px] text-slate-500">
+                  Automated Test System
+                </p>
+              </div>
+            </div>
+          </div>
 
-          <input
-            className="ats-input"
-            placeholder="CPU"
-            value={pythonCpu}
-            onChange={(e) => setPythonCpu(e.target.value)}
-          />
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navigate("/tested-controllers")}
+              className="h-8 text-xs border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800 hover:text-white"
+            >
+              <FileCheck2 className="mr-1.5 h-3.5 w-3.5" />
+              Tested Controllers
+            </Button>
 
-          <input
-            className="ats-input"
-            placeholder="IP"
-            value={pythonIp}
-            onChange={(e) => setPythonIp(e.target.value)}
-          />
+            {selectedMac ? (
+              <Badge
+                variant="outline"
+                className="border-emerald-500/30 bg-emerald-500/5 text-emerald-400"
+              >
+                <span className="mr-1.5 h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                Connected
+              </Badge>
+            ) : (
+              <Badge
+                variant="outline"
+                className="border-slate-700 text-slate-400"
+              >
+                No Controller
+              </Badge>
+            )}
 
-          <button onClick={runPython} disabled={pythonRunning}>
-            {pythonRunning ? "⏳ Programming..." : "🐍 Run Python"}
-          </button>
-          <button
-            className="ats-toggle-btn"
-            onClick={() => setShowATSPanel(!showATSPanel)}
-          >
-            {showATSPanel ? "Hide Details" : "Show Details"}
-          </button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowATSPanel(!showATSPanel)}
+              className="h-8 text-xs text-slate-400 hover:bg-slate-800 hover:text-white"
+            >
+              {showATSPanel ? "Hide" : "Show"}
+            </Button>
+          </div>
         </div>
 
-        {/* PYTHON PROGRAMMING STATUS */}
-        {pythonStatus && (
-          <div
-            style={{
-              marginTop: "12px",
-              marginBottom: "12px",
-              padding: "14px 16px",
-              borderRadius: "8px",
-              background:
-                pythonStatus.status === "completed"
-                  ? "#102f1b"
-                  : pythonStatus.status === "failed"
-                    ? "#3a1212"
-                    : "#1a1f26",
-              border:
-                pythonStatus.status === "completed"
-                  ? "1px solid #22c55e"
-                  : pythonStatus.status === "failed"
-                    ? "1px solid #ef4444"
-                    : "1px solid #64748b",
-              color: "#fff",
-            }}
-          >
-            {/* HEADER */}
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: "10px",
-              }}
-            >
-              <div
-                style={{
-                  fontWeight: "bold",
-                  fontSize: "15px",
-                }}
-              >
-                {pythonStatus.status === "started" &&
-                  "🚀 Starting CPU Programming"}
-
-                {pythonStatus.status === "running" &&
-                  "🐍 CPU Programming Running"}
-
-                {pythonStatus.status === "warning" && "⚠️ CPU Programming"}
-
-                {pythonStatus.status === "completed" &&
-                  "✅ CPU Programming Completed"}
-
-                {pythonStatus.status === "failed" &&
-                  "❌ CPU Programming Failed"}
-              </div>
-
-              <div
-                style={{
-                  fontSize: "12px",
-                  color: "#aaa",
-                }}
-              >
-                CPU: {pythonCpu} | IP: {pythonIp}
-              </div>
-            </div>
-
-            {/* CURRENT STATUS */}
-            <div
-              style={{
-                fontSize: "13px",
-                marginBottom: "10px",
-                color:
-                  pythonStatus.status === "completed"
-                    ? "#4ade80"
-                    : pythonStatus.status === "failed"
-                      ? "#f87171"
-                      : "#cbd5e1",
-              }}
-            >
-              {pythonStatus.message}
-            </div>
-
-            {/* LIVE PYTHON OUTPUT */}
-            {pythonLogs.length > 0 && (
-              <div
-                ref={pythonLogsRef}
-                style={{
-                  background: "#0b0f14",
-                  border: "1px solid #303640",
-                  borderRadius: "6px",
-                  padding: "10px",
-                  maxHeight: "220px",
-                  overflowY: "auto",
-                  fontFamily: "Consolas, monospace",
-                  fontSize: "12px",
-                  lineHeight: "1.5",
-                  whiteSpace: "pre-wrap",
-                }}
-              >
-                {pythonLogs.map((log, index) => (
-                  <div
-                    key={index}
-                    style={{
-                      color:
-                        log.includes("ERROR") ||
-                        log.includes("FAILED") ||
-                        log.includes("NOT reachable")
-                          ? "#f87171"
-                          : log.includes("SUCCESS") ||
-                              log.includes("reachable") ||
-                              log.includes("successful")
-                            ? "#4ade80"
-                            : "#d1d5db",
-                      marginBottom: "2px",
-                    }}
-                  >
-                    {log}
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* RUNNING INDICATOR */}
-            {pythonRunning && (
-              <div
-                style={{
-                  marginTop: "8px",
-                  fontSize: "12px",
-                  color: "#94a3b8",
-                }}
-              >
-                ⏳ Programming in progress...
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* TEST STATUS - ONLY SHOW WHEN TESTS EXIST */}
-        {testResults.length > 0 && (
-          <div className="live-test-status">
-            <div className="test-status-title">Test Status</div>
-
-            <div className="test-status-row">
-              {testResults.map((test, index) => (
-                <div
-                  key={index}
-                  className={`test-status-name ${test.status}`}
-                  title={`${test.name} - ${test.status}`}
-                >
-                  {test.status === "passed" && "✓ "}
-                  {test.status === "failed" && "✕ "}
-                  {test.status === "running" && "● "}
-                  {test.status === "waiting" && "○ "}
-
-                  {test.name}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
+        {/* TEST SETUP */}
         {showATSPanel && (
-          <div className="ats-running-panel">
-            {/* TOP CONTROLS */}
-            <div className="ats-top-row">
-              <select
-                value={selectedProduct}
-                onChange={handleProductChange}
-                className="ats-select"
-              >
-                <option value="">Select Product</option>
-                <option value="iMoni">iMoni Tests</option>
-                <option value="fan">Fan Tests</option>
-                <option value="pdu">PDU Tests</option>
-              </select>
-
-              {selectedProduct === "iMoni" && (
-                <select
-                  value={testLevel}
-                  onChange={(e) => setTestLevel(e.target.value)}
-                  className="ats-select"
-                >
-                  <option value="full-controller">Assembly</option>
-                  <option value="green-pcb">Base PCB Level</option>
-                </select>
-              )}
-
-              {selectedProduct === "iMoni" && (
-                <button
-                  className={`ats-allpassed-btn${
-                    allPassedReady ? " highlight" : ""
-                  }${allPassed.status === "success" ? " success" : ""}`}
-                  onClick={generateAllPassedReport}
-                  disabled={!allPassedReady}
-                >
-                  {allPassed.status === "generating"
-                    ? "⏳ Generating..."
-                    : allPassed.status === "success"
-                      ? "✓ All-Passed Report Generated"
-                      : allPassed.status === "error"
-                        ? "↻ Retry All-Passed Report"
-                        : "Generate All-Passed Report"}
-                </button>
-              )}
-
-              <button
-                className="ats-run-btn"
-                onClick={iMoni_test}
-                disabled={awaitingCommand}
-              >
-                {awaitingCommand ? "⏳ Running..." : "▶ Run ATS Tests"}
-              </button>
+          <div className="px-4 py-3 border rounded-xl border-slate-800 bg-slate-950/80">
+            {/* HEADER */}
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <h3 className="text-sm font-semibold text-slate-200">
+                  Controller Details
+                </h3>
+                <p className="text-[10px] text-slate-500">
+                  Enter controller details
+                </p>
+              </div>
             </div>
 
-            {/* SERIAL NUMBERS */}
-            {selectedProduct === "iMoni" && (
-              <div className="ats-serial-row">
-                {testLevel === "green-pcb" ? (
-                  <input
-                    className="ats-input"
-                    placeholder="Base PCB Serial Number"
+            {/* CPU PROGRAMMING */}
+            <div className="flex flex-wrap items-end gap-2">
+              <div className="w-[155px]">
+                <label className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-slate-500">
+                  CPU Serial
+                </label>
+
+                <Input
+                  placeholder="CPU Serial Number"
+                  value={pythonCpu}
+                  onChange={(e) => setPythonCpu(e.target.value)}
+                  disabled={pythonRunning}
+                  className="text-xs h-9 border-slate-700 bg-slate-900"
+                />
+              </div>
+
+              <div className="w-[155px]">
+                <label className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-slate-500">
+                  CPU IP
+                </label>
+
+                <Input
+                  placeholder="IP Address"
+                  value={pythonIp}
+                  onChange={(e) => setPythonIp(e.target.value)}
+                  disabled={pythonRunning}
+                  className="text-xs h-9 border-slate-700 bg-slate-900"
+                />
+              </div>
+
+              <Button
+                onClick={runPython}
+                disabled={pythonRunning}
+                className="h-9 min-w-[145px] bg-blue-600 px-4 text-xs font-semibold hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {pythonRunning ? "⏳ Programming..." : "⚙ Program CPU"}
+              </Button>
+            </div>
+
+            {/* PYTHON PROGRAMMING OUTPUT */}
+            {pythonRunning && (
+              <div className="mt-3 overflow-hidden border rounded-lg border-slate-800 bg-slate-950">
+                {/* Header */}
+                <div className="flex items-center justify-between px-3 py-2 border-b border-slate-800 bg-slate-900">
+                  <div className="flex items-center gap-2">
+                    <Terminal className="w-4 h-4 text-emerald-400" />
+                    <span className="text-xs font-semibold tracking-wide uppercase text-slate-300">
+                      CPU Programming Console
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 bg-blue-400 rounded-full animate-pulse" />
+                    <span className="text-[10px] font-medium text-blue-400">
+                      RUNNING
+                    </span>
+                  </div>
+                </div>
+
+                {/* Output */}
+                <div
+                  ref={pythonLogsRef}
+                  className="h-[220px] overflow-y-auto overscroll-contain px-3 py-2 font-mono text-[11px] leading-5"
+                >
+                  {pythonLogs.length > 0 ? (
+                    pythonLogs.map((line, index) => (
+                      <div
+                        key={index}
+                        className="break-words whitespace-pre-wrap text-slate-300"
+                      >
+                        <span className="mr-2 select-none text-slate-600">
+                          {">"}
+                        </span>
+                        {line}
+                      </div>
+                    ))
+                  ) : (
+                    <div className="py-2 text-slate-600">
+                      Waiting for Python output...
+                    </div>
+                  )}
+                </div>
+
+                {/* Footer */}
+                <div className="flex items-center justify-between border-t border-slate-800 bg-slate-900/60 px-3 py-1.5">
+                  <span className="text-[10px] text-slate-500">
+                    {pythonLogs.length} lines
+                  </span>
+                  <span className="text-[10px] text-slate-500">
+                    Auto-scroll enabled
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* CONFIG + SERIALS + RUN BUTTON */}
+            <div className="flex flex-wrap items-end gap-3">
+              {/* PRODUCT */}
+              <div className="w-[200px]">
+                <label className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-slate-500">
+                  Product
+                </label>
+
+                <Select
+                  value={selectedProduct}
+                  onValueChange={(value) =>
+                    handleProductChange({ target: { value } })
+                  }
+                >
+                  <SelectTrigger className="w-full text-xs h-9 border-slate-700 bg-slate-900">
+                    <SelectValue placeholder="Select Product" />
+                  </SelectTrigger>
+
+                  <SelectContent
+                    position="popper"
+                    side="bottom"
+                    sideOffset={5}
+                    className="z-[9999] w-[200px] border-slate-700 bg-slate-950"
+                  >
+                    <SelectItem value="iMoni">iMoni Tests</SelectItem>
+                    <SelectItem value="fan">Fan Tests</SelectItem>
+                    <SelectItem value="pdu">PDU Tests</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* TEST LEVEL */}
+              {selectedProduct === "iMoni" && (
+                <div className="w-[150px]">
+                  <label className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-slate-500">
+                    Test Level
+                  </label>
+
+                  <Select value={testLevel} onValueChange={setTestLevel}>
+                    <SelectTrigger className="w-full text-xs h-9 border-slate-700 bg-slate-900">
+                      <SelectValue />
+                    </SelectTrigger>
+
+                    <SelectContent
+                      position="popper"
+                      side="bottom"
+                      sideOffset={5}
+                      className="z-[9999] w-[150px] border-slate-700 bg-slate-950"
+                    >
+                      <SelectItem value="full-controller">Assembly</SelectItem>
+
+                      <SelectItem value="green-pcb">Base PCB Level</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {/* SERIAL NUMBERS */}
+              {selectedProduct === "iMoni" && testLevel === "green-pcb" && (
+                <div className="w-[220px]">
+                  <label className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-slate-500">
+                    Base PCB
+                  </label>
+
+                  <Input
+                    placeholder="Base PCB Serial"
                     value={basePcbSrNo}
                     onChange={(e) => setBasePcbSrNo(e.target.value)}
+                    className="text-xs h-9 border-slate-700 bg-slate-900"
                   />
-                ) : (
+                </div>
+              )}
+
+              {selectedProduct === "iMoni" &&
+                testLevel === "full-controller" && (
                   <>
-                    <input
-                      className="ats-input"
-                      placeholder="iMoni Ass. Serial"
-                      value={unitSerialNo}
-                      onChange={(e) => setUnitSerialNo(e.target.value)}
-                    />
+                    <div className="w-[155px]">
+                      <label className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-slate-500">
+                        Assembly
+                      </label>
 
-                    <input
-                      className="ats-input"
-                      placeholder="CPU Serial"
-                      value={cpuSrNo}
-                      onChange={(e) => setCpuSrNo(e.target.value)}
-                    />
+                      <Input
+                        placeholder="Assembly Serial"
+                        value={unitSerialNo}
+                        onChange={(e) => setUnitSerialNo(e.target.value)}
+                        className="text-xs h-9 border-slate-700 bg-slate-900"
+                      />
+                    </div>
 
-                    <input
-                      className="ats-input"
-                      placeholder="Base PCB Serial"
-                      value={basePcbSrNo}
-                      onChange={(e) => setBasePcbSrNo(e.target.value)}
-                    />
+                    <div className="w-[155px]">
+                      <label className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-slate-500">
+                        CPU
+                      </label>
 
-                    <input
-                      className="ats-input"
-                      placeholder="Camera Serial"
-                      value={cameraSrNo}
-                      onChange={(e) => setCameraSrNo(e.target.value)}
-                    />
+                      <Input
+                        placeholder="CPU Serial"
+                        value={cpuSrNo}
+                        onChange={(e) => setCpuSrNo(e.target.value)}
+                        className="text-xs h-9 border-slate-700 bg-slate-900"
+                      />
+                    </div>
 
-                    <input
-                      className="ats-input"
-                      placeholder="PSU Serial"
-                      value={psuSrNo}
-                      onChange={(e) => setPsuSrNo(e.target.value)}
-                    />
+                    <div className="w-[155px]">
+                      <label className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-slate-500">
+                        Base PCB
+                      </label>
+
+                      <Input
+                        placeholder="Base PCB Serial"
+                        value={basePcbSrNo}
+                        onChange={(e) => setBasePcbSrNo(e.target.value)}
+                        className="text-xs h-9 border-slate-700 bg-slate-900"
+                      />
+                    </div>
+
+                    <div className="w-[155px]">
+                      <label className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-slate-500">
+                        Camera
+                      </label>
+
+                      <Input
+                        placeholder="Camera Serial"
+                        value={cameraSrNo}
+                        onChange={(e) => setCameraSrNo(e.target.value)}
+                        className="text-xs h-9 border-slate-700 bg-slate-900"
+                      />
+                    </div>
+
+                    <div className="w-[155px]">
+                      <label className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-slate-500">
+                        PSU
+                      </label>
+
+                      <Input
+                        placeholder="PSU Serial"
+                        value={psuSrNo}
+                        onChange={(e) => setPsuSrNo(e.target.value)}
+                        className="text-xs h-9 border-slate-700 bg-slate-900"
+                      />
+                    </div>
                   </>
                 )}
+
+              {/* RUN ATS — RIGHT SIDE */}
+              <div className="ml-auto">
+                <Button
+                  onClick={iMoni_test}
+                  disabled={awaitingCommand}
+                  className="h-9 min-w-[145px] bg-emerald-600 px-4 text-xs font-semibold hover:bg-emerald-500"
+                >
+                  {awaitingCommand ? "⏳ Running..." : "▶ Run ATS Tests"}
+                </Button>
+              </div>
+            </div>
+
+            {/* TEST LIST */}
+            {testResults.length > 0 && (
+              <div className="pt-3 mt-3 border-t border-slate-800">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                    Test Progress
+                  </span>
+
+                  <span className="text-[10px] text-slate-500">
+                    {
+                      testResults.filter((test) => test.status === "passed")
+                        .length
+                    }
+                    {" / "}
+                    {testResults.length} passed
+                  </span>
+                </div>
+
+                <div className="flex flex-wrap gap-1.5">
+                  {testResults.map((test, index) => {
+                    const statusClass = {
+                      passed:
+                        "border-emerald-500/30 bg-emerald-500/10 text-emerald-400",
+
+                      failed: "border-red-500/30 bg-red-500/10 text-red-400",
+
+                      running:
+                        "border-blue-500/30 bg-blue-500/10 text-blue-400",
+
+                      waiting: "border-slate-700 bg-slate-900 text-slate-500",
+                    };
+
+                    const icon = {
+                      passed: "✓",
+                      failed: "✕",
+                      running: "●",
+                      waiting: "○",
+                    };
+
+                    return (
+                      <div
+                        key={index}
+                        title={`${test.name} - ${test.status}`}
+                        className={`rounded-md border px-2.5 py-1 text-[10px] font-medium ${
+                          statusClass[test.status] || statusClass.waiting
+                        }`}
+                      >
+                        <span className="mr-1">{icon[test.status] || "○"}</span>
+
+                        {test.name}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
           </div>

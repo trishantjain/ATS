@@ -1,0 +1,10 @@
+Report No:,FAN-0021
+Unit Sr No:,NA
+CPU Sr. No.:,NA
+DateTime:,17/06/26 18:42:32
+TestLevel:,SRMS Unit
+DeviceIP:,ESP32-JIG
+TotalTests:,6
+
+Sr. No.,TestName,Status,FailedStep,TotalSteps,Reason,Remarks
+1,"Fan Tray Assembly Test",*FAILED,6,6,"Fan 6 Pulses=0",

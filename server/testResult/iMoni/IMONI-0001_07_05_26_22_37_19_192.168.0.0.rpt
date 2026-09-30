@@ -1,0 +1,23 @@
+ATS Test Run
+Report No: IMONI-0001
+Type: iMoni
+Device: 192.168.0.0
+Timestamp: 07/05/26 22:37:19
+Total Tests: 1
+
+Test: Fan Test
+Status: failed
+
+Step,StepStatus,Message
+1,PASSED,"All fans are off, | Ready to test |"
+2,FAILED,"Fan Group 1 not turned on"
+3,PASSED,"Fan Group 1 turned off successfully"
+4,FAILED,"Fan Group 2 not turned on"
+5,FAILED,"Fan Group 2 not turned off"
+6,FAILED,"Fan Group 3 not turned on"
+7,PASSED,"Fan Group 3 turned off successfully"
+8,FAILED,"Fan Group 4 not turned off"
+9,PASSED,"Fan Group 3 turned off successfully"
+
+=== TEST END ===
+

@@ -1,0 +1,11 @@
+Report No:,IMONI-0022,,,,,
+Unit Sr No:,21,,,,,
+White PCB Sr. No.:,3,,,,,
+DateTime:,12-05-2026 18:25,,,,,
+TestLevel:,Green PCB,,,,,
+TotalTests:,3,,,,,
+,,,,,,
+Sr. No.,TestName,Status,FailedStep,TotalSteps,Reason,Remarks
+1,Visual Test,FAILED,,,Visual inspection failed,
+2,Burn-In Test,FAILED,,,Burn-In test failed,
+3,Fan Test,PASSED,,1,"All fans are off, | Ready to test |",
