@@ -1,0 +1,24 @@
+ATS Test Run
+Type: iMoni
+Device: 192.168.0.20
+Timestamp: 13/02/26 18:13:27
+Total Tests: 2
+
+Test: EM Lock through eMS
+Status: failed
+
+Step,StepStatus,Message
+1,PASSED,"Lock is ready to test"
+2,FAILED,"Door not opened"
+3,PASSED,"Door closed successfully"
+
+=== TEST END ===
+
+Test: Inside Temperature Test
+Status: failed
+
+Step,StepStatus,Message
+1,FAILED,"Inside Temperature not increased by 5°C"
+
+=== TEST END ===
+

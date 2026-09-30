@@ -1,0 +1,13 @@
+Unit Sr No:,IMONI-0007
+DateTime:,12/05/26 12:13:18
+DeviceIP:,unknown-device
+ControllerID:,0015
+TotalTests:,6
+
+Sr. No.,TestName,Status,FailedStep,Reason,Remarks
+1,"Limit Switch Test",FAILED,,"❌ Test FAILED: No connected devices available"
+2,"Fire Test",FAILED,,"❌ Test FAILED: No connected devices available"
+3,"EM Lock through eMS",FAILED,,"❌ Test FAILED: No connected devices available"
+4,"Water Logging Test",FAILED,,"❌ Test FAILED: No connected devices available"
+5,"Non - Critical Load Test",FAILED,,"❌ Test FAILED: No connected devices available"
+6,"Fan-Fail Test Test",FAILED,,"❌ Test FAILED: No connected devices available"

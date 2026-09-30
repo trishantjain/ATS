@@ -1,0 +1,13 @@
+Unit Sr No:,IMONI-0005,,,,
+DateTime:,12-05-2026 11:40,,,,
+DeviceIP:,192.168.0.29,,,,
+ControllerID:,0,,,,
+TotalTests:,6,,,,
+,,,,,
+Sr. No.,TestName,Status,FailedStep,Reason,Remarks
+1,Limit Switch Test,PASSED,,Door alarm went off successfully,
+2,Fire Test,FAILED,1,Fire Alarm already ON,
+3,EM Lock through eMS,PASSED,,Door closed successfully,
+4,Water Logging Test,FAILED,2,Water Logging alarm not turned on,
+5,Non - Critical Load Test,FAILED,2,Door alarm did not trigger within time,
+6,Fan-Fail Test Test,FAILED,1,Fan 1 & 2 not started,

@@ -48,7 +48,7 @@ register_values = {
 
     # HUPS - FR FAIL
     # EMS - RECTIFIER ALARM
-    "0186": "0001",  # [0001] 1 - working, [0000] 0 - alarm
+    "0186": "0010",  # [0001] 1 - working, [0000] 0 - alarm
 
     "0786": "0005",  # Fujiyama Battery Backup
 
@@ -63,7 +63,7 @@ register_values = {
     "021C": "000C",  # 12V
 
     # LOAD CURRENT
-    "021E": "12C0",  # 5400
+    "021E": "125C",  
 
     # HUPS - MPPT 1 OUTPUT VOLT
     # EMS - OUTPUT VOLTAGE

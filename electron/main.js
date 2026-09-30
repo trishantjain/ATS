@@ -5,6 +5,8 @@ const { SerialPort } = require('serialport');
 const { createFanTestWindow } = require('./windowManager');
 // const { startFanTestWifi } = require('../server');
 const net = require('net');
+const fs = require("fs");
+const logFile = path.join(app.getPath("desktop"), "ats-backend.log");
 // const { startFanTest } = require('../server/Testing/fanTest');
 
 let startFanTest;
@@ -79,23 +81,43 @@ function startBackend() {
       HTTP_PORT,
       FRONTEND_BUILD_DIR: frontendBuildDir
     },
-    stdio: ["inherit", "inherit", "inherit", "ipc"]
+    stdio: ["ignore", "pipe", "pipe", "ipc"]
+    // stdio: ["inherit", "inherit", "inherit", "ipc"]
+  });
+
+  backendProcess.stdout.on("data", (data) => {
+    fs.appendFileSync(logFile, "[STDOUT] " + data.toString());
+  });
+
+  backendProcess.stderr.on("data", (data) => {
+    fs.appendFileSync(logFile, "[STDERR] " + data.toString());
   });
 
   backendProcess.on("error", (err) => {
-    console.error("Backend process error:", err);
+    fs.appendFileSync(logFile, "[ERROR] " + err.stack + "\n");
   });
 
-  backendProcess.on("exit", (code) => {
-    if (code !== 0 && !app.isQuitting) {
-      console.error("Backend exited with code:", code);
-
-      dialog.showErrorBox(
-        "ATS backend stopped",
-        `The ATS backend stopped unexpectedly. Exit code: ${code ?? "unknown"}`
-      );
-    }
+  backendProcess.on("exit", (code, signal) => {
+    fs.appendFileSync(
+      logFile,
+      `[EXIT] Code=${code}, Signal=${signal}\n`
+    );
   });
+  // backendProcess.on("error", (err) => {
+  //   console.error("Backend process error:", err);
+  // });
+
+  // backendProcess.on("exit", (code) => {
+  //   if (code !== 0 && !app.isQuitting) {
+  //     console.error("Backend exited with code:", code);
+
+  //     dialog.showErrorBox(
+  //       "ATS backend stopped",
+  //       `The ATS backend stopped unexpectedly. Exit code: ${code ?? "unknown"}`
+  //     );
+  //   }
+  // });
+
 }
 
 async function waitForBackend(timeoutMs = 30000) {

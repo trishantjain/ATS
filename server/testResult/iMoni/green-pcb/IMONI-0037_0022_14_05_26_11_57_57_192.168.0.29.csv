@@ -1,0 +1,11 @@
+Report No:,IMONI-0037
+Unit Sr No:,0022
+CPU Sr. No.:,NA
+DateTime:,14/05/26 11:57:57
+TestLevel:,Green PCB
+TotalTests:,3
+
+Sr. No.,TestName,Status,FailedStep,TotalSteps,Reason,Remarks
+1,"Visual Test",PASSED,,,"Visual inspection passed successfully",
+2,"Burn-In Test",PASSED,,,"Burn-In test passed successfully",
+3,"Fan Test",FAILED,1,1,"Some fans are still running. Turn off all fans first.",

@@ -1,0 +1,13 @@
+FAN Test Run - 04/05/26 22:57:33
+Device: 192.168.0.0
+Total Tests: 1
+
+Test: Fan Tray Test
+Status: failed
+
+Step,StepStatus,Message
+1,FAILED,"Some fans are still running. Turn off all fans first."
+2,FAILED,"Fan 1 not turned on"
+
+=== TEST END ===
+

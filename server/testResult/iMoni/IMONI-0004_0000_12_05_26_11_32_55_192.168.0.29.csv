@@ -1,0 +1,8 @@
+Unit Sr No:,IMONI-0004
+DateTime:,12/05/26 11:32:55
+DeviceIP:,192.168.0.29
+ControllerID:,0000
+TotalTests:,1
+
+Sr. No.,TestName,Status,FailedStep,Reason,Remarks
+1,"Limit Switch Test",FAILED,1,"Door is still open. Close the door first."

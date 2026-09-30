@@ -17,6 +17,8 @@ const axios = require("axios");
 const { spawn } = require("child_process");
 const WebSocket = require("ws");
 
+const TestedController = require("./models/TestedController");
+
 const { startImageSimulator } = require("./imageSimulator.js");
 
 startImageSimulator();
@@ -171,15 +173,21 @@ function broadcastToWebClients(reading) {
 // BROADCAST TEST STATUS/PROGRESS TO WEB CLIENT
 function broadcastTestStatus(payload) {
   const message = JSON.stringify(payload);
+  wsClients.forEach((client, index) => {
+    console.log(
+      `   Client ${index + 1}: readyState=${client.readyState}, OPEN=${WebSocket.OPEN}`,
+    );
 
-  wsClients.forEach((client) => {
     if (client.readyState === WebSocket.OPEN) {
       try {
         client.send(message);
       } catch (err) {
-        console.error("Failed to send TEST_STATUS:", err);
+        console.error(`❌ TEST STATUS SEND FAILED: ${payload?.type}`, err);
+
         wsClients.delete(client);
       }
+    } else {
+      console.warn(`⚠️ TEST STATUS NOT SENT: client ${index + 1} is not OPEN`);
     }
   });
 }
@@ -290,10 +298,10 @@ const debug = {
 };
 
 // 🔌 DB connection
-// mongoose
-//   .connect(process.env.MONGO_URI)
-//   .then(() => console.log("MongoDB connected"))
-//   .catch((err) => console.error("MongoDB connection error:", err.message));
+mongoose
+  .connect(process.env.MONGO_URI)
+  .then(() => console.log("MongoDB connected"))
+  .catch((err) => console.error("MongoDB connection error:", err.message));
 
 // fs.appendFileSync(logFile, "Mongo connected\n");
 
@@ -782,6 +790,7 @@ app.post("/api/tests/run-all", async (req, res) => {
       testLevel = "full-controller",
       skipFrontendTests,
       frontendResults,
+      duplicateConfirmed = false,
     } = req.body;
     // const testDir = path.join(__dirname, "tests/iMoni");
     const testDir = getIMoniTestDir(testLevel);
@@ -821,6 +830,66 @@ app.post("/api/tests/run-all", async (req, res) => {
         error: "No test files found in test directory",
         timestamp: getFormattedDateTime(),
       });
+    }
+
+    // =====================================================
+    // TESTED CONTROLLER DUPLICATE CHECK
+    // =====================================================
+
+    const duplicateFields = {
+      controllerIp: mac,
+      assemblyNo: unitSerialNo,
+      cpu: cpuSrNo,
+      base: basePcbSrNo,
+      psu: psuSrNo,
+      camera: cameraSrNo,
+    };
+
+    const duplicateConditions = Object.entries(duplicateFields)
+      .filter(([, value]) => value && String(value).trim())
+      .map(([key, value]) => ({
+        [key]: String(value).trim(),
+      }));
+
+    if (!duplicateConfirmed && duplicateConditions.length > 0) {
+      const duplicateMatches = await TestedController.find({
+        $or: duplicateConditions,
+      })
+        .sort({ testedAt: -1 })
+        .limit(20)
+        .lean();
+
+      if (duplicateMatches.length > 0) {
+        const matchingFields = [];
+
+        for (const match of duplicateMatches) {
+          for (const [field, value] of Object.entries(duplicateFields)) {
+            if (
+              value &&
+              String(match[field] || "")
+                .trim()
+                .toLowerCase() === String(value).trim().toLowerCase()
+            ) {
+              if (!matchingFields.includes(field)) {
+                matchingFields.push(field);
+              }
+            }
+          }
+        }
+
+        return res.status(409).json({
+          success: false,
+
+          code: "TESTED_CONTROLLER_DUPLICATE",
+
+          message:
+            "This controller or one of its components has already been tested.",
+
+          matchingFields,
+
+          matches: duplicateMatches,
+        });
+      }
     }
 
     // Prepare a single report file for this run
@@ -914,9 +983,7 @@ app.post("/api/tests/generate-all-passed", async (req, res) => {
   const { runId } = req.body || {};
 
   if (!runId) {
-    return res
-      .status(400)
-      .json({ success: false, error: "runId is required" });
+    return res.status(400).json({ success: false, error: "runId is required" });
   }
 
   try {
@@ -1224,6 +1291,574 @@ app.post("/run-python", (req, res) => {
   });
 });
 
+// =====================================================
+// TESTED CONTROLLER - DUPLICATE CHECK
+// =====================================================
+app.post("/api/tested-controllers/check", async (req, res) => {
+  try {
+    const { controllerIp, assemblyNo, cpu, base, psu, camera } = req.body;
+
+    const fields = {
+      controllerIp,
+      assemblyNo,
+      cpu,
+      base,
+      psu,
+      camera,
+    };
+
+    // Find records matching ANY supplied identifier
+    const orConditions = Object.entries(fields)
+      .filter(([, value]) => value && String(value).trim())
+      .map(([key, value]) => ({
+        [key]: String(value).trim(),
+      }));
+
+    if (orConditions.length === 0) {
+      return res.json({
+        exists: false,
+        matches: [],
+      });
+    }
+
+    const matches = await TestedController.find({
+      $or: orConditions,
+    })
+      .sort({ testedAt: -1 })
+      .limit(20)
+      .lean();
+
+    const matchingFields = [];
+
+    for (const match of matches) {
+      for (const [field, value] of Object.entries(fields)) {
+        if (
+          value &&
+          String(match[field] || "").toLowerCase() ===
+            String(value).trim().toLowerCase()
+        ) {
+          if (!matchingFields.includes(field)) {
+            matchingFields.push(field);
+          }
+        }
+      }
+    }
+
+    return res.json({
+      exists: matches.length > 0,
+      matches,
+      matchingFields,
+    });
+  } catch (error) {
+    console.error("❌ Tested controller duplicate check:", error);
+
+    res.status(500).json({
+      error: "Failed to check tested controller registry",
+    });
+  }
+});
+
+function escapeRegex(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+app.post("/api/tested-controllers", async (req, res) => {
+  try {
+    const {
+      controllerIp,
+      assemblyNo,
+      cpu,
+      base,
+      psu,
+      camera,
+      testedBy,
+      remark = "",
+      testLevel = "full-controller",
+      reportPath = "",
+      reportNo = "",
+      duplicateConfirmed = false,
+    } = req.body || {};
+
+    const normalized = {
+      controllerIp: String(controllerIp ?? "").trim(),
+      assemblyNo: String(assemblyNo ?? "").trim(),
+      cpu: String(cpu ?? "").trim(),
+      base: String(base ?? "").trim(),
+      psu: String(psu ?? "").trim(),
+      camera: String(camera ?? "").trim(),
+      testedBy: String(testedBy ?? "").trim(),
+      remark: String(remark ?? "").trim(),
+      testLevel: String(testLevel || "full-controller").trim(),
+      reportPath: String(reportPath ?? "").trim(),
+      reportNo: String(reportNo ?? "").trim(),
+    };
+
+    const requiredFields = [
+      "controllerIp",
+      "assemblyNo",
+      "cpu",
+      "base",
+      "psu",
+      "camera",
+      "testedBy",
+    ];
+
+    const missingFields = requiredFields.filter((field) => !normalized[field]);
+
+    if (missingFields.length > 0) {
+      return res.status(400).json({
+        success: false,
+        error: "Required fields are missing or blank",
+        missingFields,
+      });
+    }
+
+    const duplicateFields = {
+      controllerIp: normalized.controllerIp,
+      assemblyNo: normalized.assemblyNo,
+      cpu: normalized.cpu,
+      base: normalized.base,
+      psu: normalized.psu,
+      camera: normalized.camera,
+    };
+
+    const duplicateConditions = Object.entries(duplicateFields).map(
+      ([key, value]) => ({
+        [key]: {
+          $regex: `^${escapeRegex(value)}$`,
+          $options: "i",
+        },
+      }),
+    );
+
+    const duplicateMatches = await TestedController.find({
+      $or: duplicateConditions,
+    })
+      .sort({ testedAt: -1 })
+      .limit(20)
+      .lean();
+
+    if (duplicateMatches.length > 0 && duplicateConfirmed !== true) {
+      const matchingFields = [];
+
+      for (const match of duplicateMatches) {
+        for (const [field, value] of Object.entries(duplicateFields)) {
+          if (
+            value &&
+            String(match[field] ?? "")
+              .trim()
+              .toLowerCase() === value.toLowerCase() &&
+            !matchingFields.includes(field)
+          ) {
+            matchingFields.push(field);
+          }
+        }
+      }
+
+      return res.status(409).json({
+        success: false,
+        code: "TESTED_CONTROLLER_DUPLICATE",
+        message:
+          "This controller or one of its components has already been registered.",
+        matchingFields,
+        matches: duplicateMatches,
+      });
+    }
+
+    const previousRecord = await TestedController.findOne({
+      controllerIp: {
+        $regex: `^${escapeRegex(normalized.controllerIp)}$`,
+        $options: "i",
+      },
+    })
+      .sort({ testedAt: -1 })
+      .lean();
+
+    const record = await TestedController.create({
+      ...normalized,
+      status: "Tested",
+      testedAt: new Date(),
+      previousRecordId: previousRecord?._id || null,
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: "Controller registered successfully",
+      controller: record,
+      duplicateOverride: duplicateMatches.length > 0,
+    });
+  } catch (error) {
+    console.error("❌ Failed to register tested controller:", error);
+
+    return res.status(500).json({
+      success: false,
+      error: "Failed to register tested controller",
+      details: error.message,
+    });
+  }
+});
+
+// =====================================================
+// TESTED CONTROLLER - LIST
+// =====================================================
+app.get("/api/tested-controllers", async (req, res) => {
+  try {
+    const {
+      page: requestedPage = "1",
+      limit: requestedLimit = "20",
+      search = "",
+      status = "all",
+      testedBy = "all",
+      sortBy: requestedSortBy = "testedAt",
+      sortOrder: requestedSortOrder = "desc",
+    } = req.query;
+
+    const currentPage = Math.max(1, parseInt(requestedPage, 10) || 1);
+
+    const pageLimit = Math.min(
+      100,
+      Math.max(1, parseInt(requestedLimit, 10) || 20),
+    );
+
+    // Map frontend sort keys to actual MongoDB fields.
+    const sortFieldMap = {
+      cpu: "cpuSr",
+      cpuSr: "cpuSr",
+      base: "basePcbSr",
+      basePcbSr: "basePcbSr",
+      camera: "cameraSr",
+      cameraSr: "cameraSr",
+      testedAt: "testedAt",
+    };
+
+    const sortField = sortFieldMap[requestedSortBy] || "testedAt";
+    const sortDirection = requestedSortOrder === "asc" ? 1 : -1;
+
+    // Build MongoDB filter using the actual document fields.
+    const query = {};
+
+    if (status && status !== "all") {
+      query.status = status;
+    }
+
+    if (testedBy && testedBy !== "all") {
+      query.testedBy = testedBy;
+    }
+
+    if (search && String(search).trim()) {
+      const escapedSearch = String(search)
+        .trim()
+        .replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+      const searchRegex = new RegExp(escapedSearch, "i");
+
+      query.$or = [
+        { deviceIP: searchRegex },
+        { assemblySrNo: searchRegex },
+        { cpuSr: searchRegex },
+        { basePcbSr: searchRegex },
+        { cameraSr: searchRegex },
+        { psuSrNo: searchRegex },
+        { testedBy: searchRegex },
+        { reportNo: searchRegex },
+      ];
+    }
+
+    const skip = (currentPage - 1) * pageLimit;
+
+    // Keep empty values at the end in both sort directions.
+    const pipeline = [
+      { $match: query },
+
+      {
+        $addFields: {
+          _sortValue: {
+            $ifNull: [`$${sortField}`, ""],
+          },
+          _sortMissing: {
+            $cond: [
+              {
+                $or: [
+                  { $eq: [`$${sortField}`, null] },
+                  { $eq: [`$${sortField}`, ""] },
+                ],
+              },
+              1,
+              0,
+            ],
+          },
+        },
+      },
+
+      {
+        $sort: {
+          _sortMissing: 1,
+          _sortValue: sortDirection,
+          _id: 1,
+        },
+      },
+
+      { $skip: skip },
+      { $limit: pageLimit },
+
+      {
+        $project: {
+          _sortValue: 0,
+          _sortMissing: 0,
+        },
+      },
+    ];
+
+    const [records, total] = await Promise.all([
+      TestedController.aggregate(pipeline).collation({
+        locale: "en",
+        numericOrdering: true,
+        strength: 2,
+      }),
+      TestedController.countDocuments(query),
+    ]);
+
+    return res.json({
+      success: true,
+      data: records,
+      pagination: {
+        page: currentPage,
+        limit: pageLimit,
+        total,
+        totalPages: Math.ceil(total / pageLimit),
+      },
+    });
+  } catch (error) {
+    console.error("❌ Failed to load tested controllers:", error);
+
+    return res.status(500).json({
+      success: false,
+      error: "Failed to load tested controllers",
+      details: error.message,
+    });
+  }
+});
+
+// =====================================================
+// TESTED CONTROLLER - DETAILS
+// =====================================================
+app.get("/api/tested-controllers/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        error: "Invalid controller ID",
+      });
+    }
+
+    const controller = await TestedController.findById(id).lean();
+
+    if (!controller) {
+      return res.status(404).json({
+        success: false,
+        error: "Tested controller not found",
+      });
+    }
+
+    return res.json({
+      success: true,
+      data: controller,
+    });
+  } catch (error) {
+    console.error("❌ Failed to fetch controller details:", error);
+
+    return res.status(500).json({
+      success: false,
+      error: "Failed to fetch controller details",
+    });
+  }
+});
+
+// =====================================================
+// TESTED CONTROLLER - HISTORY
+// =====================================================
+app.get("/api/tested-controllers/:id/history", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        error: "Invalid controller ID",
+      });
+    }
+
+    const current = await TestedController.findById(id).lean();
+
+    if (!current) {
+      return res.status(404).json({
+        success: false,
+        error: "Tested controller not found",
+      });
+    }
+
+    const history = [];
+
+    let currentRecord = current;
+
+    while (currentRecord) {
+      history.push(currentRecord);
+
+      if (!currentRecord.previousRecordId) {
+        break;
+      }
+
+      currentRecord = await TestedController.findById(
+        currentRecord.previousRecordId,
+      ).lean();
+    }
+
+    return res.json({
+      success: true,
+      data: history,
+    });
+  } catch (error) {
+    console.error("❌ Failed to fetch controller history:", error);
+
+    return res.status(500).json({
+      success: false,
+      error: "Failed to fetch controller history",
+    });
+  }
+});
+
+// =====================================================
+// TESTED CONTROLLERS - GENERATE ALL-PASSED REPORTS
+// Generates reports only for selected registry records
+// =====================================================
+app.post("/api/tested-controllers/generate-all-passed", async (req, res) => {
+  const { controllerIds } = req.body || {};
+
+  if (!Array.isArray(controllerIds) || controllerIds.length === 0) {
+    return res.status(400).json({
+      success: false,
+      error: "controllerIds must be a non-empty array",
+    });
+  }
+
+  // Prevent accidental oversized bulk requests
+  if (controllerIds.length > 100) {
+    return res.status(400).json({
+      success: false,
+      error: "You can select a maximum of 100 controllers at a time",
+    });
+  }
+
+  // Validate and normalize MongoDB IDs
+  const ids = [...new Set(controllerIds.map((id) => String(id).trim()))];
+
+  const invalidIds = ids.filter((id) => !mongoose.Types.ObjectId.isValid(id));
+
+  if (invalidIds.length > 0) {
+    return res.status(400).json({
+      success: false,
+      error: "One or more controller IDs are invalid",
+      invalidIds,
+    });
+  }
+
+  try {
+    // Fetch only the selected records
+    const controllers = await TestedController.find({
+      _id: { $in: ids },
+    })
+      .select("_id controllerIp assemblyNo reportNo")
+      .lean();
+
+    const foundIds = new Set(
+      controllers.map((controller) => String(controller._id)),
+    );
+
+    const missingIds = ids.filter((id) => !foundIds.has(id));
+
+    const results = [];
+
+    // Generate sequentially to avoid overwhelming report generation
+    for (const id of ids) {
+      const controller = controllers.find((item) => String(item._id) === id);
+
+      if (!controller) {
+        results.push({
+          controllerId: id,
+          success: false,
+          error: "Controller not found",
+        });
+        continue;
+      }
+
+      if (!controller.reportNo || !String(controller.reportNo).trim()) {
+        results.push({
+          controllerId: id,
+          controllerIp: controller.controllerIp,
+          assemblyNo: controller.assemblyNo,
+          success: false,
+          error: "No reportNo is saved for this controller",
+        });
+        continue;
+      }
+
+      try {
+        const reportResult = await generateAllPassedReport(
+          String(controller.reportNo).trim(),
+        );
+
+        results.push({
+          controllerId: id,
+          controllerIp: controller.controllerIp,
+          assemblyNo: controller.assemblyNo,
+          reportNo: controller.reportNo,
+          success: true,
+          report: reportResult,
+        });
+      } catch (err) {
+        console.error(
+          `All-Passed report failed for ${controller.reportNo}:`,
+          err.message,
+        );
+
+        results.push({
+          controllerId: id,
+          controllerIp: controller.controllerIp,
+          assemblyNo: controller.assemblyNo,
+          reportNo: controller.reportNo,
+          success: false,
+          code: err.code,
+          error: err.message,
+        });
+      }
+    }
+
+    const succeeded = results.filter((item) => item.success).length;
+    const failed = results.length - succeeded;
+
+    return res.json({
+      success: failed === 0,
+      message: `Generated ${succeeded} report(s); ${failed} failed.`,
+      requested: ids.length,
+      succeeded,
+      failed,
+      missingIds,
+      results,
+      timestamp: getFormattedDateTime(),
+    });
+  } catch (err) {
+    console.error("❌ Bulk All-Passed report generation failed:", err);
+
+    return res.status(500).json({
+      success: false,
+      error: "Failed to generate selected All-Passed reports",
+      details: err.message,
+    });
+  }
+});
+
 const eMS_LOGS = process.env.eMS_LOGS === "true";
 console.log(`[BOOT] eMS_LOGS is`, eMS_LOGS);
 
@@ -1467,6 +2102,10 @@ const tcpServer = net.createServer((socket) => {
 
         // console.log("Extracted IP: ", extractedIP);
         const mac = ip; //! Converting to LowerCase()
+
+        // Check whether this IP was already connected
+        const wasAlreadyConnected = atsRuntime.connectedDevices.has(mac);
+
         const humidity = +packet.readFloatLE(17).toFixed(2);
         const insideTemperature = +packet.readFloatLE(21).toFixed(2);
         const outsideTemperature = +packet.readFloatLE(25).toFixed(2); // "+" converts string to number as toFixed return string
@@ -1869,6 +2508,17 @@ const tcpServer = net.createServer((socket) => {
           lastSeen: Date.now(),
         });
 
+        // Notify frontend only when this is a NEW device connection
+        if (!wasAlreadyConnected) {
+          console.log(`🟢 New device connected: ${mac}`);
+
+          broadcastTestStatus({
+            type: "DEVICE_CONNECTED",
+            mac,
+            timestamp: getFormattedDateTime(),
+          });
+        }
+
         // Build a lightweight reading object and broadcast to web clients
         const reading = {
           mac,
@@ -2035,6 +2685,13 @@ const tcpServer = net.createServer((socket) => {
         atsRuntime.connectedDevices.delete(mac);
 
         console.log(`🔌 Device disconnected: ${mac}`);
+
+        // Notify frontend
+        broadcastTestStatus({
+          type: "DEVICE_DISCONNECTED",
+          mac,
+          timestamp: getFormattedDateTime(),
+        });
 
         console.log(
           `📱 Remaining connected devices:`,

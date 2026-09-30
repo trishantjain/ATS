@@ -1,0 +1,40 @@
+ATS Test Run - 11/05/26 12:46:16
+Device: 192.168.0.0
+Total Tests: 15
+
+Test: Visual Test , Status: passed
+Test: Burn-In Test , Status: passed
+Test: Fan Test , Status: failed , Steps: 2/9
+Test: Limit Switch Test , Status: passed , Steps: 3/3
+Test: Fire Test , Status: passed , Steps: 3/3
+Test: Water Leakage Test , Status: passed , Steps: 3/3
+Test: EM Lock through Keypad , Status: passed , Steps: 3/3
+Test: EM Lock through eMS , Status: passed , Steps: 3/3
+Test: Water Logging Test , Status: failed , Steps: 2/3
+Test: Humidity Test
+Status: passed
+
+Step,StepStatus,Message
+1,PASSED,"Humidity alarm successfully"
+
+=== TEST END ===
+
+Test: Inside Temperature Test
+Status: passed
+
+Step,StepStatus,Message
+1,PASSED,"Inside Temperature sensor successfully tested"
+
+=== TEST END ===
+
+Test: Outside Temperature Test
+Status: failed
+
+Step,StepStatus,Message
+1,FAILED,"Outside Temperature alarm not turned on"
+
+=== TEST END ===
+
+Test: Non - Critical Load Test , Status: passed , Steps: 3/3
+Test: Camera Test , Status: passed , Steps: 1/1
+Test: Fan-Fail Test Test , Status: failed , Steps: 1/2
