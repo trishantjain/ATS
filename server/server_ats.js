@@ -1291,35 +1291,44 @@ app.post("/run-python", (req, res) => {
   });
 });
 
+function escapeRegex(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 // =====================================================
 // TESTED CONTROLLER - DUPLICATE CHECK
 // =====================================================
 app.post("/api/tested-controllers/check", async (req, res) => {
   try {
-    const { controllerIp, assemblyNo, cpu, base, psu, camera } = req.body;
-
     const fields = {
-      controllerIp,
-      assemblyNo,
-      cpu,
-      base,
-      psu,
-      camera,
+      cpu: String(req.body?.cpu ?? "").trim(),
+      base: String(req.body?.base ?? "").trim(),
+      camera: String(req.body?.camera ?? "").trim(),
+      psu: String(req.body?.psu ?? "").trim(),
     };
 
-    // Find records matching ANY supplied identifier
-    const orConditions = Object.entries(fields)
-      .filter(([, value]) => value && String(value).trim())
-      .map(([key, value]) => ({
-        [key]: String(value).trim(),
-      }));
+    // Ignore empty values and common placeholders.
+    const suppliedFields = Object.entries(fields).filter(
+      ([, value]) =>
+        value &&
+        !["-", "—", "n/a", "na"].includes(value.toLowerCase()),
+    );
 
-    if (orConditions.length === 0) {
+    if (suppliedFields.length === 0) {
       return res.json({
         exists: false,
         matches: [],
+        matchingFields: [],
       });
     }
+
+    // Match each supplied component independently, ignoring letter case.
+    const orConditions = suppliedFields.map(([field, value]) => ({
+      [field]: {
+        $regex: `^${escapeRegex(value)}$`,
+        $options: "i",
+      },
+    }));
 
     const matches = await TestedController.find({
       $or: orConditions,
@@ -1331,15 +1340,13 @@ app.post("/api/tested-controllers/check", async (req, res) => {
     const matchingFields = [];
 
     for (const match of matches) {
-      for (const [field, value] of Object.entries(fields)) {
+      for (const [field, value] of suppliedFields) {
         if (
-          value &&
-          String(match[field] || "").toLowerCase() ===
-            String(value).trim().toLowerCase()
+          String(match[field] ?? "").trim().toLowerCase() ===
+          value.toLowerCase() &&
+          !matchingFields.includes(field)
         ) {
-          if (!matchingFields.includes(field)) {
-            matchingFields.push(field);
-          }
+          matchingFields.push(field);
         }
       }
     }
@@ -1352,15 +1359,13 @@ app.post("/api/tested-controllers/check", async (req, res) => {
   } catch (error) {
     console.error("❌ Tested controller duplicate check:", error);
 
-    res.status(500).json({
+    return res.status(500).json({
+      exists: false,
       error: "Failed to check tested controller registry",
+      details: error.message,
     });
   }
 });
-
-function escapeRegex(value) {
-  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
 
 app.post("/api/tested-controllers", async (req, res) => {
   try {

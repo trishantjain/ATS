@@ -93,6 +93,9 @@ function DashboardViewTest() {
 
   const [refreshing, setRefreshing] = useState(false);
 
+  const [pendingTestedRun, setPendingTestedRun] = useState(null);
+  const [savingTestedController, setSavingTestedController] = useState(false);
+
   const isTestRunning = awaitingCommand || fanTestStatus || pduTestStatus;
 
   const TEST_COLORS = {
@@ -1136,6 +1139,135 @@ function DashboardViewTest() {
   //   return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   // }
 
+  async function checkTestedControllerDuplicate() {
+    const payload = {
+      cpu: String(cpuSrNo || "").trim(),
+      base: String(basePcbSrNo || "").trim(),
+      camera: String(cameraSrNo || "").trim(),
+      psu: String(psuSrNo || "").trim(),
+    };
+
+    const identifiers = Object.values(payload).filter(Boolean);
+
+    if (identifiers.length === 0) {
+      throw new Error(
+        "Enter at least one CPU, Base, Camera, or PSU serial number.",
+      );
+    }
+
+    const response = await fetch(
+      `${process.env.REACT_APP_API_URL}/api/tested-controllers/check`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      },
+    );
+
+    const result = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      throw new Error(
+        result.error || `Duplicate check failed (${response.status})`,
+      );
+    }
+
+    return {
+      ...result,
+      matches: result.matches || [],
+      matchingFields: result.matchingFields || [],
+      entered: payload,
+    };
+  }
+
+  async function showDuplicateWarning(duplicateResult) {
+    const { matches, matchingFields, entered } = duplicateResult;
+
+    const labels = {
+      assemblyNo: "Assembly No",
+      cpu: "CPU",
+      base: "Base",
+      camera: "Camera",
+      psu: "PSU",
+      controllerIp: "Controller IP",
+    };
+
+    const rows = matches.map((record, index) => {
+      const matched = [];
+
+      for (const field of ["cpu", "base", "camera", "psu"]) {
+        const enteredValue = entered[field];
+
+        if (
+          enteredValue &&
+          String(record[field] || "")
+            .trim()
+            .toLowerCase() === enteredValue.trim().toLowerCase()
+        ) {
+          matched.push(labels[field]);
+        }
+      }
+
+      return [
+        `Record ${index + 1}`,
+        `Matched: ${matched.join(", ") || matchingFields.join(", ")}`,
+        `Assembly: ${record.assemblyNo || "-"}`,
+        `CPU: ${record.cpu || "-"}`,
+        `Base: ${record.base || "-"}`,
+        `Camera: ${record.camera || "-"}`,
+        `PSU: ${record.psu || "-"}`,
+        `Controller IP: ${record.controllerIp || "-"}`,
+        `Tested By: ${record.testedBy || "-"}`,
+        `Tested At: ${
+          record.testedAt ? new Date(record.testedAt).toLocaleString() : "-"
+        }`,
+      ].join("\n");
+    });
+
+    await swal.fire({
+      icon: "warning",
+      title: "Duplicate component found",
+      text:
+        "One or more entered component serial numbers already exist in the Tested Controllers database.\n\n" +
+        rows.join("\n\n--------------------\n\n") +
+        "\n\nTesting has not started. Check the existing record before proceeding.",
+      confirmButtonText: "Understood",
+    });
+  }
+
+  async function markControllerAsTested() {
+    if (!pendingTestedRun || savingTestedController) return;
+
+    setSavingTestedController(true);
+
+    try {
+      await registerTestedController(pendingTestedRun);
+
+      setPendingTestedRun(null);
+      setTestStatus("Controller successfully saved to Tested Controllers.");
+
+      await swal.fire({
+        icon: "success",
+        title: "Controller marked as tested",
+        text: "The controller record has been saved to the database.",
+      });
+    } catch (err) {
+      console.error("Failed to save tested controller:", err);
+
+      setTestStatus(`Tests completed, but saving failed: ${err.message}`);
+
+      await swal.fire({
+        icon: "error",
+        title: "Could not save controller",
+        text: err.message,
+      });
+    } finally {
+      setSavingTestedController(false);
+    }
+  }
+
   // Register a completed ATS run in the Tested Controllers collection
   async function registerTestedController(runData) {
     const payload = {
@@ -1254,6 +1386,36 @@ function DashboardViewTest() {
       }
     }
 
+    // Check component serial numbers before starting any tests.
+    try {
+      const duplicateResult = await checkTestedControllerDuplicate();
+
+      if (duplicateResult.exists) {
+        await showDuplicateWarning(duplicateResult);
+
+        setAwaitingCommand(false);
+        setShowATSPanel(true);
+        return;
+      }
+    } catch (err) {
+      console.error("Duplicate check failed:", err);
+
+      await swal.fire({
+        icon: "error",
+        title: "Unable to check duplicate records",
+        text:
+          `${err.message}\n\n` +
+          "Testing was not started because the database check could not be completed.",
+      });
+
+      setAwaitingCommand(false);
+      setShowATSPanel(true);
+      return;
+    }
+
+    // No duplicate found: clear any previous pending run.
+    setPendingTestedRun(null);
+
     // New run starting: previous run's All-Passed button state no longer applies
     setAllPassed({ runId: null, status: "idle" });
     setNotifications((prev) => {
@@ -1318,10 +1480,9 @@ function DashboardViewTest() {
       });
 
       console.log("Frontend Results: ", frontendResults);
+
       // 3. Runs API '/tests/run-all/'
       try {
-        // if()
-
         const resp = await fetch(
           `${process.env.REACT_APP_API_URL}/api/tests/run-all`,
           {
@@ -1347,6 +1508,8 @@ function DashboardViewTest() {
           throw new Error(data.error || `ATS failed (${resp.status})`);
         }
 
+        setPendingTestedRun(data);
+
         setTestStatus(
           `Done: ${data.summary?.passed ?? 0} passed, ` +
             `${data.summary?.failed ?? 0} failed`,
@@ -1354,34 +1517,39 @@ function DashboardViewTest() {
 
         markRunCompleted(data);
 
-        try {
-          await registerTestedController(data);
+        // try {
+        //   await registerTestedController(data);
 
-          setTestStatus(
-            `Done: ${data.summary?.passed ?? 0} passed, ` +
-              `${data.summary?.failed ?? 0} failed — Saved to ATS`,
-          );
+        //   setTestStatus(
+        //     `Done: ${data.summary?.passed ?? 0} passed, ` +
+        //       `${data.summary?.failed ?? 0} failed — Saved to ATS`,
+        //   );
 
-          await swal.fire({
-            icon: "success",
-            title: "Test completed",
-            text: "Test results and controller information were saved to ATS.",
-          });
-        } catch (saveError) {
-          console.error("ATS registration failed:", saveError);
+        //   await swal.fire({
+        //     icon: "success",
+        //     title: "Test completed",
+        //     text: "Test results and controller information were saved to ATS.",
+        //   });
+        // } catch (saveError) {
+        //   console.error("ATS registration failed:", saveError);
 
-          setTestStatus(
-            `Tests completed, but ATS registration failed: ${saveError.message}`,
-          );
+        //   setTestStatus(
+        //     `Tests completed, but ATS registration failed: ${saveError.message}`,
+        //   );
 
-          await swal.fire({
-            icon: "warning",
-            title: "Test completed, registration failed",
-            text:
-              `The test report was generated, but the controller was not saved. ` +
-              `${saveError.message}`,
-          });
-        }
+        //   await swal.fire({
+        //     icon: "warning",
+        //     title: "Test completed, registration failed",
+        //     text:
+        //       `The test report was generated, but the controller was not saved. ` +
+        //       `${saveError.message}`,
+        //   });
+        // }
+
+        setTestStatus(
+          `Done: ${data.summary?.passed ?? 0} passed, ` +
+            `${data.summary?.failed ?? 0} failed — Ready to mark as tested`,
+        );
       } catch (err) {
         setTestStatus(`Error: ${err.message}`);
       }
@@ -1414,6 +1582,8 @@ function DashboardViewTest() {
           throw new Error(data.error || `ATS failed (${resp.status})`);
         }
 
+        setPendingTestedRun(data);
+
         setTestStatus(
           `Done: ${data.summary?.passed ?? 0} passed, ` +
             `${data.summary?.failed ?? 0} failed`,
@@ -1421,38 +1591,10 @@ function DashboardViewTest() {
 
         markRunCompleted(data);
 
-        try {
-          await registerTestedController(data);
-
-          setTestStatus(
-            `Done: ${data.summary?.passed ?? 0} passed, ` +
-              `${data.summary?.failed ?? 0} failed — Saved to ATS`,
-          );
-
-          await swal.fire({
-            icon: "success",
-            title: "Test completed",
-            text: "Test results and controller information were saved to ATS.",
-          });
-        } catch (saveError) {
-          console.error("ATS registration failed:", saveError);
-
-          setTestStatus(
-            `Tests completed, but ATS registration failed: ${saveError.message}`,
-          );
-
-          await swal.fire({
-            icon: "warning",
-            title: "Test completed, registration failed",
-            text:
-              `The test report was generated, but the controller was not saved. ` +
-              `${saveError.message}`,
-          });
-        }
         setTestStatus(
-          `Done: ${data.summary.passed} passed, ${data.summary.failed} failed`,
+          `Done: ${data.summary?.passed ?? 0} passed, ` +
+            `${data.summary?.failed ?? 0} failed — Ready to mark as tested`,
         );
-        markRunCompleted(data);
       } catch (err) {
         setTestStatus(`Error: ${err.message}`);
       }
@@ -1759,6 +1901,28 @@ function DashboardViewTest() {
                 {pythonRunning ? "⏳ Programming..." : "⚙ Program CPU"}
               </Button>
             </div>
+
+            {pendingTestedRun && (
+              <div className="flex items-center justify-between p-3 mt-4 border rounded-lg border-amber-500/30 bg-amber-500/5">
+                <div>
+                  <p className="text-sm font-semibold text-amber-400">
+                    Testing completed
+                  </p>
+                  <p className="text-xs text-slate-400">
+                    Review the results, then save this controller to the
+                    registry.
+                  </p>
+                </div>
+
+                <Button
+                  onClick={markControllerAsTested}
+                  disabled={savingTestedController}
+                  className="px-4 text-xs font-semibold h-9 bg-emerald-600 hover:bg-emerald-500"
+                >
+                  {savingTestedController ? "Saving..." : "✓ Mark as Tested"}
+                </Button>
+              </div>
+            )}
 
             {/* PYTHON PROGRAMMING OUTPUT */}
             {pythonRunning && (
