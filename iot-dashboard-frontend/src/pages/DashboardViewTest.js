@@ -62,10 +62,11 @@ function DashboardViewTest() {
 
   const [testLevel, setTestLevel] = useState("full-controller");
   const [unitSerialNo, setUnitSerialNo] = useState("");
-  const [cpuSrNo, setCpuSrNo] = useState("");
-  const [basePcbSrNo, setBasePcbSrNo] = useState("");
-  const [cameraSrNo, setCameraSrNo] = useState("");
-  const [psuSrNo, setPsuSrNo] = useState("");
+  // const [cpuSrNo, setCpuSrNo] = useState("");
+  const [cpu, setCpu] = useState("");
+  const [base, setBase] = useState("");
+  const [camera, setCamera] = useState("");
+  const [psu, setPsu] = useState("");
   const [pythonCpu, setPythonCpu] = useState("");
   const [pythonIp, setPythonIp] = useState("");
 
@@ -73,8 +74,6 @@ function DashboardViewTest() {
   const [pythonStatus, setPythonStatus] = useState(null);
   const [pythonLogs, setPythonLogs] = useState([]);
   const [pythonRunning, setPythonRunning] = useState(false);
-
-  // const [controllerId, setControllerId] = useState("");
 
   // States for Test Lists
   const [selectedTests, setSelectedTests] = useState([]); // Stores selected tests
@@ -790,9 +789,9 @@ function DashboardViewTest() {
             prev.map((t) =>
               t.id === message.testFile
                 ? {
-                    ...t,
-                    status: "running",
-                  }
+                  ...t,
+                  status: "running",
+                }
                 : t,
             ),
           );
@@ -840,10 +839,10 @@ function DashboardViewTest() {
             prev.map((t) =>
               t.id === message.testFile
                 ? {
-                    ...t,
-                    status: message.status === "passed" ? "passed" : "failed",
-                    duration: message.duration || "-",
-                  }
+                  ...t,
+                  status: message.status === "passed" ? "passed" : "failed",
+                  duration: message.duration || "-",
+                }
                 : t,
             ),
           );
@@ -907,9 +906,8 @@ function DashboardViewTest() {
             ...prev,
             [testId]: {
               title: `${message.name} - Step ${message.stepNumber}/${message.totalSteps}`,
-              message: `${stepResult} ${
-                message.message || (isPassed ? "Step passed" : "Step failed")
-              }`,
+              message: `${stepResult} ${message.message || (isPassed ? "Step passed" : "Step failed")
+                }`,
               type: isPassed ? "success" : "error",
               testColor: getTestColor(message),
             },
@@ -1141,10 +1139,10 @@ function DashboardViewTest() {
 
   async function checkTestedControllerDuplicate() {
     const payload = {
-      cpu: String(cpuSrNo || "").trim(),
-      base: String(basePcbSrNo || "").trim(),
-      camera: String(cameraSrNo || "").trim(),
-      psu: String(psuSrNo || "").trim(),
+      cpu: String(cpu || "").trim(),
+      base: String(base || "").trim(),
+      camera: String(camera || "").trim(),
+      psu: String(psu || "").trim(),
     };
 
     const identifiers = Object.values(payload).filter(Boolean);
@@ -1183,57 +1181,278 @@ function DashboardViewTest() {
   }
 
   async function showDuplicateWarning(duplicateResult) {
-    const { matches, matchingFields, entered } = duplicateResult;
+    const { matches = [], matchingFields = [], entered = {} } =
+      duplicateResult;
+
+    const fieldMap = {
+      cpu: ["cpu", "cpuSr"],
+      base: ["base", "basePcbSr"],
+      camera: ["camera", "cameraSr"],
+      psu: ["psu", "psuSrNo"],
+    };
 
     const labels = {
-      assemblyNo: "Assembly No",
       cpu: "CPU",
       base: "Base",
       camera: "Camera",
       psu: "PSU",
-      controllerIp: "Controller IP",
     };
 
-    const rows = matches.map((record, index) => {
-      const matched = [];
+    const escapeHtml = (value) =>
+      String(value ?? "-").replace(/[&<>"']/g, (char) => {
+        const entities = {
+          "&": "&amp;",
+          "<": "&lt;",
+          ">": "&gt;",
+          '"': "&quot;",
+          "'": "&#39;",
+        };
+        return entities[char];
+      });
 
-      for (const field of ["cpu", "base", "camera", "psu"]) {
-        const enteredValue = entered[field];
+    const getValue = (record, fields) => {
+      for (const field of fields) {
+        if (
+          record[field] !== undefined &&
+          record[field] !== null &&
+          record[field] !== ""
+        ) {
+          return record[field];
+        }
+      }
+      return null;
+    };
+
+    const getDuplicates = (record) => {
+      const duplicates = [];
+
+      for (const [field, dbFields] of Object.entries(fieldMap)) {
+        const enteredValue = String(entered[field] ?? "").trim();
+        if (!enteredValue) continue;
+
+        const recordValue = getValue(record, dbFields);
 
         if (
-          enteredValue &&
-          String(record[field] || "")
-            .trim()
-            .toLowerCase() === enteredValue.trim().toLowerCase()
+          recordValue !== null &&
+          String(recordValue).trim().toLowerCase() ===
+          enteredValue.toLowerCase()
         ) {
-          matched.push(labels[field]);
+          duplicates.push({
+            field,
+            label: labels[field],
+            value: recordValue,
+          });
         }
       }
 
-      return [
-        `Record ${index + 1}`,
-        `Matched: ${matched.join(", ") || matchingFields.join(", ")}`,
-        `Assembly: ${record.assemblyNo || "-"}`,
-        `CPU: ${record.cpu || "-"}`,
-        `Base: ${record.base || "-"}`,
-        `Camera: ${record.camera || "-"}`,
-        `PSU: ${record.psu || "-"}`,
-        `Controller IP: ${record.controllerIp || "-"}`,
-        `Tested By: ${record.testedBy || "-"}`,
-        `Tested At: ${
-          record.testedAt ? new Date(record.testedAt).toLocaleString() : "-"
-        }`,
-      ].join("\n");
+      return duplicates;
+    };
+
+    const columns = [
+      { label: "Assembly No.", key: "assemblySrNo" },
+      { label: "Controller IP", key: "deviceIP" },
+      { label: "CPU", key: "cpuSr", aliases: ["cpu"] },
+      { label: "Base", key: "basePcbSr", aliases: ["base"] },
+      { label: "PSU", key: "psuSrNo", aliases: ["psu"] },
+      { label: "Camera", key: "cameraSr", aliases: ["camera"] },
+      { label: "Report No.", key: "reportNo" },
+      { label: "S. No.", key: "sNo" },
+      { label: "Status", key: "status" },
+      { label: "Tested By", key: "testedBy" },
+      { label: "Tested At", key: "testedAt" },
+    ];
+
+    const getColumnValue = (record, column) => {
+      return getValue(
+        record,
+        [column.key, ...(column.aliases || [])]
+      );
+    };
+
+    const recordRows = matches.map((record, index) => {
+      const duplicates = getDuplicates(record);
+      const duplicateFields = new Set(
+        duplicates.map((item) => item.field)
+      );
+
+      const duplicateBadge = duplicates.length
+        ? duplicates
+          .map(
+            (item) => `
+              <span style="
+                display:inline-block;
+                margin:2px 4px 2px 0;
+                padding:3px 7px;
+                border-radius:4px;
+                background:#7f1d1d;
+                color:#fecaca;
+                font-size:11px;
+                font-weight:600;
+                white-space:nowrap;
+              ">
+                ${escapeHtml(item.label)}: ${escapeHtml(item.value)}
+              </span>
+            `
+          )
+          .join("")
+        : `<span style="color:#fbbf24;font-size:11px;">
+           Matching field details unavailable
+         </span>`;
+
+      const cells = columns
+        .map((column) => {
+          const value = getColumnValue(record, column);
+          const displayValue =
+            value === null || value === undefined || value === ""
+              ? "-"
+              : typeof value === "object"
+                ? JSON.stringify(value)
+                : String(value);
+
+          const isDuplicate = duplicates.some((item) =>
+            (fieldMap[item.field] || []).includes(column.key) ||
+            (column.aliases || []).some((alias) =>
+              (fieldMap[item.field] || []).includes(alias)
+            )
+          );
+
+          return `
+          <td style="
+            padding:9px 10px;
+            border-bottom:1px solid #475569;
+            background:${isDuplicate ? "#7f1d1d" : "transparent"};
+            color:${isDuplicate ? "#fff" : "#e2e8f0"};
+            font-weight:${isDuplicate ? "700" : "400"};
+            white-space:nowrap;
+          ">
+            ${escapeHtml(displayValue)}
+            ${isDuplicate
+              ? `<div style="
+                    margin-top:3px;
+                    color:#fecaca;
+                    font-size:10px;
+                    font-weight:600;
+                  ">DUPLICATE</div>`
+              : ""
+            }
+          </td>
+        `;
+        })
+        .join("");
+
+      return `
+      <div style="
+        border:1px solid #475569;
+        border-radius:8px;
+        margin-bottom:10px;
+        padding:10px;
+        background:#1e293b;
+        text-align:left;
+      ">
+        <div style="
+          display:flex;
+          justify-content:space-between;
+          align-items:center;
+          gap:8px;
+          flex-wrap:wrap;
+          margin-bottom:7px;
+        ">
+          <strong style="font-size:13px;color:#f8fafc;">
+            Existing Record ${index + 1}
+          </strong>
+          <span style="
+            padding:3px 7px;
+            border-radius:5px;
+            background:#7f1d1d;
+            color:#fecaca;
+            font-size:11px;
+          ">
+            ${duplicates.length} duplicate field(s)
+          </span>
+        </div>
+
+        <div style="
+          display:flex;
+          flex-wrap:wrap;
+          gap:3px;
+          margin-bottom:8px;
+        ">
+          ${duplicateBadge}
+        </div>
+
+        <div style="
+          width:100%;
+          overflow-x:auto;
+          border:1px solid #475569;
+          border-radius:6px;
+        ">
+          <table style="
+            width:100%;
+            min-width:950px;
+            border-collapse:collapse;
+            font-size:11px;
+            text-align:left;
+          ">
+            <thead>
+              <tr>
+                ${columns
+          .map(
+            (column) => `
+                      <th style="
+                        padding:9px 10px;
+                        background:#0f172a;
+                        color:#94a3b8;
+                        font-size:11px;
+                        font-weight:600;
+                        white-space:nowrap;
+                        border-bottom:1px solid #475569;
+                      ">
+                        ${escapeHtml(column.label)}
+                      </th>
+                    `
+          )
+          .join("")}
+              </tr>
+            </thead>
+            <tbody>
+              <tr>${cells}</tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `;
     });
 
     await swal.fire({
       icon: "warning",
       title: "Duplicate component found",
-      text:
-        "One or more entered component serial numbers already exist in the Tested Controllers database.\n\n" +
-        rows.join("\n\n--------------------\n\n") +
-        "\n\nTesting has not started. Check the existing record before proceeding.",
+      html: `
+      <div style="
+        font-size:13px;
+        line-height:1.5;
+        color:#64748b;
+        margin-bottom:12px;
+      ">
+        Testing has not started. The following existing database
+        records match one or more entered component serial numbers.
+      </div>
+
+      <div style="
+        max-height:430px;
+        overflow-y:auto;
+        padding:0 4px;
+      ">
+        ${recordRows.length
+          ? recordRows.join("")
+          : `<p>No matching record details were returned.</p>`
+        }
+      </div>
+    `,
+      width: "1000px",
       confirmButtonText: "Understood",
+      confirmButtonColor: "#6366f1",
+      allowOutsideClick: false,
+      allowEscapeKey: false,
     });
   }
 
@@ -1243,69 +1462,64 @@ function DashboardViewTest() {
     setSavingTestedController(true);
 
     try {
-      await registerTestedController(pendingTestedRun);
+      const result = await registerTestedController(pendingTestedRun);
 
+      console.log("✅ Controller saved:", result.controller);
+
+      // Only clear pending record AFTER successful DB insertion
       setPendingTestedRun(null);
-      setTestStatus("Controller successfully saved to Tested Controllers.");
+
+      setTestStatus(
+        "Controller successfully saved to Tested Controllers."
+      );
 
       await swal.fire({
         icon: "success",
         title: "Controller marked as tested",
         text: "The controller record has been saved to the database.",
+        confirmButtonText: "OK",
       });
-    } catch (err) {
-      console.error("Failed to save tested controller:", err);
 
-      setTestStatus(`Tests completed, but saving failed: ${err.message}`);
+    } catch (err) {
+      console.error("❌ Failed to save tested controller:", err);
+
+      setTestStatus(
+        `Tests completed, but saving failed: ${err.message}`
+      );
 
       await swal.fire({
         icon: "error",
         title: "Could not save controller",
-        text: err.message,
+        text: err.message || "Failed to save the controller.",
       });
+
     } finally {
       setSavingTestedController(false);
     }
   }
 
   // Register a completed ATS run in the Tested Controllers collection
-  async function registerTestedController(runData) {
+  async function registerTestedController(data) {
     const payload = {
-      controllerIp: String(selectedMac || "").trim(),
-      assemblyNo: String(unitSerialNo || "").trim(),
-      cpu: String(cpuSrNo || "").trim(),
-      base: String(basePcbSrNo || "").trim(),
-      psu: String(psuSrNo || "").trim(),
-      camera: String(cameraSrNo || "").trim(),
+      controllerIp: String(data.controllerIp ?? "").trim(),
+      unitSerialNo: String(data.unitSerialNo ?? "").trim(),
+      cpu: String(data.cpu ?? "").trim(),
+      base: String(data.base ?? "").trim(),
+      psu: String(data.psu ?? "").trim(),
+      camera: String(data.camera ?? "").trim(),
+      testedBy: String(data.testedBy ?? "ATS Operator").trim(),
 
-      // Replace testerName with the variable used by your login/auth system.
-      testedBy: "ATS Operator",
-      remark: "",
-      testLevel,
-      reportNo: String(runData.runId || ""),
-      reportPath: String(runData.reportPath || ""),
+      remark: String(data.remark ?? "").trim(),
+      testLevel: String(data.testLevel ?? "full-controller").trim(),
+      reportPath: String(data.reportPath ?? "").trim(),
+      reportNo: String(data.reportNo ?? "").trim(),
+
+      // Do not override duplicates from the UI.
+      // The pre-test duplicate check should already have prevented them.
+      duplicateConfirmed: false,
     };
 
-    const missing = Object.entries(payload)
-      .filter(
-        ([key, value]) =>
-          [
-            "controllerIp",
-            "assemblyNo",
-            "cpu",
-            "base",
-            "psu",
-            "camera",
-            "testedBy",
-          ].includes(key) && !value,
-      )
-      .map(([key]) => key);
-
-    if (missing.length) {
-      throw new Error(
-        `Cannot register controller. Missing: ${missing.join(", ")}`,
-      );
-    }
+    console.log("📤 Saving tested controller:", payload);
 
     const response = await fetch(
       `${process.env.REACT_APP_API_URL}/api/tested-controllers`,
@@ -1315,16 +1529,31 @@ function DashboardViewTest() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify(payload),
-      },
+      }
     );
 
     const result = await response.json().catch(() => ({}));
 
-    if (!response.ok || !result.success) {
+    console.log("📥 Save response:", response.status, result);
+
+    if (!response.ok) {
+      // Give the caller useful information if backend rejects it.
+      if (response.status === 409) {
+        const duplicateError = new Error(
+          result.message || "Duplicate controller/component found."
+        );
+
+        duplicateError.code = result.code;
+        duplicateError.matchingFields = result.matchingFields || [];
+        duplicateError.matches = result.matches || [];
+
+        throw duplicateError;
+      }
+
       throw new Error(
         result.error ||
-          result.message ||
-          `Controller registration failed (${response.status})`,
+        result.message ||
+        "Failed to save tested controller."
       );
     }
 
@@ -1332,276 +1561,299 @@ function DashboardViewTest() {
   }
 
   // IMONI TEST FUNCTION
+
   async function iMoni_test() {
-    setAwaitingCommand(true); // Shows 'Running...' state
+    setAwaitingCommand(true);
     setShowATSPanel(false);
 
-    const initialResults = [];
+    try {
+      const initialResults = [];
 
-    // Frontend tests
-    initialResults.push({
-      name: "Visual Test",
-      status: "waiting",
-      duration: "-",
-    });
-
-    initialResults.push({
-      name: "Burn-In Test",
-      status: "waiting",
-      duration: "-",
-    });
-
-    // Backend tests
-    selectedTests.forEach((test) => {
+      // Frontend tests
       initialResults.push({
-        id: test,
-        name: test.replace(".srv", ""),
+        name: "Visual Test",
         status: "waiting",
         duration: "-",
       });
-    });
 
-    setTestResults(initialResults);
+      initialResults.push({
+        name: "Burn-In Test",
+        status: "waiting",
+        duration: "-",
+      });
 
-    if (testLevel === "green-pcb") {
-      if (!basePcbSrNo.trim()) {
-        swal.fire({
-          icon: "warning",
-          title: "Base PCB Serial Number Required",
-          text: "Please enter Base PCB Serial Number before starting ATS",
+      // Backend tests
+      selectedTests.forEach((test) => {
+        initialResults.push({
+          id: test,
+          name: test.replace(".srv", ""),
+          status: "waiting",
+          duration: "-",
         });
-        setAwaitingCommand(false);
-        return;
+      });
+
+      setTestResults(initialResults);
+
+      // 1. Validate required serial number for the test level
+      if (testLevel === "green-pcb") {
+        if (!base.trim()) {
+          await swal.fire({
+            icon: "warning",
+            title: "Base PCB Serial Number Required",
+            text: "Please enter Base PCB Serial Number before starting ATS",
+          });
+          return;
+        }
+      } else {
+        if (!unitSerialNo.trim()) {
+          await swal.fire({
+            icon: "warning",
+            title: "Unit Serial Number Required",
+            text: "Please enter Unit Serial Number before starting ATS",
+          });
+          return;
+        }
       }
-    } else {
-      if (!unitSerialNo.trim()) {
-        swal.fire({
-          icon: "warning",
-          title: "Unit Serial Number Required",
-          text: "Please enter Unit Serial Number before starting ATS",
+
+      // 2. Check for duplicate component serial numbers
+      try {
+        const duplicateResult =
+          await checkTestedControllerDuplicate();
+
+        if (duplicateResult.exists) {
+          await showDuplicateWarning(duplicateResult);
+          setShowATSPanel(true);
+          return;
+        }
+      } catch (err) {
+        console.error("Duplicate check failed:", err);
+
+        await swal.fire({
+          icon: "error",
+          title: "Unable to check duplicate records",
+          text:
+            `${err.message}\n\n` +
+            "Testing was not started because the database check " +
+            "could not be completed.",
         });
-        setAwaitingCommand(false);
+
         setShowATSPanel(true);
         return;
       }
-    }
 
-    // Check component serial numbers before starting any tests.
-    try {
-      const duplicateResult = await checkTestedControllerDuplicate();
+      // 3. No duplicate found: clear previous pending run
+      setPendingTestedRun(null);
 
-      if (duplicateResult.exists) {
-        await showDuplicateWarning(duplicateResult);
-
-        setAwaitingCommand(false);
-        setShowATSPanel(true);
-        return;
-      }
-    } catch (err) {
-      console.error("Duplicate check failed:", err);
-
-      await swal.fire({
-        icon: "error",
-        title: "Unable to check duplicate records",
-        text:
-          `${err.message}\n\n` +
-          "Testing was not started because the database check could not be completed.",
+      setAllPassed({
+        runId: null,
+        status: "idle",
       });
 
-      setAwaitingCommand(false);
-      setShowATSPanel(true);
-      return;
-    }
-
-    // No duplicate found: clear any previous pending run.
-    setPendingTestedRun(null);
-
-    // New run starting: previous run's All-Passed button state no longer applies
-    setAllPassed({ runId: null, status: "idle" });
-    setNotifications((prev) => {
-      const updated = { ...prev };
-      delete updated.allPassed;
-      return updated;
-    });
-
-    const frontendResults = []; // Stores Visual & Burn-in results
-    console.log("Fetched Test List Length: ", fetchedTestList.length);
-    console.log("Selected Tests Length: ", selectedTests.length);
-
-    if (fetchedTestList.length === selectedTests.length) {
-      // 1. Visual Test (frontend dialog)
-      // Visual Test
-      const v = await swal.fire({
-        title: "Visual Test",
-        text: "Is Visual inspection passed?",
-        showCancelButton: true,
-        confirmButtonText: "Pass",
-        cancelButtonText: "Fail",
+      setNotifications((prev) => {
+        const updated = { ...prev };
+        delete updated.allPassed;
+        return updated;
       });
 
-      const visualPassed = v.isConfirmed;
+      const frontendResults = [];
 
-      setTestResults((prev) =>
-        prev.map((t) =>
-          t.name === "Visual Test"
-            ? {
+      console.log(
+        "Fetched Test List Length: ",
+        fetchedTestList.length
+      );
+      console.log(
+        "Selected Tests Length: ",
+        selectedTests.length
+      );
+
+      // 4. Run all tests if the complete test list is selected
+      if (fetchedTestList.length === selectedTests.length) {
+        // Visual Test
+        const v = await swal.fire({
+          title: "Visual Test",
+          text: "Is Visual inspection passed?",
+          showCancelButton: true,
+          confirmButtonText: "Pass",
+          cancelButtonText: "Fail",
+        });
+
+        const visualPassed = v.isConfirmed;
+
+        setTestResults((prev) =>
+          prev.map((t) =>
+            t.name === "Visual Test"
+              ? {
                 ...t,
                 status: visualPassed ? "passed" : "failed",
               }
-            : t,
-        ),
+              : t
+          )
+        );
+
+        frontendResults.push({
+          name: "Visual Test",
+          status: visualPassed ? "passed" : "failed",
+          passed: visualPassed,
+          output: visualPassed
+            ? "Visual inspection passed successfully"
+            : "Visual inspection failed",
+        });
+
+        // Burn-In Test
+        const b = await swal.fire({
+          title: "Burn-In Test",
+          text: "Is Burn-In test passed?",
+          showCancelButton: true,
+          confirmButtonText: "Pass",
+          cancelButtonText: "Fail",
+        });
+
+        frontendResults.push({
+          name: "Burn-In Test",
+          status: b.isConfirmed ? "passed" : "failed",
+          passed: b.isConfirmed,
+          output: b.isConfirmed
+            ? "Burn-In test passed successfully"
+            : "Burn-In test failed",
+        });
+
+        console.log("Frontend Results: ", frontendResults);
+
+        // 5. Run all backend tests
+        try {
+          const resp = await fetch(
+            `${process.env.REACT_APP_API_URL}/api/tests/run-all`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                mac: selectedMac,
+                skipFrontendTests: true,
+                frontendResults,
+                cpu: cpu.trim(),
+                base: base.trim(),
+                camera: camera.trim(),
+                psu: psu.trim(),
+                unitSerialNo: unitSerialNo.trim(),
+                testLevel,
+              }),
+            }
+          );
+
+          const data = await resp.json().catch(() => ({}));
+
+          if (!resp.ok) {
+            throw new Error(
+              data.error || `ATS failed (${resp.status})`
+            );
+          }
+
+          // Preserve entered values even if the API response
+          // does not include the serial numbers.
+          setPendingTestedRun({
+            ...data,
+            assemblyNo: unitSerialNo.trim(),
+            cpu: cpu.trim(),
+            base: base.trim(),
+            camera: camera.trim(),
+            psu: psu.trim(),
+            testLevel,
+          });
+
+          markRunCompleted(data);
+
+          setTestStatus(
+            `Done: ${data.summary?.passed ?? 0} passed, ` +
+            `${data.summary?.failed ?? 0} failed — ` +
+            "Ready to mark as tested"
+          );
+        } catch (err) {
+          console.error("Run-all ATS failed:", err);
+          setTestStatus(`Error: ${err.message}`);
+        }
+      } else {
+        // 6. Run selected backend tests
+        console.log(
+          "Selected Test code runs ...",
+          selectedTests
+        );
+
+        try {
+          const resp = await fetch(
+            `${process.env.REACT_APP_API_URL}/api/tests/run`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                mac: selectedMac,
+                selectedProduct,
+                selectedTests,
+                unitSerialNo: unitSerialNo.trim(),
+                cpu: cpu.trim(),
+                base: base.trim(),
+                camera: camera.trim(),
+                psu: psu.trim(),
+                testLevel,
+              }),
+            }
+          );
+
+          const data = await resp.json().catch(() => ({}));
+
+          if (!resp.ok) {
+            throw new Error(
+              data.error || `ATS failed (${resp.status})`
+            );
+          }
+
+          // Preserve entered values even if the API response
+          // does not include the serial numbers.
+          setPendingTestedRun({
+            ...data,
+            assemblyNo: unitSerialNo.trim(),
+            cpu: cpu.trim(),
+            base: base.trim(),
+            camera: camera.trim(),
+            psu: psu.trim(),
+            testLevel,
+          });
+
+          markRunCompleted(data);
+
+          setTestStatus(
+            `Done: ${data.summary?.passed ?? 0} passed, ` +
+            `${data.summary?.failed ?? 0} failed — ` +
+            "Ready to mark as tested"
+          );
+        } catch (err) {
+          console.error("Selected ATS tests failed:", err);
+          setTestStatus(`Error: ${err.message}`);
+        }
+      }
+    } catch (err) {
+      // Catch unexpected errors outside the individual API calls.
+      console.error("Unexpected iMoni test error:", err);
+
+      setTestStatus(
+        `Error: ${err.message || "Unexpected ATS error"}`
       );
 
-      frontendResults.push({
-        name: "Visual Test",
-        status: visualPassed ? "passed" : "failed",
-        passed: visualPassed,
-        output: visualPassed
-          ? "Visual inspection passed successfully"
-          : "Visual inspection failed",
+      await swal.fire({
+        icon: "error",
+        title: "ATS Test Error",
+        text: err.message || "An unexpected error occurred.",
       });
-
-      // Burn-In Test
-      const b = await swal.fire({
-        title: "Burn-In Test",
-        text: "Is Burn-In test passed?",
-        showCancelButton: true,
-        confirmButtonText: "Pass",
-        cancelButtonText: "Fail",
-      });
-
-      frontendResults.push({
-        name: "Burn-In Test",
-        status: b.isConfirmed ? "passed" : "failed",
-        passed: b.isConfirmed,
-        output: b.isConfirmed
-          ? "Burn-In test passed successfully"
-          : "Burn-In test failed",
-      });
-
-      console.log("Frontend Results: ", frontendResults);
-
-      // 3. Runs API '/tests/run-all/'
-      try {
-        const resp = await fetch(
-          `${process.env.REACT_APP_API_URL}/api/tests/run-all`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              mac: selectedMac,
-              skipFrontendTests: true,
-              frontendResults,
-              cpuSrNo: cpuSrNo.trim(),
-              basePcbSrNo: basePcbSrNo.trim(),
-              cameraSrNo: cameraSrNo.trim(),
-              psuSrNo: psuSrNo.trim(),
-              unitSerialNo: unitSerialNo.trim(),
-              testLevel,
-            }),
-          },
-        );
-
-        const data = await resp.json().catch(() => ({}));
-
-        if (!resp.ok) {
-          throw new Error(data.error || `ATS failed (${resp.status})`);
-        }
-
-        setPendingTestedRun(data);
-
-        setTestStatus(
-          `Done: ${data.summary?.passed ?? 0} passed, ` +
-            `${data.summary?.failed ?? 0} failed`,
-        );
-
-        markRunCompleted(data);
-
-        // try {
-        //   await registerTestedController(data);
-
-        //   setTestStatus(
-        //     `Done: ${data.summary?.passed ?? 0} passed, ` +
-        //       `${data.summary?.failed ?? 0} failed — Saved to ATS`,
-        //   );
-
-        //   await swal.fire({
-        //     icon: "success",
-        //     title: "Test completed",
-        //     text: "Test results and controller information were saved to ATS.",
-        //   });
-        // } catch (saveError) {
-        //   console.error("ATS registration failed:", saveError);
-
-        //   setTestStatus(
-        //     `Tests completed, but ATS registration failed: ${saveError.message}`,
-        //   );
-
-        //   await swal.fire({
-        //     icon: "warning",
-        //     title: "Test completed, registration failed",
-        //     text:
-        //       `The test report was generated, but the controller was not saved. ` +
-        //       `${saveError.message}`,
-        //   });
-        // }
-
-        setTestStatus(
-          `Done: ${data.summary?.passed ?? 0} passed, ` +
-            `${data.summary?.failed ?? 0} failed — Ready to mark as tested`,
-        );
-      } catch (err) {
-        setTestStatus(`Error: ${err.message}`);
-      }
-    } else {
-      console.log("Selected Test code runs ...", selectedTests);
-
-      try {
-        const resp = await fetch(
-          `${process.env.REACT_APP_API_URL}/api/tests/run`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              mac: selectedMac,
-              selectedProduct,
-              selectedTests,
-              unitSerialNo: unitSerialNo.trim(),
-              cpuSrNo: cpuSrNo.trim(),
-              basePcbSrNo: basePcbSrNo.trim(),
-              cameraSrNo: cameraSrNo.trim(),
-              psuSrNo: psuSrNo.trim(),
-              testLevel,
-            }),
-          },
-        );
-
-        const data = await resp.json().catch(() => ({}));
-
-        if (!resp.ok) {
-          throw new Error(data.error || `ATS failed (${resp.status})`);
-        }
-
-        setPendingTestedRun(data);
-
-        setTestStatus(
-          `Done: ${data.summary?.passed ?? 0} passed, ` +
-            `${data.summary?.failed ?? 0} failed`,
-        );
-
-        markRunCompleted(data);
-
-        setTestStatus(
-          `Done: ${data.summary?.passed ?? 0} passed, ` +
-            `${data.summary?.failed ?? 0} failed — Ready to mark as tested`,
-        );
-      } catch (err) {
-        setTestStatus(`Error: ${err.message}`);
-      }
+    } finally {
+      // Always reset the Running state and restore the panel.
+      setAwaitingCommand(false);
+      setShowATSPanel(true);
     }
-    setAwaitingCommand(false);
-    setShowATSPanel(true);
   }
+
 
   // FAN TEST FUNCTION
   async function fan_test() {
@@ -2046,8 +2298,8 @@ function DashboardViewTest() {
 
                   <Input
                     placeholder="Base PCB Serial"
-                    value={basePcbSrNo}
-                    onChange={(e) => setBasePcbSrNo(e.target.value)}
+                    value={base}
+                    onChange={(e) => setBase(e.target.value)}
                     className="text-xs h-9 border-slate-700 bg-slate-900"
                   />
                 </div>
@@ -2076,8 +2328,8 @@ function DashboardViewTest() {
 
                       <Input
                         placeholder="CPU Serial"
-                        value={cpuSrNo}
-                        onChange={(e) => setCpuSrNo(e.target.value)}
+                        value={cpu}
+                        onChange={(e) => setCpu(e.target.value)}
                         className="text-xs h-9 border-slate-700 bg-slate-900"
                       />
                     </div>
@@ -2089,8 +2341,8 @@ function DashboardViewTest() {
 
                       <Input
                         placeholder="Base PCB Serial"
-                        value={basePcbSrNo}
-                        onChange={(e) => setBasePcbSrNo(e.target.value)}
+                        value={base}
+                        onChange={(e) => setBase(e.target.value)}
                         className="text-xs h-9 border-slate-700 bg-slate-900"
                       />
                     </div>
@@ -2102,8 +2354,8 @@ function DashboardViewTest() {
 
                       <Input
                         placeholder="Camera Serial"
-                        value={cameraSrNo}
-                        onChange={(e) => setCameraSrNo(e.target.value)}
+                        value={camera}
+                        onChange={(e) => setCamera(e.target.value)}
                         className="text-xs h-9 border-slate-700 bg-slate-900"
                       />
                     </div>
@@ -2115,8 +2367,8 @@ function DashboardViewTest() {
 
                       <Input
                         placeholder="PSU Serial"
-                        value={psuSrNo}
-                        onChange={(e) => setPsuSrNo(e.target.value)}
+                        value={psu}
+                        onChange={(e) => setPsu(e.target.value)}
                         className="text-xs h-9 border-slate-700 bg-slate-900"
                       />
                     </div>
@@ -2178,9 +2430,8 @@ function DashboardViewTest() {
                       <div
                         key={index}
                         title={`${test.name} - ${test.status}`}
-                        className={`rounded-md border px-2.5 py-1 text-[10px] font-medium ${
-                          statusClass[test.status] || statusClass.waiting
-                        }`}
+                        className={`rounded-md border px-2.5 py-1 text-[10px] font-medium ${statusClass[test.status] || statusClass.waiting
+                          }`}
                       >
                         <span className="mr-1">{icon[test.status] || "○"}</span>
 
@@ -2303,13 +2554,12 @@ function DashboardViewTest() {
                 alignItems: "flex-start",
                 color: "#fff",
 
-                boxShadow: `0 4px 12px ${
-                  notification.type === "success"
-                    ? "rgba(0, 204, 102, 0.3)"
-                    : notification.type === "error"
-                      ? "rgba(204, 51, 51, 0.3)"
-                      : "rgba(0, 204, 204, 0.3)"
-                }`,
+                boxShadow: `0 4px 12px ${notification.type === "success"
+                  ? "rgba(0, 204, 102, 0.3)"
+                  : notification.type === "error"
+                    ? "rgba(204, 51, 51, 0.3)"
+                    : "rgba(0, 204, 204, 0.3)"
+                  }`,
 
                 animation: "slideIn 0.3s ease-out",
               }}
@@ -2615,14 +2865,13 @@ function DashboardViewTest() {
                         {[1, 2, 3, 4, 5].map((level) => (
                           <div key={level} className="fan-light">
                             <button
-                              className={`power-btn ${
-                                activeFanBtns.includes(level) ||
+                              className={`power-btn ${activeFanBtns.includes(level) ||
                                 (latestReading &&
                                   latestReading[`fanLevel${level}Running`] ===
-                                    true)
-                                  ? "active"
-                                  : ""
-                              }`}
+                                  true)
+                                ? "active"
+                                : ""
+                                }`}
                               onClick={() => handleFanClick(level)}
                             />
                             <div className="fan-label">
@@ -2668,13 +2917,12 @@ function DashboardViewTest() {
                         {alarmKeys.map((alarm, i) => (
                           <div key={i} className="status-box">
                             <div
-                              className={`alarm-led ${
-                                latestReading[alarm.key] === 87
-                                  ? "wait"
-                                  : latestReading[alarm.key]
-                                    ? "active"
-                                    : ""
-                              }`}
+                              className={`alarm-led ${latestReading[alarm.key] === 87
+                                ? "wait"
+                                : latestReading[alarm.key]
+                                  ? "active"
+                                  : ""
+                                }`}
                             />
                             <div className="status-title">{alarm.Name}</div>
                           </div>
@@ -2684,11 +2932,10 @@ function DashboardViewTest() {
                             return (
                               <div key={i} className="alarm-indicator">
                                 <div
-                                  className={`alarm-led ${
-                                    latestReading[status.key] === "OPEN"
-                                      ? "active"
-                                      : ""
-                                  }`}
+                                  className={`alarm-led ${latestReading[status.key] === "OPEN"
+                                    ? "active"
+                                    : ""
+                                    }`}
                                 />
                                 <div className="alarm-label">{status.Name}</div>
                               </div>
@@ -2700,15 +2947,14 @@ function DashboardViewTest() {
                                   {/* <div className={`alarm-led ${latestReading[status.key] === 1 ? 'active' : ''}`} /> */}
                                   <div
                                     className={`alarm-led
-                              ${
-                                latestReading[status.key] === 1
-                                  ? "pass-danger"
-                                  : latestReading[status.key] === 2
-                                    ? "pass-warn"
-                                    : latestReading[status.key] === 3
-                                      ? "pass-active"
-                                      : ""
-                              }`}
+                              ${latestReading[status.key] === 1
+                                        ? "pass-danger"
+                                        : latestReading[status.key] === 2
+                                          ? "pass-warn"
+                                          : latestReading[status.key] === 3
+                                            ? "pass-active"
+                                            : ""
+                                      }`}
                                   />
                                   <div className="alarm-label">
                                     {status.Name}
@@ -2732,9 +2978,8 @@ function DashboardViewTest() {
                         {hupsKeys.map((hups, i) => (
                           <div key={i} className="status-box">
                             <div
-                              className={`alarm-led ${
-                                latestReading[hups.key] ? "" : "active"
-                              }`}
+                              className={`alarm-led ${latestReading[hups.key] ? "" : "active"
+                                }`}
                             />
                             <div className="status-title">{hups.Name}</div>
                           </div>

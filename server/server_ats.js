@@ -502,9 +502,8 @@ app.post("/api/log-command", (req, res) => {
   console.log(date, mac, command, status, message);
 
   const now = new Date();
-  const fileName = `${now.getDate()}_${
-    now.getMonth() + 1
-  }_${now.getHours()}.out`;
+  const fileName = `${now.getDate()}_${now.getMonth() + 1
+    }_${now.getHours()}.out`;
   const logDir = "C:/CommandLogs/out";
 
   if (!fs.existsSync(logDir)) {
@@ -645,17 +644,18 @@ app.post("/api/tests/run", async (req, res) => {
     selectedTests,
     controllerId,
     unitSerialNo,
-    cpuSrNo,
-    basePcbSrNo,
-    cameraSrNo,
-    psuSrNo,
+    cpu = "",
+    base = "",
+    camera = "",
+    psu = "",
     testLevel = "green-pcb",
   } = req.body;
+
   console.log("Requested test file:", selectedTests);
-  console.log(cpuSrNo);
-  console.log(basePcbSrNo);
-  console.log(cameraSrNo);
-  console.log(psuSrNo);
+  console.log("CPU:", cpu);
+  console.log("Base:", base);
+  console.log("Camera:", camera);
+  console.log("PSU:", psu);
 
   if (!selectedTests || selectedTests.length === 0) {
     return res.status(400).json({ error: "selectedTests is required" });
@@ -731,10 +731,10 @@ app.post("/api/tests/run", async (req, res) => {
       mac: firstMac,
       deviceId: controllerId,
       unitSerialNo,
-      cpuSrNo,
-      basePcbSrNo,
-      cameraSrNo,
-      psuSrNo,
+      cpu,
+      base,
+      camera,
+      psu,
       runCompleted: isRunCompleted(testResult.results),
       testLevel,
     });
@@ -782,16 +782,17 @@ app.post("/api/tests/run-all", async (req, res) => {
   try {
     const {
       mac,
-      cpuSrNo,
-      basePcbSrNo,
-      cameraSrNo,
-      psuSrNo,
+      cpu = "",
+      base = "",
+      camera = "",
+      psu = "",
       unitSerialNo,
       testLevel = "full-controller",
       skipFrontendTests,
       frontendResults,
       duplicateConfirmed = false,
     } = req.body;
+
     // const testDir = path.join(__dirname, "tests/iMoni");
     const testDir = getIMoniTestDir(testLevel);
 
@@ -833,62 +834,24 @@ app.post("/api/tests/run-all", async (req, res) => {
     }
 
     // =====================================================
-    // TESTED CONTROLLER DUPLICATE CHECK
+    // TESTED CONTROLLER DUPLICATE CHECK (shared five-field rule)
+    // reportNo is generated after the run, so only the supplied
+    // serial numbers are checked here. One query, no second pass.
     // =====================================================
+    if (!isDuplicateConfirmed(duplicateConfirmed)) {
+      const duplicateResult = await findControllerDuplicates({
+        unitSerialNo,
+        cpu,
+        base,
+        camera,
+      });
 
-    const duplicateFields = {
-      controllerIp: mac,
-      assemblyNo: unitSerialNo,
-      cpu: cpuSrNo,
-      base: basePcbSrNo,
-      psu: psuSrNo,
-      camera: cameraSrNo,
-    };
-
-    const duplicateConditions = Object.entries(duplicateFields)
-      .filter(([, value]) => value && String(value).trim())
-      .map(([key, value]) => ({
-        [key]: String(value).trim(),
-      }));
-
-    if (!duplicateConfirmed && duplicateConditions.length > 0) {
-      const duplicateMatches = await TestedController.find({
-        $or: duplicateConditions,
-      })
-        .sort({ testedAt: -1 })
-        .limit(20)
-        .lean();
-
-      if (duplicateMatches.length > 0) {
-        const matchingFields = [];
-
-        for (const match of duplicateMatches) {
-          for (const [field, value] of Object.entries(duplicateFields)) {
-            if (
-              value &&
-              String(match[field] || "")
-                .trim()
-                .toLowerCase() === String(value).trim().toLowerCase()
-            ) {
-              if (!matchingFields.includes(field)) {
-                matchingFields.push(field);
-              }
-            }
-          }
-        }
-
-        return res.status(409).json({
-          success: false,
-
-          code: "TESTED_CONTROLLER_DUPLICATE",
-
-          message:
-            "This controller or one of its components has already been tested.",
-
-          matchingFields,
-
-          matches: duplicateMatches,
-        });
+      if (duplicateResult.found) {
+        return sendDuplicateConflict(
+          res,
+          duplicateResult,
+          "This controller or one of its components has already been tested.",
+        );
       }
     }
 
@@ -946,11 +909,11 @@ app.post("/api/tests/run-all", async (req, res) => {
       runResult: response,
       destination: "iMoni",
       mac: reportMac,
-      cpuSrNo,
-      basePcbSrNo,
-      cameraSrNo,
-      psuSrNo,
       unitSerialNo,
+      cpu,
+      base,
+      camera,
+      psu,
       runCompleted: isRunCompleted(mergedResults),
       testLevel,
     });
@@ -1291,116 +1254,250 @@ app.post("/run-python", (req, res) => {
   });
 });
 
+
+
+// =====================================================
+// TESTED CONTROLLER - SHARED DUPLICATE DETECTION
+// One implementation used by /check, POST, PUT and /api/tests/run-all.
+// Duplicate rule: exactly these five fields. controllerIp and psu are
+// intentionally NOT duplicate fields.
+// =====================================================
+const DUPLICATE_FIELDS = ["unitSerialNo", "cpu", "base", "camera", "reportNo"];
+
+// Older imported documents may hold the same value under a legacy name.
+// Legacy names are only READ here so such records still count as
+// duplicates; they are never written to.
+const DUPLICATE_DB_FIELDS = {
+  unitSerialNo: ["unitSerialNo", "assemblySrNo"],
+  cpu: ["cpu", "cpuSr"],
+  base: ["base", "basePcbSr"],
+  camera: ["camera", "cameraSr"],
+  reportNo: ["reportNo"],
+};
+
+const NUMERIC_SERIAL_FIELDS = ["cpu", "base", "camera"];
+const DUPLICATE_PLACEHOLDERS = ["-", "—", "n/a", "na"];
+const MAX_DUPLICATE_MATCHES = 20;
+
+// Existing schema fields that the frontend may submit (POST and PUT).
+const EDITABLE_FIELDS = [
+  "controllerIp",
+  "unitSerialNo",
+  "cpu",
+  "base",
+  "psu",
+  "camera",
+  "testedBy",
+  "status",
+  "remark",
+  "testLevel",
+  "reportPath",
+  "reportNo",
+];
+
+function normalizeValue(value) {
+  if (value === undefined || value === null) return "";
+  return String(value).trim();
+}
+
+function normalizeIdentifier(value) {
+  return normalizeValue(value).toLowerCase();
+}
+
+// Blank and placeholder values never count as duplicates.
+function normalizeDuplicateValue(value) {
+  const normalized = normalizeValue(value);
+  if (!normalized) return "";
+  return DUPLICATE_PLACEHOLDERS.includes(normalized.toLowerCase())
+    ? ""
+    : normalized;
+}
+
+// Request-only flag. It is never copied into a MongoDB document.
+function isDuplicateConfirmed(value) {
+  return value === true || value === "true";
+}
+
+// Escape special characters for safe exact matching.
 function escapeRegex(value) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+/**
+ * Checks the five duplicate fields against other documents with ONE query.
+ * Values are trimmed and matched case-insensitively; stored values are
+ * never changed. `excludeId` removes the current record from the check.
+ */
+async function findControllerDuplicates(values = {}, excludeId = null) {
+  const submitted = {};
+
+  for (const field of DUPLICATE_FIELDS) {
+    const value = normalizeDuplicateValue(values[field]);
+    if (value) submitted[field] = value;
+  }
+
+  const result = {
+    found: false,
+    matchingFields: [],
+    duplicates: {},
+    conflicts: [],
+    matches: [],
+  };
+
+  if (Object.keys(submitted).length === 0) return result;
+
+  const conditions = [];
+
+  for (const [field, value] of Object.entries(submitted)) {
+    for (const dbField of DUPLICATE_DB_FIELDS[field]) {
+      const asNumber = Number(value);
+
+      if (
+        NUMERIC_SERIAL_FIELDS.includes(field) &&
+        /^\d+$/.test(value) &&
+        Number.isSafeInteger(asNumber) &&
+        String(asNumber) === value
+      ) {
+        // Legacy documents may store serials as numbers.
+        conditions.push({ [dbField]: { $in: [value, asNumber] } });
+      } else {
+        conditions.push({
+          [dbField]: { $regex: `^${escapeRegex(value)}$`, $options: "i" },
+        });
+      }
+    }
+  }
+
+  const filter = { $or: conditions };
+
+  if (excludeId && mongoose.Types.ObjectId.isValid(String(excludeId))) {
+    filter._id = { $ne: new mongoose.Types.ObjectId(String(excludeId)) };
+  }
+
+  const docs = await TestedController.find(filter)
+    .sort({ testedAt: -1 })
+    .limit(200)
+    .lean();
+
+  const matchedDocs = new Set();
+
+  for (const doc of docs) {
+    for (const [field, value] of Object.entries(submitted)) {
+      const matchedDbField = DUPLICATE_DB_FIELDS[field].find(
+        (dbField) => normalizeIdentifier(doc[dbField]) === normalizeIdentifier(value),
+      );
+
+      if (!matchedDbField) continue;
+
+      matchedDocs.add(doc);
+      result.conflicts.push({
+        field,
+        value,
+        matchedDbField,
+        recordId: String(doc._id),
+        sNo: doc.sNo ?? null,
+        reportNo: doc.reportNo ?? null,
+        unitSerialNo: doc.unitSerialNo ?? doc.assemblySrNo ?? null,
+      });
+
+      if (!result.duplicates[field]) {
+        result.duplicates[field] = { value, existingId: doc._id };
+      }
+    }
+  }
+
+  result.matchingFields = DUPLICATE_FIELDS.filter(
+    (field) => result.duplicates[field],
+  );
+  result.matches = Array.from(matchedDocs).slice(0, MAX_DUPLICATE_MATCHES);
+  result.found = result.matchingFields.length > 0;
+
+  return result;
+}
+
+// Distinguishes: no duplicate / duplicate found / duplicate confirmed.
+function buildDuplicateSummary(result, confirmed = false) {
+  const duplicateStatus = !result.found
+    ? "no_duplicate"
+    : confirmed
+      ? "duplicate_confirmed"
+      : "duplicate_found";
+
+  return {
+    duplicateStatus,
+    duplicateFound: result.found,
+    duplicateConfirmed: result.found && confirmed,
+    matchingFields: result.matchingFields,
+    duplicates: result.duplicates,
+    conflicts: result.conflicts,
+  };
+}
+
+// HTTP 409 used by every endpoint that enforces the duplicate rule.
+function sendDuplicateConflict(res, result, lead) {
+  return res.status(409).json({
+    success: false,
+    code: "TESTED_CONTROLLER_DUPLICATE",
+    message: `${lead} Already exists: ${result.matchingFields.join(", ")}.`,
+    requiresConfirmation: true,
+    ...buildDuplicateSummary(result, false),
+    matches: result.matches,
+  });
+}
+
 // =====================================================
-// TESTED CONTROLLER - DUPLICATE CHECK
+// TESTED CONTROLLER - CHECKING CONTROLLER DETAILS FOR DUPLICATE RECORDS
 // =====================================================
 app.post("/api/tested-controllers/check", async (req, res) => {
   try {
-    const fields = {
-      cpu: String(req.body?.cpu ?? "").trim(),
-      base: String(req.body?.base ?? "").trim(),
-      camera: String(req.body?.camera ?? "").trim(),
-      psu: String(req.body?.psu ?? "").trim(),
-    };
+    const body = req.body || {};
 
-    // Ignore empty values and common placeholders.
-    const suppliedFields = Object.entries(fields).filter(
-      ([, value]) =>
-        value &&
-        !["-", "—", "n/a", "na"].includes(value.toLowerCase()),
-    );
-
-    if (suppliedFields.length === 0) {
-      return res.json({
-        exists: false,
-        matches: [],
-        matchingFields: [],
+    if (body.excludeId && !mongoose.Types.ObjectId.isValid(String(body.excludeId))) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid excludeId",
       });
     }
 
-    // Match each supplied component independently, ignoring letter case.
-    const orConditions = suppliedFields.map(([field, value]) => ({
-      [field]: {
-        $regex: `^${escapeRegex(value)}$`,
-        $options: "i",
-      },
-    }));
-
-    const matches = await TestedController.find({
-      $or: orConditions,
-    })
-      .sort({ testedAt: -1 })
-      .limit(20)
-      .lean();
-
-    const matchingFields = [];
-
-    for (const match of matches) {
-      for (const [field, value] of suppliedFields) {
-        if (
-          String(match[field] ?? "").trim().toLowerCase() ===
-          value.toLowerCase() &&
-          !matchingFields.includes(field)
-        ) {
-          matchingFields.push(field);
-        }
-      }
-    }
+    const confirmed = isDuplicateConfirmed(body.duplicateConfirmed);
+    const result = await findControllerDuplicates(body, body.excludeId);
 
     return res.json({
-      exists: matches.length > 0,
-      matches,
-      matchingFields,
+      success: true,
+      exists: result.found,
+      ...buildDuplicateSummary(result, confirmed),
+      matches: result.matches,
     });
   } catch (error) {
-    console.error("❌ Tested controller duplicate check:", error);
-
+    console.error("Duplicate check error:", error);
     return res.status(500).json({
-      exists: false,
-      error: "Failed to check tested controller registry",
-      details: error.message,
+      success: false,
+      message: "Failed to check duplicate values",
     });
   }
 });
 
+// =====================================================
+// TESTED CONTROLLER - ADDING NEW CONTROLLER RECORD
+// =====================================================
 app.post("/api/tested-controllers", async (req, res) => {
   try {
-    const {
-      controllerIp,
-      assemblyNo,
-      cpu,
-      base,
-      psu,
-      camera,
-      testedBy,
-      remark = "",
-      testLevel = "full-controller",
-      reportPath = "",
-      reportNo = "",
-      duplicateConfirmed = false,
-    } = req.body || {};
+    const body = req.body || {};
+    const duplicateConfirmed = isDuplicateConfirmed(body.duplicateConfirmed);
 
-    const normalized = {
-      controllerIp: String(controllerIp ?? "").trim(),
-      assemblyNo: String(assemblyNo ?? "").trim(),
-      cpu: String(cpu ?? "").trim(),
-      base: String(base ?? "").trim(),
-      psu: String(psu ?? "").trim(),
-      camera: String(camera ?? "").trim(),
-      testedBy: String(testedBy ?? "").trim(),
-      remark: String(remark ?? "").trim(),
-      testLevel: String(testLevel || "full-controller").trim(),
-      reportPath: String(reportPath ?? "").trim(),
-      reportNo: String(reportNo ?? "").trim(),
-    };
+    // Whitelist: request-only flags (duplicateConfirmed) are never saved.
+    const normalized = {};
+
+    for (const field of EDITABLE_FIELDS) {
+      if (Object.prototype.hasOwnProperty.call(body, field)) {
+        normalized[field] =
+          typeof body[field] === "string" ? body[field].trim() : body[field];
+      }
+    }
 
     const requiredFields = [
       "controllerIp",
-      "assemblyNo",
+      "unitSerialNo",
       "cpu",
       "base",
       "psu",
@@ -1408,75 +1505,33 @@ app.post("/api/tested-controllers", async (req, res) => {
       "testedBy",
     ];
 
-    const missingFields = requiredFields.filter((field) => !normalized[field]);
+    const missingFields = requiredFields.filter(
+      (field) => !normalizeValue(normalized[field]),
+    );
 
-    if (missingFields.length > 0) {
+    if (missingFields.length) {
       return res.status(400).json({
         success: false,
-        error: "Required fields are missing or blank",
+        message: "Required fields are missing",
         missingFields,
       });
     }
 
-    const duplicateFields = {
-      controllerIp: normalized.controllerIp,
-      assemblyNo: normalized.assemblyNo,
-      cpu: normalized.cpu,
-      base: normalized.base,
-      psu: normalized.psu,
-      camera: normalized.camera,
-    };
+    const duplicateResult = await findControllerDuplicates(normalized);
 
-    const duplicateConditions = Object.entries(duplicateFields).map(
-      ([key, value]) => ({
-        [key]: {
-          $regex: `^${escapeRegex(value)}$`,
-          $options: "i",
-        },
-      }),
-    );
-
-    const duplicateMatches = await TestedController.find({
-      $or: duplicateConditions,
-    })
-      .sort({ testedAt: -1 })
-      .limit(20)
-      .lean();
-
-    if (duplicateMatches.length > 0 && duplicateConfirmed !== true) {
-      const matchingFields = [];
-
-      for (const match of duplicateMatches) {
-        for (const [field, value] of Object.entries(duplicateFields)) {
-          if (
-            value &&
-            String(match[field] ?? "")
-              .trim()
-              .toLowerCase() === value.toLowerCase() &&
-            !matchingFields.includes(field)
-          ) {
-            matchingFields.push(field);
-          }
-        }
-      }
-
-      return res.status(409).json({
-        success: false,
-        code: "TESTED_CONTROLLER_DUPLICATE",
-        message:
-          "This controller or one of its components has already been registered.",
-        matchingFields,
-        matches: duplicateMatches,
-      });
+    if (duplicateResult.found && !duplicateConfirmed) {
+      return sendDuplicateConflict(
+        res,
+        duplicateResult,
+        "One or more values already exist.",
+      );
     }
 
     const previousRecord = await TestedController.findOne({
-      controllerIp: {
-        $regex: `^${escapeRegex(normalized.controllerIp)}$`,
-        $options: "i",
-      },
+      controllerIp: normalized.controllerIp,
     })
       .sort({ testedAt: -1 })
+      .select("_id")
       .lean();
 
     const record = await TestedController.create({
@@ -1490,15 +1545,22 @@ app.post("/api/tested-controllers", async (req, res) => {
       success: true,
       message: "Controller registered successfully",
       controller: record,
-      duplicateOverride: duplicateMatches.length > 0,
+      ...buildDuplicateSummary(duplicateResult, duplicateConfirmed),
     });
   } catch (error) {
-    console.error("❌ Failed to register tested controller:", error);
+    console.error("Register controller error:", error);
+
+    if (error.name === "ValidationError") {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid controller data",
+        errors: Object.values(error.errors || {}).map((e) => e.message),
+      });
+    }
 
     return res.status(500).json({
       success: false,
-      error: "Failed to register tested controller",
-      details: error.message,
+      message: "Failed to register controller",
     });
   }
 });
@@ -1506,40 +1568,50 @@ app.post("/api/tested-controllers", async (req, res) => {
 // =====================================================
 // TESTED CONTROLLER - LIST
 // =====================================================
+
 app.get("/api/tested-controllers", async (req, res) => {
   try {
     const {
       page: requestedPage = "1",
       limit: requestedLimit = "20",
       search = "",
+      searchField = "all",
       status = "all",
       testedBy = "all",
       sortBy: requestedSortBy = "testedAt",
       sortOrder: requestedSortOrder = "desc",
     } = req.query;
 
-    const currentPage = Math.max(1, parseInt(requestedPage, 10) || 1);
+    const currentPage = Math.max(
+      1,
+      parseInt(requestedPage, 10) || 1
+    );
 
     const pageLimit = Math.min(
       100,
-      Math.max(1, parseInt(requestedLimit, 10) || 20),
+      Math.max(1, parseInt(requestedLimit, 10) || 20)
     );
 
-    // Map frontend sort keys to actual MongoDB fields.
+    // Map frontend sort keys to canonical schema fields.
     const sortFieldMap = {
-      cpu: "cpuSr",
-      cpuSr: "cpuSr",
-      base: "basePcbSr",
-      basePcbSr: "basePcbSr",
-      camera: "cameraSr",
-      cameraSr: "cameraSr",
+      cpu: "cpu",
+      cpuSr: "cpu",
+      base: "base",
+      basePcbSr: "base",
+      camera: "camera",
+      cameraSr: "camera",
       testedAt: "testedAt",
     };
 
-    const sortField = sortFieldMap[requestedSortBy] || "testedAt";
-    const sortDirection = requestedSortOrder === "asc" ? 1 : -1;
+    const sortField =
+      sortFieldMap[requestedSortBy] || "testedAt";
 
-    // Build MongoDB filter using the actual document fields.
+    const sortDirection =
+      requestedSortOrder === "asc" ? 1 : -1;
+
+    const numericFields = ["cpu", "base", "camera"];
+    const isNumericSort = numericFields.includes(sortField);
+
     const query = {};
 
     if (status && status !== "all") {
@@ -1550,68 +1622,144 @@ app.get("/api/tested-controllers", async (req, res) => {
       query.testedBy = testedBy;
     }
 
-    if (search && String(search).trim()) {
-      const escapedSearch = String(search)
-        .trim()
-        .replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    // Search canonical and legacy field names.
+    const searchText = String(search ?? "").trim();
+
+    if (searchText) {
+      const escapedSearch = searchText.replace(
+        /[.*+?^${}()|[\]\\]/g,
+        "\\$&"
+      );
 
       const searchRegex = new RegExp(escapedSearch, "i");
 
-      query.$or = [
-        { deviceIP: searchRegex },
-        { assemblySrNo: searchRegex },
-        { cpuSr: searchRegex },
-        { basePcbSr: searchRegex },
-        { cameraSr: searchRegex },
-        { psuSrNo: searchRegex },
-        { testedBy: searchRegex },
-        { reportNo: searchRegex },
-      ];
+      const searchFieldMap = {
+        all: [
+          "controllerIp",
+          "unitSerialNo",
+          "cpu",
+          "base",
+          "psu",
+          "camera",
+          "deviceIP",
+          "assemblySrNo",
+          "cpuSr",
+          "basePcbSr",
+          "cameraSr",
+          "psuSrNo",
+          "testedBy",
+          "status",
+          "remark",
+          "reportNo",
+        ],
+        cpu: ["cpu", "cpuSr"],
+        base: ["base", "basePcbSr"],
+        camera: ["camera", "cameraSr"],
+        psu: ["psu", "psuSrNo"],
+        assemblyNo: ["unitSerialNo", "assemblySrNo"],
+        controllerIp: ["controllerIp", "deviceIP"],
+      };
+
+      const selectedFields =
+        searchFieldMap[searchField] || searchFieldMap.all;
+
+      const searchConditions = selectedFields.map((field) => ({
+        [field]: searchRegex,
+      }));
+
+      // Also match old numeric BSON values in legacy fields.
+      if (/^\d+$/.test(searchText)) {
+        const numericValue = Number(searchText);
+
+        if (Number.isSafeInteger(numericValue)) {
+          const numericFieldMap = {
+            all: ["cpuSr", "basePcbSr", "cameraSr"],
+            cpu: ["cpuSr"],
+            base: ["basePcbSr"],
+            camera: ["cameraSr"],
+          };
+
+          const numericFieldsToSearch =
+            numericFieldMap[searchField] || [];
+
+          numericFieldsToSearch.forEach((field) => {
+            searchConditions.push({
+              [field]: numericValue,
+            });
+          });
+        }
+      }
+
+      query.$or = searchConditions;
     }
 
     const skip = (currentPage - 1) * pageLimit;
 
-    // Keep empty values at the end in both sort directions.
+    // Numeric sort expressions also support legacy documents.
+    const numericSortSource = {
+      cpu: { $ifNull: ["$cpu", "$cpuSr"] },
+      base: { $ifNull: ["$base", "$basePcbSr"] },
+      camera: { $ifNull: ["$camera", "$cameraSr"] },
+    };
+
     const pipeline = [
       { $match: query },
 
-      {
-        $addFields: {
-          _sortValue: {
-            $ifNull: [`$${sortField}`, ""],
-          },
-          _sortMissing: {
-            $cond: [
-              {
-                $or: [
-                  { $eq: [`$${sortField}`, null] },
-                  { $eq: [`$${sortField}`, ""] },
-                ],
+      ...(isNumericSort
+        ? [
+            {
+              $addFields: {
+                _sortValue: {
+                  $convert: {
+                    input: numericSortSource[sortField],
+                    to: "long",
+                    onError: null,
+                    onNull: null,
+                  },
+                },
               },
-              1,
-              0,
-            ],
-          },
-        },
-      },
-
-      {
-        $sort: {
-          _sortMissing: 1,
-          _sortValue: sortDirection,
-          _id: 1,
-        },
-      },
+            },
+            {
+              $addFields: {
+                _sortMissing: {
+                  $cond: [
+                    { $eq: ["$_sortValue", null] },
+                    1,
+                    0,
+                  ],
+                },
+              },
+            },
+            {
+              $sort: {
+                _sortMissing: 1,
+                _sortValue: sortDirection,
+                _id: 1,
+              },
+            },
+          ]
+        : [
+            {
+              $sort: {
+                [sortField]: sortDirection,
+                _id: 1,
+              },
+            },
+          ]),
 
       { $skip: skip },
       { $limit: pageLimit },
 
-      {
-        $project: {
-          _sortValue: 0,
-          _sortMissing: 0,
-        },
-      },
+      ...(isNumericSort
+        ? [
+            {
+              $project: {
+                _sortValue: 0,
+                _sortMissing: 0,
+              },
+            },
+          ]
+        : []),
     ];
 
     const [records, total] = await Promise.all([
@@ -1623,9 +1771,36 @@ app.get("/api/tested-controllers", async (req, res) => {
       TestedController.countDocuments(query),
     ]);
 
+    // Normalize both document formats for the frontend.
+    const normalizedRecords = records.map((item) => ({
+      ...item,
+      controllerIp:
+        item.controllerIp ?? item.deviceIP ?? "",
+      unitSerialNo:
+        item.unitSerialNo ?? item.assemblySrNo ?? "",
+      cpu: item.cpu ?? item.cpuSr ?? "",
+      base: item.base ?? item.basePcbSr ?? "",
+      camera: item.camera ?? item.cameraSr ?? "",
+      psu: item.psu ?? item.psuSrNo ?? "",
+      testedAt:
+        item.testedAt ?? item.dateTested ?? null,
+      testedBy: item.testedBy ?? "Imported",
+    }));
+
+    console.log("[GET tested-controllers]", {
+      search: searchText,
+      status,
+      testedBy,
+      sortField,
+      sortDirection,
+      page: currentPage,
+      returned: normalizedRecords.length,
+      total,
+    });
+
     return res.json({
       success: true,
-      data: records,
+      data: normalizedRecords,
       pagination: {
         page: currentPage,
         limit: pageLimit,
@@ -1634,55 +1809,178 @@ app.get("/api/tested-controllers", async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("❌ Failed to load tested controllers:", error);
+    console.error(
+      "❌ Failed to load tested controllers:",
+      error
+    );
 
     return res.status(500).json({
       success: false,
       error: "Failed to load tested controllers",
-      details: error.message,
     });
   }
 });
 
+
 // =====================================================
-// TESTED CONTROLLER - DETAILS
+// TESTED CONTROLLER - UPDATE (EDIT) EXISTING RECORD
+// Single implementation of PUT /api/tested-controllers/:id.
+// Updates the existing document in place; never creates a new one.
+// `duplicateConfirmed` is a request-only flag and is never stored.
 // =====================================================
-app.get("/api/tested-controllers/:id", async (req, res) => {
+app.put("/api/tested-controllers/:id", async (req, res) => {
   try {
     const { id } = req.params;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({
         success: false,
-        error: "Invalid controller ID",
+        error: "Invalid controller record ID",
       });
     }
 
-    const controller = await TestedController.findById(id).lean();
+    const body = req.body || {};
+    const duplicateConfirmed = isDuplicateConfirmed(body.duplicateConfirmed);
 
-    if (!controller) {
+    const existingRecord = await TestedController.findById(id);
+
+    if (!existingRecord) {
       return res.status(404).json({
         success: false,
-        error: "Tested controller not found",
+        error: "Controller record not found",
       });
     }
 
-    return res.json({
+    // Only whitelisted schema fields that were actually submitted.
+    const updates = {};
+    for (const field of EDITABLE_FIELDS) {
+      if (
+        Object.prototype.hasOwnProperty.call(body, field) &&
+        body[field] !== undefined
+      ) {
+        updates[field] = normalizeValue(body[field]);
+      }
+    }
+
+    // Final values after the update (submitted value, else existing value).
+    const finalValues = {};
+    for (const field of EDITABLE_FIELDS) {
+      finalValues[field] = Object.prototype.hasOwnProperty.call(updates, field)
+        ? updates[field]
+        : normalizeValue(existingRecord[field]);
+    }
+
+    const requiredFields = [
+      "controllerIp",
+      "unitSerialNo",
+      "cpu",
+      "base",
+      "psu",
+      "camera",
+      "testedBy",
+    ];
+
+    const missingFields = requiredFields.filter((field) => !finalValues[field]);
+
+    if (missingFields.length > 0) {
+      return res.status(400).json({
+        success: false,
+        error: "Required fields are missing or blank",
+        missingFields,
+      });
+    }
+
+    if (finalValues.status !== "Tested") {
+      return res.status(400).json({
+        success: false,
+        error: 'Status must be "Tested"',
+      });
+    }
+
+    for (const field of NUMERIC_SERIAL_FIELDS) {
+      if (!/^\d+$/.test(finalValues[field])) {
+        return res.status(400).json({
+          success: false,
+          error: `${field} serial number must contain digits only`,
+          field,
+        });
+      }
+    }
+
+    // Duplicate check: submitted values only, five duplicate fields only,
+    // excluding this record. One query.
+    const duplicateInput = {};
+    for (const field of DUPLICATE_FIELDS) {
+      if (Object.prototype.hasOwnProperty.call(updates, field)) {
+        duplicateInput[field] = updates[field];
+      }
+    }
+
+    const duplicateResult = await findControllerDuplicates(
+      duplicateInput,
+      existingRecord._id,
+    );
+
+    if (duplicateResult.found && !duplicateConfirmed) {
+      return sendDuplicateConflict(
+        res,
+        duplicateResult,
+        "One or more entered values are already registered in another record.",
+      );
+    }
+
+    // Apply only changed values, so untouched (e.g. legacy) data is not rewritten.
+    for (const [field, value] of Object.entries(updates)) {
+      if (normalizeValue(existingRecord[field]) !== value) {
+        existingRecord[field] = value;
+      }
+    }
+
+    const updatedRecord = await existingRecord.save();
+
+    return res.status(200).json({
       success: true,
-      data: controller,
+      message: "Controller record updated successfully",
+      controller: updatedRecord,
+      duplicateOverride: duplicateResult.found && duplicateConfirmed,
+      ...buildDuplicateSummary(duplicateResult, duplicateConfirmed),
     });
   } catch (error) {
-    console.error("❌ Failed to fetch controller details:", error);
+    console.error("Failed to update tested controller:", error);
+
+    if (error.name === "ValidationError") {
+      return res.status(400).json({
+        success: false,
+        error: "Invalid controller data",
+        errors: Object.values(error.errors || {}).map((e) => e.message),
+      });
+    }
+
+    if (error.name === "CastError") {
+      return res.status(400).json({
+        success: false,
+        error: `Invalid value for ${error.path}`,
+      });
+    }
+
+    if (error.code === 11000) {
+      return res.status(409).json({
+        success: false,
+        code: "TESTED_CONTROLLER_DUPLICATE",
+        message: "A unique identifier is already registered.",
+        duplicateKey: error.keyValue || null,
+      });
+    }
 
     return res.status(500).json({
       success: false,
-      error: "Failed to fetch controller details",
+      error: "Failed to update tested controller",
     });
   }
 });
 
 // =====================================================
-// TESTED CONTROLLER - HISTORY
+// TESTED CONTROLLER - HISTORY OF THE TESTED CONTROLLER 
 // =====================================================
 app.get("/api/tested-controllers/:id/history", async (req, res) => {
   try {
@@ -2349,9 +2647,8 @@ const tcpServer = net.createServer((socket) => {
         // ===================== Logging Incoming Data from Simulator =====================
         if (INC_LOGS_CMD) {
           const now = new Date();
-          const fileName = `${now.getDate()}_${
-            now.getMonth() + 1
-          }_${now.getHours()}.inc`;
+          const fileName = `${now.getDate()}_${now.getMonth() + 1
+            }_${now.getHours()}.inc`;
 
           // const sensorData = {
           //   humidity: humidity,
@@ -2482,9 +2779,8 @@ const tcpServer = net.createServer((socket) => {
           const now = new Date();
           const timestamp = now.toLocaleString();
 
-          const alarmFileName = `${now.getDate()}_${
-            now.getMonth() + 1
-          }_${now.getHours()}_Alarm.inc`;
+          const alarmFileName = `${now.getDate()}_${now.getMonth() + 1
+            }_${now.getHours()}_Alarm.inc`;
 
           if (fanStatus.includes(2)) {
             var logAlarm = `[${timestamp}] | MAC: ${mac}| ${activeAlarms} | Fan Status: ${fanStatus}\n`;

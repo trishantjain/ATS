@@ -37,7 +37,7 @@ import { useNavigate } from "react-router-dom";
 
 import { Badge } from "../components/ui/badge";
 import { Separator } from "../components/ui/separator";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   ArrowDown,
@@ -97,7 +97,7 @@ const API_URL = process.env.REACT_APP_API_URL || "http://localhost:5000";
  * ---------------------------------------------------------------------------
  * Theme tokens
  * ---------------------------------------------------------------------------
- * Light mode redesigned so the page, the table card, the header row and the
+ * Light mode --> the table card, the header row and the
  * serial-number chips are each a visibly distinct surface instead of
  * everything collapsing to white-on-white:
  *
@@ -385,9 +385,8 @@ function SortableHeader({ label, active, direction, onClick, t }) {
     <button
       type="button"
       onClick={onClick}
-      className={`inline-flex items-center justify-center gap-1 rounded text-xs font-bold uppercase tracking-wide hover:text-indigo-500 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-indigo-400/60 ${
-        active ? "text-indigo-500" : t.theadText
-      }`}
+      className={`inline-flex items-center justify-center gap-1 rounded text-xs font-bold uppercase tracking-wide hover:text-indigo-500 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-indigo-400/60 ${active ? "text-indigo-500" : t.theadText
+        }`}
     >
       {label}
       {active ? (
@@ -424,6 +423,374 @@ function RowCheckbox({ checked, onChange, label, t, className = "" }) {
   );
 }
 
+
+const ControllersTable = memo(function ControllersTable({
+  controllers,
+  selectedIds,
+  headerCheckboxState,
+  toggleSelectAllLoaded,
+  toggleSelect,
+  toggleSort,
+  sortKey,
+  sortDir,
+  openDetails,
+  openEditForm,
+  openHistory,
+  generateSelectedAllPassedReports,
+  generatingReports,
+  loading,
+  error,
+  refreshControllers,
+  clearFilters,
+  hasFilters,
+  t,
+  mode,
+  scrollContainerRef,
+  loadMoreRef,
+}) {
+  return (
+    <div
+      className={`flex-1 min-h-0 overflow-hidden rounded-lg border ${t.tableWrap}`}
+    >
+      <div ref={scrollContainerRef} className="h-full overflow-auto">
+        <table className="w-full min-w-[1250px] caption-bottom text-sm">
+          <thead
+            className={`sticky top-0 z-10 border-b backdrop-blur ${t.theadWrap}`}
+          >
+            <tr>
+              <th className="w-[48px] px-4 py-3 text-center">
+                <div className="flex justify-center">
+                  <RowCheckbox
+                    checked={headerCheckboxState}
+                    onChange={toggleSelectAllLoaded}
+                    label="Select all loaded controllers"
+                    t={t}
+                  />
+                </div>
+              </th>
+              <th
+                className={`px-4 py-3 text-center text-xs font-bold uppercase tracking-wide ${t.theadText}`}
+              >
+                Controller IP
+              </th>
+              <th
+                className={`px-4 py-3 text-center text-xs font-bold uppercase tracking-wide ${t.theadText}`}
+              >
+                Assembly No.
+              </th>
+              <th className="px-4 py-3 text-center">
+                <SortableHeader
+                  label="CPU"
+                  active={sortKey === "cpu"}
+                  direction={sortDir}
+                  onClick={() => toggleSort("cpu")}
+                  t={t}
+                />
+              </th>
+              <th className="px-4 py-3 text-center">
+                <SortableHeader
+                  label="Base"
+                  active={sortKey === "base"}
+                  direction={sortDir}
+                  onClick={() => toggleSort("base")}
+                  t={t}
+                />
+              </th>
+              <th
+                className={`px-4 py-3 text-center text-xs font-bold uppercase tracking-wide ${t.theadText}`}
+              >
+                PSU
+              </th>
+              <th className="px-4 py-3 text-center">
+                <SortableHeader
+                  label="Camera"
+                  active={sortKey === "camera"}
+                  direction={sortDir}
+                  onClick={() => toggleSort("camera")}
+                  t={t}
+                />
+              </th>
+              <th className="px-4 py-3 text-center">
+                <SortableHeader
+                  label="Date Tested"
+                  active={sortKey === "testedAt"}
+                  direction={sortDir}
+                  onClick={() => toggleSort("testedAt")}
+                  t={t}
+                />
+              </th>
+              <th
+                className={`px-4 py-3 text-center text-xs font-bold uppercase tracking-wide ${t.theadText}`}
+              >
+                Tested By
+              </th>
+              <th className="w-[56px] px-3 py-3" />
+            </tr>
+          </thead>
+
+          <tbody>
+            {loading && controllers.length === 0 ? (
+              <tr>
+                <td colSpan={10} className="h-[400px] text-center">
+                  <div
+                    className={`flex flex-col items-center justify-center ${t.subtitle}`}
+                  >
+                    <div className="w-8 h-8 mb-3 border-2 border-current rounded-full animate-spin border-t-transparent" />
+                    <p className="text-sm font-medium">
+                      Loading tested controllers...
+                    </p>
+                  </div>
+                </td>
+              </tr>
+            ) : error && controllers.length === 0 ? (
+              <tr>
+                <td colSpan={10} className="h-[400px] text-center">
+                  <div className="flex flex-col items-center justify-center px-6">
+                    <p className="font-medium text-red-500">
+                      Failed to load controllers
+                    </p>
+                    <p className={`mt-1 max-w-md text-sm ${t.emptyDesc}`}>
+                      {error}
+                    </p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className={`mt-4 ${t.outlineBtn}`}
+                      onClick={refreshControllers}
+                    >
+                      Retry
+                    </Button>
+                  </div>
+                </td>
+              </tr>
+            ) : controllers.length === 0 ? (
+              <tr>
+                <td colSpan={10} className="h-[400px] text-center">
+                  <div className="flex flex-col items-center justify-center">
+                    <div
+                      className={`mb-3 rounded-full p-3 ${t.emptyIconBg}`}
+                    >
+                      <Search className={`h-5 w-5 ${t.emptyIconColor}`} />
+                    </div>
+                    <p className={`font-medium ${t.emptyTitle}`}>
+                      No controllers found
+                    </p>
+                    <p className={`mt-1 text-sm ${t.emptyDesc}`}>
+                      Try changing your search or filters.
+                    </p>
+                    {hasFilters && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className={`mt-4 ${t.outlineBtn}`}
+                        onClick={clearFilters}
+                      >
+                        Clear filters
+                      </Button>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            ) : (
+              controllers.map((controller) => {
+                const isSelected = selectedIds.includes(controller._id);
+                const avatarStyle = getAvatarStyle(
+                  controller.testedBy,
+                  mode,
+                );
+
+                return (
+                  <tr
+                    key={controller._id}
+                    className={`border-b transition-colors last:border-0 ${t.rowBorder} ${isSelected ? t.rowSelected : t.rowHover
+                      }`}
+                  >
+                    <td className="px-4 py-3 text-center">
+                      <div className="flex justify-center">
+                        <RowCheckbox
+                          checked={isSelected}
+                          onChange={() => toggleSelect(controller._id)}
+                          label={`Select controller ${controller.controllerIp}`}
+                          t={t}
+                        />
+                      </div>
+                    </td>
+
+                    <td className="px-4 py-3 text-center">
+                      {controller.controllerIp ? (
+                        <button
+                          onClick={() => openDetails(controller)}
+                          className="text-sm font-semibold text-indigo-500 rounded hover:text-indigo-400 hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-indigo-400/60"
+                          style={{
+                            fontFamily: "Arial, Helvetica, sans-serif",
+                          }}
+                        >
+                          {controller.controllerIp}
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => openDetails(controller)}
+                          className={`text-sm opacity-50 hover:opacity-80 ${t.cellSecondary}`}
+                          title="No controller IP recorded — click to view details"
+                        >
+                          —
+                        </button>
+                      )}
+                    </td>
+
+                    <td
+                      className={`px-4 py-3 text-center ${t.cellPrimary}`}
+                    >
+                      <CopyableValue
+                        value={controller.unitSerialNo}
+                        t={t}
+                      />
+                    </td>
+                    <td
+                      className={`px-4 py-3 text-center ${t.cellSecondary}`}
+                    >
+                      <CopyableValue value={controller.cpu} t={t} />
+                    </td>
+                    <td
+                      className={`px-4 py-3 text-center ${t.cellSecondary}`}
+                    >
+                      <CopyableValue value={controller.base} t={t} />
+                    </td>
+                    <td
+                      className={`px-4 py-3 text-center ${t.cellSecondary}`}
+                    >
+                      <CopyableValue value={controller.psu} t={t} />
+                    </td>
+                    <td
+                      className={`px-4 py-3 text-center ${t.cellSecondary}`}
+                    >
+                      <CopyableValue value={controller.camera} t={t} />
+                    </td>
+
+                    <td
+                      className={`whitespace-nowrap px-4 py-3 text-center text-sm font-medium ${t.cellDate}`}
+                    >
+                      {formatDate(controller.testedAt)}
+                    </td>
+
+                    <td className="px-4 py-3">
+                      <div className="flex items-center justify-center">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <button
+                              type="button"
+                              className="flex cursor-pointer items-center justify-center gap-2.5
+                     border-0 bg-transparent p-0
+                     focus-visible:outline-none"
+                              title={controller.status || "Not Tested"}
+                            >
+                              <div
+                                className={`flex h-7 w-7 shrink-0 items-center justify-center
+                        rounded-full text-[10px] font-bold ring-1
+                        ${avatarStyle.bg} ${avatarStyle.ring} ${avatarStyle.text}`}
+                              >
+                                {(controller.testedBy || "Imported")
+                                  .charAt(0)
+                                  .toUpperCase()}
+                              </div>
+
+                              <span
+                                className={`text-sm font-medium ${t.cellPrimary}`}
+                              >
+                                {controller.testedBy || "Imported"}
+                              </span>
+                            </button>
+                          </TooltipTrigger>
+
+                          <TooltipContent
+                            side="top"
+                            align="center"
+                            sideOffset={8}
+                            className="max-w-[320px] whitespace-normal break-words"
+                          >
+                            {controller.status || "Not Tested"}
+                          </TooltipContent>
+                        </Tooltip>
+                      </div>
+                    </td>
+
+                    <td className="px-3 py-3">
+                      <div className="flex justify-center">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className={`h-8 w-8 ${t.mutedBtn}`}
+                              aria-label={`Actions for ${controller.controllerIp}`}
+                            >
+                              <MoreHorizontal className="w-4 h-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+
+                          <DropdownMenuContent
+                            align="end"
+                            className={`w-56 ${t.dropdownContent}`}
+                          >
+                            <DropdownMenuItem
+                              onClick={() => openDetails(controller)}
+                              className={`cursor-pointer ${t.dropdownItemHover}`}
+                            >
+                              <Eye className="w-4 h-4 mr-2 text-indigo-500" />
+                              View Details
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => openEditForm(controller)}
+                              className={`cursor-pointer ${t.dropdownItemHover}`}
+                            >
+                              <FileCheck2 className="mr-2 h-4 w-4 text-amber-500" />
+                              Edit Record
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => openHistory(controller)}
+                              className={`cursor-pointer ${t.dropdownItemHover}`}
+                            >
+                              <History className="w-4 h-4 mr-2 text-violet-500" />
+                              View Test History
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator
+                              className={t.dropdownSeparator}
+                            />
+                            <DropdownMenuItem
+                              disabled={generatingReports}
+                              onClick={() =>
+                                generateSelectedAllPassedReports([
+                                  controller._id,
+                                ])
+                              }
+                              className={`cursor-pointer ${t.dropdownItemHover}`}
+                            >
+                              <FileSpreadsheet className="w-4 h-4 mr-2 text-emerald-500" />
+                              Generate All-Passed Report
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+
+        {/* Sentinel: when this enters the table's scroll viewport,
+                the next backend page is fetched automatically. */}
+        <div
+          ref={loadMoreRef}
+          aria-hidden="true"
+          className="w-full h-1"
+        />
+      </div>
+    </div>
+  )
+});
+
 export default function TestedControllers() {
   const [mode, setMode] = useState("light"); // "dark" | "light"
   const t = THEME[mode];
@@ -438,12 +805,16 @@ export default function TestedControllers() {
   const PAGE_SIZE = 20;
 
   const [controllers, setControllers] = useState([]);
+  const visibleControllers = controllers;
+
   const [totalControllers, setTotalControllers] = useState(0);
   const [nextPage, setNextPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
 
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(false); // Initial load only
+  const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
+  const hasLoadedOnceRef = useRef(false);
   const [error, setError] = useState("");
 
   const [selectedIds, setSelectedIds] = useState([]);
@@ -455,6 +826,172 @@ export default function TestedControllers() {
   const [historyOpen, setHistoryOpen] = useState(false);
 
   const [generatingReports, setGeneratingReports] = useState(false);
+
+  const [searchField, setSearchField] = useState("all");
+  const [testerOptions, setTesterOptions] = useState([]);
+
+  const [stableStats, setStableStats] = useState({
+    total: 0,
+    uniqueTesters: 0,
+    latestDate: "—",
+  });
+
+  const emptyForm = {
+    controllerIp: "",
+    unitSerialNo: "",
+    cpu: "",
+    base: "",
+    psu: "",
+    camera: "",
+    testedBy: "",
+    status: "Tested",
+    remark: "",
+  };
+
+  const [formOpen, setFormOpen] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [formData, setFormData] = useState(emptyForm);
+  const [savingRecord, setSavingRecord] = useState(false);
+  const [formError, setFormError] = useState("");
+
+  const openAddForm = () => {
+    setEditingId(null);
+    setFormData({ ...emptyForm });
+    setFormError("");
+    setFormOpen(true);
+  };
+
+  const openEditForm = (controller) => {
+    setEditingId(controller._id);
+    setFormData({
+      controllerIp: controller.controllerIp ?? "",
+      unitSerialNo: controller.unitSerialNo ?? "",
+      cpu: controller.cpu ?? "",
+      base: controller.base ?? "",
+      psu: controller.psu ?? "",
+      camera: controller.camera ?? "",
+      testedBy: controller.testedBy ?? "",
+      status: controller.status ?? "Tested",
+      remark: controller.remark ?? "",
+    });
+    setFormError("");
+    setFormOpen(true);
+  };
+
+  const handleFormChange = (field, value) => {
+    setFormData((current) => ({
+      ...current,
+      [field]: value,
+    }));
+  };
+
+  const saveManualRecord = async (e) => {
+    e.preventDefault();
+
+    if (savingRecord) return;
+
+    setSavingRecord(true);
+    setFormError("");
+
+    try {
+      const isEditing = Boolean(editingId);
+      const url = isEditing
+        ? `${API_URL}/api/tested-controllers/${editingId}`
+        : `${API_URL}/api/tested-controllers`;
+
+      const response = await fetch(url, {
+        method: isEditing ? "PUT" : "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(formData),
+      });
+
+
+      const data = await response.json().catch(() => ({}));
+
+      console.log("[MANUAL SAVE] Sending record:", {
+        isEditing,
+        url,
+        formData,
+      });
+
+      if (!response.ok || data.success === false) {
+        throw new Error(data.error || data.message || "Failed to save record");
+      }
+
+      // Update the visible row immediately after a successful edit.
+      // The API may return database field names (cameraSr, deviceIP, etc.),
+      // while the table uses the normalized UI names (camera, controllerIp).
+      if (isEditing) {
+        const savedRecord = data.data || {};
+
+        const updatedFields = {
+          ...formData,
+          ...savedRecord,
+
+          controllerIp:
+            savedRecord.controllerIp ??
+            savedRecord.deviceIP ??
+            formData.controllerIp,
+
+          unitSerialNo:
+            savedRecord.unitSerialNo ??
+            savedRecord.assemblySrNo ??
+            formData.unitSerialNo,
+
+          cpu:
+            savedRecord.cpu ??
+            savedRecord.cpuSr ??
+            formData.cpu,
+
+          base:
+            savedRecord.base ??
+            savedRecord.basePcbSr ??
+            formData.base,
+
+          camera:
+            savedRecord.camera ??
+            savedRecord.cameraSr ??
+            formData.camera,
+
+          psu:
+            savedRecord.psu ??
+            savedRecord.psuSrNo ??
+            savedRecord.psuSr ??
+            formData.psu,
+        };
+
+        setControllers((current) =>
+          current.map((item) =>
+            String(item._id) === String(editingId)
+              ? { ...item, ...updatedFields, _id: item._id }
+              : item,
+          ),
+        );
+
+        setSelectedController((current) =>
+          current && String(current._id) === String(editingId)
+            ? { ...current, ...updatedFields, _id: current._id }
+            : current,
+        );
+      }
+
+      setFormOpen(false);
+      setEditingId(null);
+
+      // Re-fetch in the background to keep pagination and server-derived
+      // fields in sync; the row is already updated locally above.
+      refreshControllers();
+
+      console.log("[MANUAL SAVE] Local record updated; refresh requested");
+    } catch (err) {
+      console.error("Manual record save failed:", err);
+      setFormError(err.message || "Failed to save record");
+    } finally {
+      setSavingRecord(false);
+    }
+  };
 
   const generateSelectedAllPassedReports = async (ids = selectedIds) => {
     if (!ids.length || generatingReports) return;
@@ -483,7 +1020,7 @@ export default function TestedControllers() {
 
       alert(
         data.message ||
-          `All-Passed reports generated for ${ids.length} controller(s).`,
+        `All-Passed reports generated for ${ids.length} controller(s).`,
       );
     } catch (err) {
       console.error("All-Passed report generation failed:", err);
@@ -506,11 +1043,17 @@ export default function TestedControllers() {
       return;
     }
 
-    const requestId = ++requestIdRef.current;
+    // Only replacement requests (initial load / refresh / filter changes)
+    // establish a new request generation. Loading another page must not
+    // invalidate the active refresh and leave its spinner stuck.
+    const requestId = replace
+      ? ++requestIdRef.current
+      : requestIdRef.current;
 
     try {
       if (replace) {
-        setLoading(true);
+        setLoading(!hasLoadedOnceRef.current);
+        setRefreshing(hasLoadedOnceRef.current);
       } else {
         loadingMoreRef.current = true;
         setLoadingMore(true);
@@ -527,6 +1070,7 @@ export default function TestedControllers() {
 
       if (search.trim()) {
         params.set("search", search.trim());
+        params.set("searchField", searchField);
       }
 
       if (statusFilter !== "all") {
@@ -551,19 +1095,54 @@ export default function TestedControllers() {
         return;
       }
 
+
+      hasLoadedOnceRef.current = true;
+
       const newRecords = Array.isArray(data.data)
         ? data.data.map((item) => ({
-            ...item,
-            controllerIp: item.deviceIP ?? "",
-            assemblyNo: item.assemblySrNo ?? "",
-            cpu: item.cpuSr ?? "",
-            base: item.basePcbSr ?? "",
-            camera: item.cameraSr ?? "",
-            psu: item.psuSrNo ?? "",
-            testedAt: item.testedAt ?? item.dateTested ?? null,
-            testedBy: item.testedBy ?? "Imported",
-          }))
+          ...item,
+
+          controllerIp:
+            item.controllerIp ?? item.deviceIP ?? "",
+
+          unitSerialNo:
+            item.unitSerialNo ?? item.assemblySrNo ?? "",
+
+          cpu:
+            item.cpu ?? item.cpuSr ?? "",
+
+          base:
+            item.base ?? item.basePcbSr ?? "",
+
+          camera:
+            item.camera ?? item.cameraSr ?? "",
+
+          psu:
+            item.psu ?? item.psuSrNo ?? item.psuSr ?? "",
+
+          testedAt:
+            item.testedAt ?? item.dateTested ?? null,
+
+          testedBy:
+            item.testedBy ?? "Imported",
+        }))
         : [];
+
+      console.log("[MAP] Mapped record count:", newRecords.length);
+
+      console.table(
+        newRecords.map((item) => ({
+          _id: item._id,
+          controllerIp: item.controllerIp,
+          unitSerialNo: item.unitSerialNo,
+          cpu: item.cpu,
+          base: item.base,
+          camera: item.camera,
+          psu: item.psu,
+          testedBy: item.testedBy,
+          status: item.status,
+        }))
+      );
 
       const paginationData = data.pagination || {};
       const total = Number(paginationData.total || 0);
@@ -596,6 +1175,7 @@ export default function TestedControllers() {
       if (requestId === requestIdRef.current) {
         if (replace) {
           setLoading(false);
+          setRefreshing(false);
         } else {
           loadingMoreRef.current = false;
           setLoadingMore(false);
@@ -610,8 +1190,8 @@ export default function TestedControllers() {
     loadingMoreRef.current = false;
 
     setLoadingMore(false);
-    setControllers([]);
-    setTotalControllers(0);
+    // setControllers([]);
+    // setTotalControllers(0);
     setNextPage(1);
     setHasMore(true);
     setSelectedIds([]);
@@ -621,7 +1201,8 @@ export default function TestedControllers() {
     }, 350);
 
     return () => clearTimeout(timer);
-  }, [search, statusFilter, testerFilter, sortKey, sortDir]);
+  }, [search, searchField, statusFilter, testerFilter, sortKey, sortDir]);
+
   // Infinite scroll uses an IntersectionObserver instead of relying on the
   // scroll event. This is more reliable when the table is inside a nested
   // overflow container.
@@ -659,6 +1240,7 @@ export default function TestedControllers() {
     hasMore,
     nextPage,
     search,
+    searchField,
     statusFilter,
     testerFilter,
     sortKey,
@@ -667,12 +1249,15 @@ export default function TestedControllers() {
 
   const navigate = useNavigate();
 
-  const testers = useMemo(
-    () => [
-      ...new Set(controllers.map((item) => item.testedBy).filter(Boolean)),
-    ],
-    [controllers],
-  );
+  const testers = useMemo(() => {
+    const currentTesters = controllers
+      .map((item) => item.testedBy)
+      .filter(Boolean);
+
+    return [...new Set([...testerOptions, ...currentTesters])].sort(
+      (a, b) => a.localeCompare(b)
+    );
+  }, [controllers, testerOptions]);
 
   const stats = {
     total: totalControllers,
@@ -680,15 +1265,16 @@ export default function TestedControllers() {
     latestDate:
       controllers.length > 0
         ? formatDate(
-            controllers.reduce((latest, controller) => {
-              if (!latest?.testedAt) return controller;
-              if (!controller?.testedAt) return latest;
+          controllers.reduce((latest, controller) => {
+            if (!latest?.testedAt) return controller;
+            if (!controller?.testedAt) return latest;
 
-              return new Date(controller.testedAt) > new Date(latest.testedAt)
-                ? controller
-                : latest;
-            }, controllers[0]).testedAt,
-          )
+            return new Date(controller.testedAt) >
+              new Date(latest.testedAt)
+              ? controller
+              : latest;
+          }, controllers[0]).testedAt
+        )
         : "—",
   };
 
@@ -697,7 +1283,14 @@ export default function TestedControllers() {
   // nothing. This actually orders the current page's rows.
   // Backend already returns the records in the correct global order.
   // Do NOT sort only the currently loaded records here.
-  const visibleControllers = controllers;
+
+  console.log("[RENDER] Controllers in state:", controllers.length);
+  console.log("[RENDER] Visible controllers:", visibleControllers.length);
+  console.log("[RENDER] Current filters:", {
+    search,
+    statusFilter,
+    testerFilter,
+  });
 
   const allLoadedSelected =
     visibleControllers.length > 0 &&
@@ -767,7 +1360,35 @@ export default function TestedControllers() {
         throw new Error(data.error || "Failed to load controller details");
       }
 
-      setSelectedController(data.data);
+      const item = data.data || {};
+
+      setSelectedController({
+        ...item,
+
+        controllerIp:
+          item.controllerIp ?? item.deviceIP ?? "",
+
+        unitSerialNo:
+          item.unitSerialNo ?? item.unitSerialNo ?? item.assemblySrNo ?? "",
+
+        cpu:
+          item.cpu ?? item.cpuSr ?? "",
+
+        base:
+          item.base ?? item.basePcbSr ?? "",
+
+        psu:
+          item.psu ?? item.psuSrNo ?? item.psuSr ?? "",
+
+        camera:
+          item.camera ?? item.cameraSr ?? "",
+
+        testedAt:
+          item.testedAt ?? item.dateTested ?? null,
+
+        testedBy:
+          item.testedBy ?? "Imported",
+      });
     } catch (err) {
       console.error("Failed to load controller details:", err);
     }
@@ -799,6 +1420,7 @@ export default function TestedControllers() {
 
   const clearFilters = () => {
     setSearch("");
+    setSearchField("all");
     setStatusFilter("all");
     setTesterFilter("all");
   };
@@ -806,8 +1428,8 @@ export default function TestedControllers() {
   const refreshControllers = () => {
     requestIdRef.current += 1;
     loadingMoreRef.current = false;
-    setControllers([]);
-    setTotalControllers(0);
+    // setControllers([]);
+    // setTotalControllers(0);
     setNextPage(1);
     setHasMore(true);
     setSelectedIds([]);
@@ -815,7 +1437,10 @@ export default function TestedControllers() {
   };
 
   const hasFilters =
-    search.trim() !== "" || statusFilter !== "all" || testerFilter !== "all";
+    search.trim() !== "" ||
+    searchField !== "all" ||
+    statusFilter !== "all" ||
+    testerFilter !== "all";
 
   return (
     <TooltipProvider delayDuration={200}>
@@ -898,6 +1523,14 @@ export default function TestedControllers() {
             </Button>
 
             <Button
+              onClick={openAddForm}
+              className="h-9 gap-2 bg-emerald-600 text-white hover:bg-emerald-500"
+            >
+              <span className="text-lg leading-none">+</span>
+              Add Record
+            </Button>
+
+            <Button
               disabled={selectedIds.length === 0 || generatingReports}
               onClick={() => generateSelectedAllPassedReports()}
               className="gap-2 text-white bg-indigo-500 h-9 hover:bg-indigo-400 disabled:opacity-50"
@@ -905,9 +1538,8 @@ export default function TestedControllers() {
               <FileSpreadsheet className="w-4 h-4" />
               {generatingReports
                 ? "Generating..."
-                : `Generate All-Passed Reports${
-                    selectedIds.length ? ` (${selectedIds.length})` : ""
-                  }`}
+                : `Generate All-Passed Reports${selectedIds.length ? ` (${selectedIds.length})` : ""
+                }`}
             </Button>
           </div>
         </div>
@@ -927,6 +1559,25 @@ export default function TestedControllers() {
                 className={`h-10 pl-9 text-sm focus-visible:border-indigo-500 focus-visible:ring-1 focus-visible:ring-indigo-500/50 ${t.input}`}
               />
             </div>
+
+            <Select
+              value={searchField}
+              onValueChange={setSearchField}
+            >
+              <SelectTrigger className={`w-[150px] h-10 ${t.selectTrigger}`}>
+                <SelectValue placeholder="Search field" />
+              </SelectTrigger>
+
+              <SelectContent className={t.selectContent}>
+                <SelectItem value="all">All fields</SelectItem>
+                <SelectItem value="cpu">CPU only</SelectItem>
+                <SelectItem value="base">Base only</SelectItem>
+                <SelectItem value="camera">Camera only</SelectItem>
+                <SelectItem value="psu">PSU only</SelectItem>
+                <SelectItem value="assemblyNo">Assembly only</SelectItem>
+                <SelectItem value="controllerIp">IP only</SelectItem>
+              </SelectContent>
+            </Select>
 
             <div className="flex flex-wrap items-center gap-2">
               <Select value={statusFilter} onValueChange={setStatusFilter}>
@@ -969,15 +1620,25 @@ export default function TestedControllers() {
             </div>
           </div>
 
+          {refreshing && (
+            <div
+              className={`flex items-center gap-2 text-xs ${t.subtitle}`}
+              role="status"
+              aria-live="polite"
+            >
+              <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-indigo-500 border-t-transparent" />
+              Updating records...
+            </div>
+          )}
+
           {/* Selection toolbar */}
           {selectedIds.length > 0 && (
             <div className="mb-4 flex items-center justify-between rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2.5">
               <div className="flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-amber-500" />
                 <span
-                  className={`text-sm font-medium ${
-                    mode === "dark" ? "text-amber-200" : "text-amber-800"
-                  }`}
+                  className={`text-sm font-medium ${mode === "dark" ? "text-amber-200" : "text-amber-800"
+                    }`}
                 >
                   {selectedIds.length}{" "}
                   {selectedIds.length === 1 ? "controller" : "controllers"}{" "}
@@ -1009,339 +1670,31 @@ export default function TestedControllers() {
           )}
 
           {/* Table */}
-          <div
-            className={`flex-1 min-h-0 overflow-hidden rounded-lg border ${t.tableWrap}`}
-          >
-            <div ref={scrollContainerRef} className="h-full overflow-auto">
-              <table className="w-full min-w-[1250px] caption-bottom text-sm">
-                <thead
-                  className={`sticky top-0 z-10 border-b backdrop-blur ${t.theadWrap}`}
-                >
-                  <tr>
-                    <th className="w-[48px] px-4 py-3 text-center">
-                      <div className="flex justify-center">
-                        <RowCheckbox
-                          checked={headerCheckboxState}
-                          onChange={toggleSelectAllLoaded}
-                          label="Select all loaded controllers"
-                          t={t}
-                        />
-                      </div>
-                    </th>
-                    <th
-                      className={`px-4 py-3 text-center text-xs font-bold uppercase tracking-wide ${t.theadText}`}
-                    >
-                      Controller IP
-                    </th>
-                    <th
-                      className={`px-4 py-3 text-center text-xs font-bold uppercase tracking-wide ${t.theadText}`}
-                    >
-                      Assembly No.
-                    </th>
-                    <th className="px-4 py-3 text-center">
-                      <SortableHeader
-                        label="CPU"
-                        active={sortKey === "cpuSr"}
-                        direction={sortDir}
-                        onClick={() => toggleSort("cpuSr")}
-                        t={t}
-                      />
-                    </th>
-                    <th className="px-4 py-3 text-center">
-                      <SortableHeader
-                        label="Base"
-                        active={sortKey === "basePcbSr"}
-                        direction={sortDir}
-                        onClick={() => toggleSort("basePcbSr")}
-                        t={t}
-                      />
-                    </th>
-                    <th
-                      className={`px-4 py-3 text-center text-xs font-bold uppercase tracking-wide ${t.theadText}`}
-                    >
-                      PSU
-                    </th>
-                    <th className="px-4 py-3 text-center">
-                      <SortableHeader
-                        label="Camera"
-                        active={sortKey === "cameraSr"}
-                        direction={sortDir}
-                        onClick={() => toggleSort("cameraSr")}
-                        t={t}
-                      />
-                    </th>
-                    <th className="px-4 py-3 text-center">
-                      <SortableHeader
-                        label="Date Tested"
-                        active={sortKey === "testedAt"}
-                        direction={sortDir}
-                        onClick={() => toggleSort("testedAt")}
-                        t={t}
-                      />
-                    </th>
-                    <th
-                      className={`px-4 py-3 text-center text-xs font-bold uppercase tracking-wide ${t.theadText}`}
-                    >
-                      Tested By
-                    </th>
-                    <th className="w-[56px] px-3 py-3" />
-                  </tr>
-                </thead>
+          <ControllersTable
+            controllers={controllers}
+            selectedIds={selectedIds}
+            headerCheckboxState={headerCheckboxState}
+            toggleSelectAllLoaded={toggleSelectAllLoaded}
+            toggleSelect={toggleSelect}
+            toggleSort={toggleSort}
+            sortKey={sortKey}
+            sortDir={sortDir}
+            openDetails={openDetails}
+            openEditForm={openEditForm}
+            openHistory={openHistory}
+            generateSelectedAllPassedReports={generateSelectedAllPassedReports}
+            generatingReports={generatingReports}
+            loading={loading}
+            error={error}
+            refreshControllers={refreshControllers}
+            clearFilters={clearFilters}
+            hasFilters={hasFilters}
+            t={t}
+            mode={mode}
+            scrollContainerRef={scrollContainerRef}
+            loadMoreRef={loadMoreRef}
+          />
 
-                <tbody>
-                  {loading ? (
-                    <tr>
-                      <td colSpan={10} className="h-[400px] text-center">
-                        <div
-                          className={`flex flex-col items-center justify-center ${t.subtitle}`}
-                        >
-                          <div className="w-8 h-8 mb-3 border-2 border-current rounded-full animate-spin border-t-transparent" />
-                          <p className="text-sm font-medium">
-                            Loading tested controllers...
-                          </p>
-                        </div>
-                      </td>
-                    </tr>
-                  ) : error ? (
-                    <tr>
-                      <td colSpan={10} className="h-[400px] text-center">
-                        <div className="flex flex-col items-center justify-center px-6">
-                          <p className="font-medium text-red-500">
-                            Failed to load controllers
-                          </p>
-                          <p className={`mt-1 max-w-md text-sm ${t.emptyDesc}`}>
-                            {error}
-                          </p>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className={`mt-4 ${t.outlineBtn}`}
-                            onClick={refreshControllers}
-                          >
-                            Retry
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ) : visibleControllers.length === 0 ? (
-                    <tr>
-                      <td colSpan={10} className="h-[400px] text-center">
-                        <div className="flex flex-col items-center justify-center">
-                          <div
-                            className={`mb-3 rounded-full p-3 ${t.emptyIconBg}`}
-                          >
-                            <Search className={`h-5 w-5 ${t.emptyIconColor}`} />
-                          </div>
-                          <p className={`font-medium ${t.emptyTitle}`}>
-                            No controllers found
-                          </p>
-                          <p className={`mt-1 text-sm ${t.emptyDesc}`}>
-                            Try changing your search or filters.
-                          </p>
-                          {hasFilters && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className={`mt-4 ${t.outlineBtn}`}
-                              onClick={clearFilters}
-                            >
-                              Clear filters
-                            </Button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ) : (
-                    visibleControllers.map((controller) => {
-                      const isSelected = selectedIds.includes(controller._id);
-                      const avatarStyle = getAvatarStyle(
-                        controller.testedBy,
-                        mode,
-                      );
-
-                      return (
-                        <tr
-                          key={controller._id}
-                          className={`border-b transition-colors last:border-0 ${t.rowBorder} ${
-                            isSelected ? t.rowSelected : t.rowHover
-                          }`}
-                        >
-                          <td className="px-4 py-3 text-center">
-                            <div className="flex justify-center">
-                              <RowCheckbox
-                                checked={isSelected}
-                                onChange={() => toggleSelect(controller._id)}
-                                label={`Select controller ${controller.controllerIp}`}
-                                t={t}
-                              />
-                            </div>
-                          </td>
-
-                          <td className="px-4 py-3 text-center">
-                            {controller.controllerIp ? (
-                              <button
-                                onClick={() => openDetails(controller)}
-                                className="text-sm font-semibold text-indigo-500 rounded hover:text-indigo-400 hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-indigo-400/60"
-                                style={{
-                                  fontFamily: "Arial, Helvetica, sans-serif",
-                                }}
-                              >
-                                {controller.controllerIp}
-                              </button>
-                            ) : (
-                              <button
-                                onClick={() => openDetails(controller)}
-                                className={`text-sm opacity-50 hover:opacity-80 ${t.cellSecondary}`}
-                                title="No controller IP recorded — click to view details"
-                              >
-                                —
-                              </button>
-                            )}
-                          </td>
-
-                          <td
-                            className={`px-4 py-3 text-center ${t.cellPrimary}`}
-                          >
-                            <CopyableValue
-                              value={controller.assemblyNo}
-                              t={t}
-                            />
-                          </td>
-                          <td
-                            className={`px-4 py-3 text-center ${t.cellSecondary}`}
-                          >
-                            <CopyableValue value={controller.cpu} t={t} />
-                          </td>
-                          <td
-                            className={`px-4 py-3 text-center ${t.cellSecondary}`}
-                          >
-                            <CopyableValue value={controller.base} t={t} />
-                          </td>
-                          <td
-                            className={`px-4 py-3 text-center ${t.cellSecondary}`}
-                          >
-                            <CopyableValue value={controller.psu} t={t} />
-                          </td>
-                          <td
-                            className={`px-4 py-3 text-center ${t.cellSecondary}`}
-                          >
-                            <CopyableValue value={controller.camera} t={t} />
-                          </td>
-
-                          <td
-                            className={`whitespace-nowrap px-4 py-3 text-center text-sm font-medium ${t.cellDate}`}
-                          >
-                            {formatDate(controller.testedAt)}
-                          </td>
-
-                          <td className="px-4 py-3">
-                            <div className="flex items-center justify-center">
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <button
-                                    type="button"
-                                    className="flex cursor-pointer items-center justify-center gap-2.5
-                     border-0 bg-transparent p-0
-                     focus-visible:outline-none"
-                                    title={controller.status || "Not Tested"}
-                                  >
-                                    <div
-                                      className={`flex h-7 w-7 shrink-0 items-center justify-center
-                        rounded-full text-[10px] font-bold ring-1
-                        ${avatarStyle.bg} ${avatarStyle.ring} ${avatarStyle.text}`}
-                                    >
-                                      {(controller.testedBy || "Imported")
-                                        .charAt(0)
-                                        .toUpperCase()}
-                                    </div>
-
-                                    <span
-                                      className={`text-sm font-medium ${t.cellPrimary}`}
-                                    >
-                                      {controller.testedBy || "Imported"}
-                                    </span>
-                                  </button>
-                                </TooltipTrigger>
-
-                                <TooltipContent
-                                  side="top"
-                                  align="center"
-                                  sideOffset={8}
-                                  className="max-w-[320px] whitespace-normal break-words"
-                                >
-                                  {controller.status || "Not Tested"}
-                                </TooltipContent>
-                              </Tooltip>
-                            </div>
-                          </td>
-
-                          <td className="px-3 py-3">
-                            <div className="flex justify-center">
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className={`h-8 w-8 ${t.mutedBtn}`}
-                                    aria-label={`Actions for ${controller.controllerIp}`}
-                                  >
-                                    <MoreHorizontal className="w-4 h-4" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-
-                                <DropdownMenuContent
-                                  align="end"
-                                  className={`w-56 ${t.dropdownContent}`}
-                                >
-                                  <DropdownMenuItem
-                                    onClick={() => openDetails(controller)}
-                                    className={`cursor-pointer ${t.dropdownItemHover}`}
-                                  >
-                                    <Eye className="w-4 h-4 mr-2 text-indigo-500" />
-                                    View Details
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    onClick={() => openHistory(controller)}
-                                    className={`cursor-pointer ${t.dropdownItemHover}`}
-                                  >
-                                    <History className="w-4 h-4 mr-2 text-violet-500" />
-                                    View Test History
-                                  </DropdownMenuItem>
-                                  <DropdownMenuSeparator
-                                    className={t.dropdownSeparator}
-                                  />
-                                  <DropdownMenuItem
-                                    disabled={generatingReports}
-                                    onClick={() =>
-                                      generateSelectedAllPassedReports([
-                                        controller._id,
-                                      ])
-                                    }
-                                    className={`cursor-pointer ${t.dropdownItemHover}`}
-                                  >
-                                    <FileSpreadsheet className="w-4 h-4 mr-2 text-emerald-500" />
-                                    Generate All-Passed Report
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-
-              {/* Sentinel: when this enters the table's scroll viewport,
-                the next backend page is fetched automatically. */}
-              <div
-                ref={loadMoreRef}
-                aria-hidden="true"
-                className="w-full h-1"
-              />
-            </div>
-          </div>
 
           {/* Infinite-scroll status */}
           <div className="flex items-center justify-center pt-3 pb-1 shrink-0">
@@ -1396,7 +1749,7 @@ export default function TestedControllers() {
                         />
                         <DetailRow
                           label="Assembly No."
-                          value={selectedController.assemblyNo}
+                          value={selectedController.unitSerialNo}
                           t={t}
                         />
                       </div>
@@ -1530,11 +1883,10 @@ export default function TestedControllers() {
                         <div className="flex items-center justify-between gap-3 mb-3">
                           <div className="flex items-center gap-2">
                             <span
-                              className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
-                                index === 0
-                                  ? "bg-indigo-500/10 text-indigo-500"
-                                  : "bg-slate-500/10 text-slate-500"
-                              }`}
+                              className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${index === 0
+                                ? "bg-indigo-500/10 text-indigo-500"
+                                : "bg-slate-500/10 text-slate-500"
+                                }`}
                             >
                               {index + 1}
                             </span>
@@ -1562,7 +1914,7 @@ export default function TestedControllers() {
                           />
                           <DetailRow
                             label="Assembly No."
-                            value={record.assemblyNo}
+                            value={record.unitSerialNo}
                             t={t}
                           />
                           <DetailRow label="CPU" value={record.cpu} t={t} />
@@ -1597,6 +1949,119 @@ export default function TestedControllers() {
                   </div>
                 )}
               </div>
+            </SheetContent>
+          </Sheet>
+
+          {/* MANUAL FORM SHEET */}
+          <Sheet open={formOpen} onOpenChange={setFormOpen}>
+            <SheetContent
+              className={`w-full overflow-y-auto border-l sm:max-w-lg ${t.sheetBg}`}
+            >
+              <SheetHeader>
+                <SheetTitle className={t.heading}>
+                  {editingId ? "Edit Controller Record" : "Add Controller Record"}
+                </SheetTitle>
+                <SheetDescription className={t.subtitle}>
+                  {editingId
+                    ? "Update the saved controller information."
+                    : "Manually add a controller to the tested controllers registry."}
+                </SheetDescription>
+              </SheetHeader>
+
+              <form onSubmit={saveManualRecord} className="mt-6 space-y-4">
+                {[
+                  { key: "controllerIp", label: "Controller IP", required: true },
+                  { key: "unitSerialNo", label: "Assembly No.", required: true },
+                  { key: "cpu", label: "CPU Serial No.", required: true },
+                  { key: "base", label: "Base PCB Serial No.", required: true },
+                  { key: "psu", label: "PSU Serial No.", required: true },
+                  { key: "camera", label: "Camera Serial No.", required: true },
+                  { key: "testedBy", label: "Tested By", required: true },
+                ].map((field) => (
+                  <div key={field.key} className="space-y-1.5">
+                    <label
+                      htmlFor={`manual-${field.key}`}
+                      className={`text-sm font-medium ${t.detailLabel}`}
+                    >
+                      {field.label}
+                    </label>
+                    <Input
+                      id={`manual-${field.key}`}
+                      value={formData[field.key]}
+                      onChange={(e) =>
+                        handleFormChange(field.key, e.target.value)
+                      }
+                      required={field.required}
+                      className={t.input}
+                      placeholder={`Enter ${field.label.toLowerCase()}`}
+                    />
+                  </div>
+                ))}
+
+                <div className="space-y-1.5">
+                  <label className={`text-sm font-medium ${t.detailLabel}`}>
+                    Status
+                  </label>
+                  <Select
+                    value={formData.status}
+                    onValueChange={(value) => handleFormChange("status", value)}
+                  >
+                    <SelectTrigger className={t.selectTrigger}>
+                      <SelectValue placeholder="Select status" />
+                    </SelectTrigger>
+                    <SelectContent className={t.selectContent}>
+                      <SelectItem value="Tested">Tested</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label
+                    htmlFor="manual-remark"
+                    className={`text-sm font-medium ${t.detailLabel}`}
+                  >
+                    Remark
+                  </label>
+                  <textarea
+                    id="manual-remark"
+                    value={formData.remark}
+                    onChange={(e) => handleFormChange("remark", e.target.value)}
+                    rows={3}
+                    className={`w-full rounded-md border p-3 text-sm outline-none focus:ring-2 focus:ring-indigo-500 ${t.input}`}
+                    placeholder="Optional notes"
+                  />
+                </div>
+
+                {formError && (
+                  <div className="rounded-md border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-500">
+                    {formError}
+                  </div>
+                )}
+
+                <div className="flex gap-2 pt-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className={`flex-1 ${t.outlineBtn}`}
+                    onClick={() => setFormOpen(false)}
+                    disabled={savingRecord}
+                  >
+                    Cancel
+                  </Button>
+
+                  <Button
+                    type="submit"
+                    className="flex-1 bg-indigo-500 text-white hover:bg-indigo-400"
+                    disabled={savingRecord}
+                  >
+                    {savingRecord
+                      ? "Saving..."
+                      : editingId
+                        ? "Save Changes"
+                        : "Add Record"}
+                  </Button>
+                </div>
+              </form>
             </SheetContent>
           </Sheet>
         </div>

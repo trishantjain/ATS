@@ -80,13 +80,11 @@ async function generateFanMainReport({
 async function reportWriter({
     runResult,
     destination,
-    // outputDir,
     mac = "unknown-device",
-    // unitSerialNo = '0000',
-    cpuSrNo = "",
-    basePcbSrNo = "",
-    cameraSrNo = "",
-    psuSrNo = "",
+    cpu = "",
+    base = "",
+    camera = "",
+    psu = "",
     unitSerialNo = "",
     runCompleted = true,
     testLevel = "full-controller"
@@ -153,7 +151,7 @@ async function reportWriter({
     let fileName
 
     if (testLevel === "green-pcb") {
-        fileName = `${reportNo}_${basePcbSrNo}_${getFormattedDateTime("file")}_${safeMac}.xlsx`;
+        fileName = `${reportNo}_${base}_${getFormattedDateTime("file")}_${safeMac}.xlsx`;
     } else {
         fileName = `${reportNo}_${safeUnitSerialNo}_${getFormattedDateTime("file")}_${safeMac}.xlsx`;
     }
@@ -181,7 +179,7 @@ async function reportWriter({
     // HEADER FOR IMONI (GREEN PCB) TESTING
     else if ((destination === "iMoni") && (testLevel === "green-pcb")) {
         worksheet.getCell("B2").value = reportNo;
-        worksheet.getCell("B3").value = basePcbSrNo || "NA";
+        worksheet.getCell("B3").value = base || "NA";
         // worksheet.getCell("B4").value = whitePcbSrNo || "NA";
         worksheet.getCell("B4").value = getFormattedDateTime();
         // worksheet.getCell("B5").value = runResult.summary.testLevel;
@@ -206,10 +204,10 @@ async function reportWriter({
 
         worksheet.getCell("B6").value = mac;
 
-        worksheet.getCell("C7").value = cpuSrNo || "NA";
-        worksheet.getCell("D7").value = basePcbSrNo || "NA";
-        worksheet.getCell("E7").value = cameraSrNo || "NA";
-        worksheet.getCell("F7").value = psuSrNo || "NA";
+        worksheet.getCell("C7").value = cpu || "NA";
+        worksheet.getCell("D7").value = base || "NA";
+        worksheet.getCell("E7").value = camera || "NA";
+        worksheet.getCell("F7").value = psu || "NA";
 
         worksheet.getCell("B7").value = runResult.summary.total;
 
@@ -416,14 +414,16 @@ async function reportWriter({
     // exactly this run's hardware data / file name.
     if (destination === "iMoni") {
         registerRun(reportNo, {
+            runResult,
+            destination,
             testLevel,
             fileName,
             mac,
             unitSerialNo,
-            cpuSrNo,
-            basePcbSrNo,
-            cameraSrNo,
-            psuSrNo,
+            cpu,
+            base,
+            camera,
+            psu,
             generatedAt: getFormattedDateTime(),
             eligible: Boolean(runCompleted),
         });
@@ -457,15 +457,15 @@ function registerRun(runId, context) {
 
 async function writeAllPassedReport(runId, run) {
     const {
-        testLevel,
         fileName,
+        generatedAt,
         mac,
         unitSerialNo,
-        cpuSrNo,
-        basePcbSrNo,
-        cameraSrNo,
-        psuSrNo,
-        generatedAt,
+        cpu = "",
+        base = "",
+        camera = "",
+        psu = "",
+        testLevel,
     } = run;
 
     const allPassedDir = path.join(
@@ -480,11 +480,16 @@ async function writeAllPassedReport(runId, run) {
         fs.mkdirSync(allPassedDir, { recursive: true });
     }
 
-    // Select correct All Passed template
     const allPassedTemplate =
         testLevel === "green-pcb"
-            ? path.join(__dirname, "./template/green-pcb_allpassed_template.xlsx")
-            : path.join(__dirname, "./template/srms_allpassed_template.xlsx");
+            ? path.join(
+                __dirname,
+                "./template/green-pcb_allpassed_template.xlsx"
+            )
+            : path.join(
+                __dirname,
+                "./template/srms_allpassed_template.xlsx"
+            );
 
     const passedWorkbook = new ExcelJS.Workbook();
     await passedWorkbook.xlsx.readFile(allPassedTemplate);
@@ -493,7 +498,7 @@ async function writeAllPassedReport(runId, run) {
 
     if (testLevel === "green-pcb") {
         passedWorksheet.getCell("B2").value = runId;
-        passedWorksheet.getCell("B3").value = basePcbSrNo || "NA";
+        passedWorksheet.getCell("B3").value = base || "NA";
         passedWorksheet.getCell("B4").value = generatedAt;
         passedWorksheet.getCell("B5").value = "iMoni Base PCB";
     } else {
@@ -501,19 +506,17 @@ async function writeAllPassedReport(runId, run) {
         passedWorksheet.getCell("B3").value = unitSerialNo || "NA";
         passedWorksheet.getCell("B4").value = generatedAt;
         passedWorksheet.getCell("B5").value = "iMoni Assembly";
-        passedWorksheet.getCell("B6").value = mac;
+        passedWorksheet.getCell("B6").value = mac || "NA";
 
-        passedWorksheet.getCell("C7").value = cpuSrNo || "NA";
-        passedWorksheet.getCell("D7").value = basePcbSrNo || "NA";
-        passedWorksheet.getCell("E7").value = cameraSrNo || "NA";
-        passedWorksheet.getCell("F7").value = psuSrNo || "NA";
+        passedWorksheet.getCell("C7").value = cpu || "NA";
+        passedWorksheet.getCell("D7").value = base || "NA";
+        passedWorksheet.getCell("E7").value = camera || "NA";
+        passedWorksheet.getCell("F7").value = psu || "NA";
     }
 
-    // Same file name as this run's actual report (unique because of runId)
     const allPassedFilePath = path.join(allPassedDir, fileName);
     const tmpPath = `${allPassedFilePath}.tmp`;
 
-    // Write to a temp file first so a failed write never leaves a partial report
     try {
         await passedWorkbook.xlsx.writeFile(tmpPath);
         await fs.promises.rename(tmpPath, allPassedFilePath);
@@ -523,6 +526,7 @@ async function writeAllPassedReport(runId, run) {
     }
 
     console.log(`✅ All Passed Report Generated: ${fileName}`);
+
     return { runId, fileName };
 }
 
