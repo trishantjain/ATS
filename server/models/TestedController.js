@@ -9,7 +9,7 @@ const testedControllerSchema = new mongoose.Schema(
       trim: true,
     },
 
-    assemblyNo: {
+    unitSerialNo: {
       type: String,
       required: true,
       trim: true,
@@ -95,7 +95,7 @@ const testedControllerSchema = new mongoose.Schema(
 );
 
 testedControllerSchema.index({ controllerIp: 1 });
-testedControllerSchema.index({ assemblyNo: 1 });
+testedControllerSchema.index({ unitSerialNo: 1 });
 testedControllerSchema.index({ cpu: 1 });
 testedControllerSchema.index({ base: 1 });
 testedControllerSchema.index({ psu: 1 });
