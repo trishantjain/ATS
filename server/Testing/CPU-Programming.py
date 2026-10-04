@@ -3,6 +3,7 @@ import time
 import subprocess
 import platform
 import sys
+import math
 
 PORT = 23
 
@@ -59,20 +60,24 @@ def ping_ip(ip):
 # --------------------------------------------------
 
 if len(sys.argv) < 3:
-    print("Usage: python camera_test.py <serial> <host_ip>")
+    print("Usage: python camera_test.py <new_IP> <current_IP>")
     sys.exit(1)
 
-serial = sys.argv[1]
-HOST_IP = sys.argv[2]
 
-if serial.lower() == "q" or HOST_IP.lower() == "q":
+updated_IP = sys.argv[1]  # CPU NUMBER WILL BE ENTERED
+current_IP = sys.argv[2]
+
+# Updated new_IP in the range of 0-250 so that IP address is valid
+new_IP = new_ip = updated_IP - 250 * (math.floor(updated_IP/250))
+
+if new_IP.lower() == "q" or current_IP.lower() == "q":
     print("Exiting...")
     sys.exit(0)
 
-HOST = f"192.168.0.{HOST_IP}"
+HOST = f"192.168.0.{current_IP}"
 
-print(f"Serial: {serial}")
-print(f"Host IP: {HOST_IP}")
+print(f"new_IP: {new_IP}")
+print(f"Host IP: {current_IP}")
 print(f"Target: {HOST}:{PORT}")
 
 tn = None
@@ -102,13 +107,13 @@ try:
 
     type_command(
         tn,
-        f"cfg myip 192 168 0 {serial}"
+        f"cfg myip 192 168 0 {new_IP}"
     )
 
     # Change SYSID
     type_command(
         tn,
-        f"cfg sysid 00 17 34 51 68 {serial}"
+        f"cfg sysid 00 17 34 51 68 {new_IP}"
     )
 
     type_command(tn, "cfg save")
@@ -122,9 +127,9 @@ try:
     time.sleep(5)
 
     # Check new IP
-    new_ip = f"192.168.0.{serial}"
+    new_IP = f"192.168.0.{new_IP}"
 
-    ping_ip(new_ip)
+    ping_ip(new_IP)
 
     print("\n===================================")
     print("Camera test execution completed.")
