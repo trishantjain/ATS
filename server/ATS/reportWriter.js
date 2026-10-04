@@ -517,25 +517,17 @@ async function generateAllPassedReport(runId) {
         reportNo: runId,
       })
         .select(
-          "_id reportNo testedAt testLevel reportPath testResults controllerIp unitSerialNo cpu base camera psu",
+          "_id reportNo testedAt testLevel reportPath controllerIp unitSerialNo cpu base camera psu",
         )
         .lean();
 
       if (controller) {
-        const testResults = controller.testResults || {};
-
-        const unitSerialNo =
-          testResults.unitSerialNo || controller.unitSerialNo || "";
-
-        const mac = testResults.controllerIp || controller.controllerIp || "";
-
-        const cpu = testResults.cpu ?? controller.cpu ?? "";
-
-        const base = testResults.base ?? controller.base ?? "";
-
-        const camera = testResults.camera ?? controller.camera ?? "";
-
-        const psu = testResults.psu ?? controller.psu ?? "";
+        const unitSerialNo = controller.unitSerialNo || "";
+        const mac = controller.controllerIp || "";
+        const cpu = controller.cpu || "";
+        const base = controller.base || "";
+        const camera = controller.camera || "";
+        const psu = controller.psu || "";
 
         const testLevel =
           controller.testLevel ||
