@@ -1,7 +1,9 @@
 const fs = require("fs");
 const path = require("path");
 const { getFormattedDateTime } = require("../utils/time");
-const { getNextReportNumber } = require("../Testing/reportCounter")
+const { getNextReportNumber } = require("../Testing/reportCounter");
+const ReportRun = require("../models/ReportRun");
+const TestedController = require("../models/TestedController");
 
 const ExcelJS = require("exceljs");
 
@@ -9,432 +11,407 @@ const ExcelJS = require("exceljs");
 // const worksheet = workbook.addWorksheet("Test Report");
 
 const DESTINATION_MAP = {
-    fan: "testResult/fan",
-    iMoni: "testResult/iMoni",
-    pdu: "testResult/pdu"
+  fan: "testResult/fan",
+  iMoni: "testResult/iMoni",
+  pdu: "testResult/pdu",
 };
 
 const REPORT_SUBDIR_MAP = {
-    "green-pcb": "green-pcb",
-    "full-controller": "full-controller"
+  "green-pcb": "green-pcb",
+  "full-controller": "full-controller",
 };
 
 async function generateFanMainReport({
-    runResult,
-    reportNo,
-    unitSerialNo,
-    safeMac,
-    baseDir
+  runResult,
+  reportNo,
+  unitSerialNo,
+  safeMac,
+  baseDir,
 }) {
+  const workbook = new ExcelJS.Workbook();
 
-    const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet("Fan ATS Report");
 
-    const worksheet =
-        workbook.addWorksheet("Fan ATS Report");
+  worksheet.addRow(["Report No", reportNo]);
+  worksheet.addRow(["Fan Tray No", unitSerialNo]);
+  worksheet.addRow(["Date Time", getFormattedDateTime()]);
+  worksheet.addRow([]);
 
-    worksheet.addRow(["Report No", reportNo]);
-    worksheet.addRow(["Fan Tray No", unitSerialNo]);
-    worksheet.addRow(["Date Time", getFormattedDateTime()]);
-    worksheet.addRow([]);
+  worksheet.columns = [
+    { header: "Fan", width: 10 },
+    { header: "Pulses", width: 15 },
+    { header: "Status", width: 15 },
+    { header: "Remarks", width: 40 },
+  ];
 
-    worksheet.columns = [
-        { header: "Fan", width: 10 },
-        { header: "Pulses", width: 15 },
-        { header: "Status", width: 15 },
-        { header: "Remarks", width: 40 }
-    ];
+  const steps = runResult.results[0]?.stepResults || [];
 
-    const steps =
-        runResult.results[0]?.stepResults || [];
+  steps.forEach((step) => {
+    worksheet.addRow([
+      `Fan ${step.step}`,
+      step.message,
+      step.status.toUpperCase(),
+      step.status === "passed" ? "PASS" : "FAIL",
+    ]);
+  });
 
-    steps.forEach((step) => {
-        worksheet.addRow([
-            `Fan ${step.step}`,
-            step.message,
-            step.status.toUpperCase(),
-            step.status === "passed"
-                ? "PASS"
-                : "FAIL"
-        ]);
-    });
+  const mainDir = path.join(baseDir, "..", "fan-main-report");
 
-    const mainDir = path.join(
-        baseDir,
-        "..",
-        "fan-main-report"
-    );
+  if (!fs.existsSync(mainDir)) {
+    fs.mkdirSync(mainDir, { recursive: true });
+  }
 
-    if (!fs.existsSync(mainDir)) {
-        fs.mkdirSync(mainDir, { recursive: true });
-    }
+  const fileName = `${reportNo}_${unitSerialNo}_${safeMac}_main.xlsx`;
 
-    const fileName =
-        `${reportNo}_${unitSerialNo}_${safeMac}_main.xlsx`;
-
-    await workbook.xlsx.writeFile(
-        path.join(mainDir, fileName)
-    );
+  await workbook.xlsx.writeFile(path.join(mainDir, fileName));
 }
 
-
 async function reportWriter({
-    runResult,
-    destination,
-    mac = "unknown-device",
-    cpu = "",
-    base = "",
-    camera = "",
-    psu = "",
-    unitSerialNo = "",
-    runCompleted = true,
-    testLevel = "full-controller"
+  runResult,
+  destination,
+  mac = "unknown-device",
+  cpu = "",
+  base = "",
+  camera = "",
+  psu = "",
+  unitSerialNo = "",
+  runCompleted = true,
+  testLevel = "full-controller",
 }) {
-    if (!DESTINATION_MAP[destination]) {
-        throw new Error(`Invalid report destination: ${destination}`);
-    }
+  if (!DESTINATION_MAP[destination]) {
+    throw new Error(`Invalid report destination: ${destination}`);
+  }
 
-    let reportNo = "";
-    let baseDir;
-    // if (testLevel === "green-pcb") {
-    //     reportNo = getNextReportNumber("iMoni-Base");
-    // } else if(testLevel==="full-controller"){
-    //     reportNo = getNextReportNumber("iMoni-SRMS");
-    // }
+  let reportNo = "";
+  let baseDir;
+  // if (testLevel === "green-pcb") {
+  //     reportNo = getNextReportNumber("iMoni-Base");
+  // } else if(testLevel==="full-controller"){
+  //     reportNo = getNextReportNumber("iMoni-SRMS");
+  // }
+
+  baseDir = path.join(__dirname, "..", DESTINATION_MAP[destination]);
+
+  if (destination === "iMoni") {
+    const reportFolder = "RPT";
 
     baseDir = path.join(
-        __dirname,
-        "..",
-        DESTINATION_MAP[destination]
+      baseDir,
+      REPORT_SUBDIR_MAP[testLevel] || "full-controller",
+      reportFolder,
+    );
+  }
+
+  if (!fs.existsSync(baseDir)) {
+    fs.mkdirSync(baseDir, { recursive: true });
+  }
+  console.log("runResult: ", runResult);
+
+  let templatePath;
+
+  if (destination === "fan") {
+    templatePath = path.join(__dirname, "./template/fan_template.xlsx");
+    reportNo = await getNextReportNumber("FAN");
+  } else if (testLevel === "green-pcb") {
+    templatePath = path.join(__dirname, "./template/green-pcb_template.xlsx");
+    reportNo = await getNextReportNumber("iMoni-Base");
+  } else {
+    templatePath = path.join(__dirname, "./template/srms_template.xlsx");
+    reportNo = await getNextReportNumber("iMoni-SRMS");
+  }
+
+  const safeMac = String(mac).replace(/:/g, "-");
+  // const fileName = `${getFormattedDateTime("file")}_${safeMac}.rpt`;
+  // const fileName = `${reportNo}_${getFormattedDateTime("file")}_${safeMac}.rpt`;
+
+  // const safeControllerId = String(deviceId || "unknown-controller").replace(/[^a-zA-Z0-9-_]/g, "");
+  const safeUnitSerialNo = String(unitSerialNo || "unknown-unit").replace(
+    /[^a-zA-Z0-9-_]/g,
+    "",
+  );
+
+  let fileName;
+
+  if (testLevel === "green-pcb") {
+    fileName = `${reportNo}_${base}_${getFormattedDateTime("file")}_${safeMac}.xlsx`;
+  } else {
+    fileName = `${reportNo}_${safeUnitSerialNo}_${getFormattedDateTime("file")}_${safeMac}.xlsx`;
+  }
+
+  // const fileName = `${reportNo}_${safeControllerId}_${getFormattedDateTime("file")}_${safeMac}.csv`;
+  const filePath = path.join(baseDir, fileName);
+
+  const workbook = new ExcelJS.Workbook();
+
+  await workbook.xlsx.readFile(templatePath);
+
+  const worksheet = workbook.getWorksheet(1);
+
+  // ================= HEADER =================
+
+  // HEADER FOR FAN TESTING
+  if (destination === "fan") {
+    worksheet.getCell("B2").value = reportNo;
+    worksheet.getCell("B3").value = unitSerialNo || "NA";
+    worksheet.getCell("B4").value = getFormattedDateTime();
+    worksheet.getCell("B5").value = runResult.summary.total;
+  }
+  // HEADER FOR IMONI (GREEN PCB) TESTING
+  else if (destination === "iMoni" && testLevel === "green-pcb") {
+    worksheet.getCell("B2").value = reportNo;
+    worksheet.getCell("B3").value = base || "NA";
+    // worksheet.getCell("B4").value = whitePcbSrNo || "NA";
+    worksheet.getCell("B4").value = getFormattedDateTime();
+    // worksheet.getCell("B5").value = runResult.summary.testLevel;
+    worksheet.getCell("B5").value =
+      testLevel === "green-pcb" ? "iMoni Base PCB" : "iMoni Assembly";
+    // worksheet.getCell("B7").value = mac;
+    worksheet.getCell("B6").value = runResult.summary.total;
+  }
+  // HEADER FOR IMONI (SRMS) TESTING
+  else if (destination === "iMoni" && testLevel !== "green-pcb") {
+    worksheet.getCell("B2").value = reportNo;
+    worksheet.getCell("B3").value = unitSerialNo || "NA";
+
+    worksheet.getCell("B4").value = getFormattedDateTime();
+
+    worksheet.getCell("B5").value =
+      testLevel === "green-pcb" ? "iMoni Base PCB" : "iMoni Assembly";
+
+    worksheet.getCell("B6").value = mac;
+
+    worksheet.getCell("C7").value = cpu || "NA";
+    worksheet.getCell("D7").value = base || "NA";
+    worksheet.getCell("E7").value = camera || "NA";
+    worksheet.getCell("F7").value = psu || "NA";
+
+    worksheet.getCell("B7").value = runResult.summary.total;
+  }
+
+  // ================= TABLE HEADER =================
+  // if (destination === "fan") {
+  //     const headerRow = worksheet.addRow([
+  //         "Fan",
+  //         "StepStatus",
+  //         "Message",
+  //         // "FailedStep",
+  //         // "TotalSteps",
+  //         // "Reason",
+  //         "Remarks"
+  //     ]);
+
+  //     headerRow.font = { bold: true };
+  // }
+  // // HEADER FOR IMONI TESTING
+  // else if (destination === "iMoni") {
+  //     const headerRow = worksheet.addRow([
+  //         "Sr. No.",
+  //         "TestName",
+  //         "Status",
+  //         "FailedStep",
+  //         "TotalSteps",
+  //         "Reason",
+  //         "Remarks"
+  //     ]);
+
+  //     headerRow.font = { bold: true };
+  // }
+
+  // Header
+  // await fs.promises.writeFile(
+  //     filePath,
+  //     `Unit Sr. No.`+
+  //     `Date & Time\n` +
+  //     `Report No: ${reportNo}\n` +
+  //     `Type: ${destination}\n` +
+  //     `Device: ${safeMac}\n` +
+  //     `Timestamp: ${getFormattedDateTime()}\n` +
+  //     `Total Tests: ${runResult.summary.total}\n\n`,
+  //     { flag: "w" }
+  // );
+
+  // ================= PER TEST =================
+  // for (const test of runResult.results) {
+  //     const testName = test.name || test.testFile || "Unnamed Test";
+
+  //     await fs.promises.appendFile(
+  //         filePath,
+  //         `Test: ${test.name}\nStatus: ${test.status}\n\n`
+  //     );
+
+  //     if (Array.isArray(test.stepResults) && test.stepResults.length > 0) {
+  //         await fs.promises.appendFile(
+  //             filePath,
+  //             "Step,StepStatus,Message\n"
+  //         );
+
+  //         for (const step of test.stepResults) {
+  //             const stepStatus = step.status === "failed" ? "*FAILED" : step.status.toUpperCase();
+  //             const line =
+  //                 `${step.step},` +
+  //                 `${stepStatus},` +
+  //                 `"${(step.message || "").replace(/"/g, '""')}"\n`;
+
+  //             await fs.promises.appendFile(filePath, line);
+  //         }
+  //     }
+
+  //     await fs.promises.appendFile(filePath, "\n=== TEST END ===\n\n");
+  // }
+
+  if (destination === "fan") {
+    // currentRow = 11;
+    let row = 11;
+
+    const steps = runResult.results[0]?.stepResults || [];
+
+    steps.forEach((step) => {
+      worksheet.getCell(`A${row}`).value = `Fan ${step.step}`;
+
+      worksheet.getCell(`B${row}`).value = step.status.toUpperCase();
+
+      worksheet.getCell(`C${row}`).value =
+        step.status === "passed" ? "RPM=OK" : "RPM=FAIL";
+
+      worksheet.getCell(`D${row}`).value = "";
+
+      row++;
+    });
+
+    worksheet.getCell("B8").value =
+      runResult.summary.failed > 0 ? "Failed" : "Passed";
+  } else if (testLevel === "green-pcb") {
+    currentRow = 9;
+  } else {
+    currentRow = 10;
+  }
+
+  // ================= TEST DATA =================
+  if (destination !== "fan") {
+    runResult.results.forEach((test, index) => {
+      // FAILED STEP
+      const failedStep = test.stepResults?.find((s) => s.status === "failed");
+
+      // LAST PASSED STEP
+      const passedStep = test.stepResults
+        ?.filter((s) => s.status === "passed")
+        ?.slice(-1)[0];
+
+      // REASON
+      const reason =
+        failedStep?.message || passedStep?.message || test.output || "";
+
+      // FAILED STEP NUMBER
+      const failedStepNo = failedStep?.step || "";
+
+      const totalSteps = test.stepResults?.length || "";
+
+      // CHANGING FAILED STATUS TO '*FAILED' IN FAN REPORT
+      const statusForReport =
+        destination === "fan" && test.status === "failed"
+          ? "*FAILED"
+          : test.status.toUpperCase();
+
+      // worksheet.addRow([
+      //     index + 1,
+      //     test.name || "",
+      //     statusForReport,
+      //     failedStepNo,
+      //     totalSteps,
+      //     String(reason),
+      //     ""
+      // ]);
+
+      // worksheet.insertRow(currentRow++, [
+      //     index + 1,
+      //     test.name || "",
+      //     statusForReport,
+      //     failedStepNo,
+      //     totalSteps,
+      //     String(reason),
+      //     ""
+      // ]);
+      let row = currentRow;
+
+      worksheet.getCell(`A${row}`).value = index + 1;
+      worksheet.getCell(`B${row}`).value = test.name || "";
+      worksheet.getCell(`C${row}`).value = statusForReport;
+      // worksheet.getCell(`D${row}`).value = failedStepNo;
+      worksheet.getCell(`D${row}`).value = totalSteps;
+      worksheet.getCell(`E${row}`).value = String(reason);
+      worksheet.getCell(`F${row}`).value = "";
+
+      currentRow++;
+    });
+  }
+
+  // WRITE COMPLETE FILE ONCE
+  // await fs.promises.writeFile(filePath, content);
+  await workbook.xlsx.writeFile(filePath);
+  console.log(`✅ Report Generated: ${fileName}`);
+
+  if (destination === "fan") {
+    await generateFanMainReport({
+      runResult,
+      reportNo,
+      unitSerialNo,
+      safeMac,
+      baseDir,
+    });
+  }
+
+  // await workbook.xlsx.writeFile(filePath);
+  // console.log(`✅ Report Generated: ${fileName}`);
+
+  // All-Passed report is NOT generated here any more.
+  // It is created only on user request via generateAllPassedReport(runId).
+  // Register this run (runId = reportNo) so the request can be tied to
+  // exactly this run's hardware data / file name.
+  if (destination === "iMoni") {
+    const generatedAt = getFormattedDateTime();
+    const runContext = {
+      reportNo,
+      fileName,
+      filePath,
+      generatedAt,
+      mac,
+      unitSerialNo,
+      cpu,
+      base,
+      camera,
+      psu,
+      testLevel,
+      eligible: Boolean(runCompleted),
+    };
+
+    await ReportRun.findOneAndUpdate(
+      { reportNo },
+      { $set: runContext },
+      { upsert: true, new: true, runValidators: true },
     );
 
-
-    if (destination === "iMoni") {
-        const reportFolder = "RPT";
-
-        baseDir = path.join(
-            baseDir,
-            REPORT_SUBDIR_MAP[testLevel] || "full-controller",
-            reportFolder
-        );
-    }
-
-
-    if (!fs.existsSync(baseDir)) {
-        fs.mkdirSync(baseDir, { recursive: true });
-    }
-    console.log("runResult: ", runResult);
-
-
-    let templatePath;
-
-    if (destination === "fan") {
-        templatePath = path.join(__dirname, "./template/fan_template.xlsx");
-        reportNo = getNextReportNumber("FAN");
-    }
-    else if (testLevel === "green-pcb") {
-        templatePath = path.join(__dirname, "./template/green-pcb_template.xlsx");
-        reportNo = getNextReportNumber("iMoni-Base");
-    }
-    else {
-        templatePath = path.join(__dirname, "./template/srms_template.xlsx");
-        reportNo = getNextReportNumber("iMoni-SRMS");
-    }
-
-    const safeMac = String(mac).replace(/:/g, "-");
-    // const fileName = `${getFormattedDateTime("file")}_${safeMac}.rpt`;
-    // const fileName = `${reportNo}_${getFormattedDateTime("file")}_${safeMac}.rpt`;
-
-    // const safeControllerId = String(deviceId || "unknown-controller").replace(/[^a-zA-Z0-9-_]/g, "");
-    const safeUnitSerialNo = String(unitSerialNo || "unknown-unit")
-        .replace(/[^a-zA-Z0-9-_]/g, "");
-
-    let fileName
-
-    if (testLevel === "green-pcb") {
-        fileName = `${reportNo}_${base}_${getFormattedDateTime("file")}_${safeMac}.xlsx`;
-    } else {
-        fileName = `${reportNo}_${safeUnitSerialNo}_${getFormattedDateTime("file")}_${safeMac}.xlsx`;
-    }
-
-    // const fileName = `${reportNo}_${safeControllerId}_${getFormattedDateTime("file")}_${safeMac}.csv`;
-    const filePath = path.join(baseDir, fileName);
-
-    const workbook = new ExcelJS.Workbook();
-
-
-
-    await workbook.xlsx.readFile(templatePath);
-
-    const worksheet = workbook.getWorksheet(1);
-
-    // ================= HEADER =================
-
-    // HEADER FOR FAN TESTING
-    if (destination === "fan") {
-        worksheet.getCell("B2").value = reportNo;
-        worksheet.getCell("B3").value = unitSerialNo || "NA";
-        worksheet.getCell("B4").value = getFormattedDateTime();
-        worksheet.getCell("B5").value = runResult.summary.total;
-    }
-    // HEADER FOR IMONI (GREEN PCB) TESTING
-    else if ((destination === "iMoni") && (testLevel === "green-pcb")) {
-        worksheet.getCell("B2").value = reportNo;
-        worksheet.getCell("B3").value = base || "NA";
-        // worksheet.getCell("B4").value = whitePcbSrNo || "NA";
-        worksheet.getCell("B4").value = getFormattedDateTime();
-        // worksheet.getCell("B5").value = runResult.summary.testLevel;
-        worksheet.getCell("B5").value =
-            testLevel === "green-pcb"
-                ? "iMoni Base PCB"
-                : "iMoni Assembly";
-        // worksheet.getCell("B7").value = mac;
-        worksheet.getCell("B6").value = runResult.summary.total;
-    }
-    // HEADER FOR IMONI (SRMS) TESTING
-    else if ((destination === "iMoni") && (testLevel !== "green-pcb")) {
-        worksheet.getCell("B2").value = reportNo;
-        worksheet.getCell("B3").value = unitSerialNo || "NA";
-
-        worksheet.getCell("B4").value = getFormattedDateTime();
-
-        worksheet.getCell("B5").value =
-            testLevel === "green-pcb"
-                ? "iMoni Base PCB"
-                : "iMoni Assembly";
-
-        worksheet.getCell("B6").value = mac;
-
-        worksheet.getCell("C7").value = cpu || "NA";
-        worksheet.getCell("D7").value = base || "NA";
-        worksheet.getCell("E7").value = camera || "NA";
-        worksheet.getCell("F7").value = psu || "NA";
-
-        worksheet.getCell("B7").value = runResult.summary.total;
-
-    }
-
-
-    // ================= TABLE HEADER =================
-    // if (destination === "fan") {
-    //     const headerRow = worksheet.addRow([
-    //         "Fan",
-    //         "StepStatus",
-    //         "Message",
-    //         // "FailedStep",
-    //         // "TotalSteps",
-    //         // "Reason",
-    //         "Remarks"
-    //     ]);
-
-    //     headerRow.font = { bold: true };
-    // }
-    // // HEADER FOR IMONI TESTING
-    // else if (destination === "iMoni") {
-    //     const headerRow = worksheet.addRow([
-    //         "Sr. No.",
-    //         "TestName",
-    //         "Status",
-    //         "FailedStep",
-    //         "TotalSteps",
-    //         "Reason",
-    //         "Remarks"
-    //     ]);
-
-    //     headerRow.font = { bold: true };
-    // }
-
-
-    // Header
-    // await fs.promises.writeFile(
-    //     filePath,
-    //     `Unit Sr. No.`+
-    //     `Date & Time\n` +
-    //     `Report No: ${reportNo}\n` +
-    //     `Type: ${destination}\n` +
-    //     `Device: ${safeMac}\n` +
-    //     `Timestamp: ${getFormattedDateTime()}\n` +
-    //     `Total Tests: ${runResult.summary.total}\n\n`,
-    //     { flag: "w" }
-    // );
-
-    // ================= PER TEST =================
-    // for (const test of runResult.results) {
-    //     const testName = test.name || test.testFile || "Unnamed Test";
-
-    //     await fs.promises.appendFile(
-    //         filePath,
-    //         `Test: ${test.name}\nStatus: ${test.status}\n\n`
-    //     );
-
-    //     if (Array.isArray(test.stepResults) && test.stepResults.length > 0) {
-    //         await fs.promises.appendFile(
-    //             filePath,
-    //             "Step,StepStatus,Message\n"
-    //         );
-
-    //         for (const step of test.stepResults) {
-    //             const stepStatus = step.status === "failed" ? "*FAILED" : step.status.toUpperCase();
-    //             const line =
-    //                 `${step.step},` +
-    //                 `${stepStatus},` +
-    //                 `"${(step.message || "").replace(/"/g, '""')}"\n`;
-
-    //             await fs.promises.appendFile(filePath, line);
-    //         }
-    //     }
-
-    //     await fs.promises.appendFile(filePath, "\n=== TEST END ===\n\n");
-    // }
-
-    if (destination === "fan") {
-        // currentRow = 11;
-        let row = 11;
-
-        const steps = runResult.results[0]?.stepResults || [];
-
-        steps.forEach((step) => {
-
-            worksheet.getCell(`A${row}`).value =
-                `Fan ${step.step}`;
-
-            worksheet.getCell(`B${row}`).value =
-                step.status.toUpperCase();
-
-            worksheet.getCell(`C${row}`).value =
-                step.status === "passed"
-                    ? "RPM=OK"
-                    : "RPM=FAIL";
-
-            worksheet.getCell(`D${row}`).value = "";
-
-            row++;
-        });
-
-        worksheet.getCell("B8").value =
-            runResult.summary.failed > 0
-                ? "Failed"
-                : "Passed";
-    }
-    else if (testLevel === "green-pcb") {
-        currentRow = 9;
-    }
-    else {
-        currentRow = 10;
-    }
-
-    // ================= TEST DATA ================= 
-    if (destination !== "fan") {
-        runResult.results.forEach((test, index) => {
-            // FAILED STEP 
-            const failedStep = test.stepResults?.find(
-                s => s.status === "failed"
-            );
-
-            // LAST PASSED STEP 
-            const passedStep = test.stepResults
-                ?.filter(s => s.status === "passed")
-                ?.slice(-1)[0];
-
-            // REASON 
-            const reason =
-                failedStep?.message ||
-                passedStep?.message ||
-                test.output || "";
-
-            // FAILED STEP NUMBER 
-            const failedStepNo =
-                failedStep?.step || "";
-
-            const totalSteps = test.stepResults?.length || "";
-
-            // CHANGING FAILED STATUS TO '*FAILED' IN FAN REPORT
-            const statusForReport =
-                destination === "fan" && test.status === "failed"
-                    ? "*FAILED"
-                    : test.status.toUpperCase();
-
-
-            // worksheet.addRow([
-            //     index + 1,
-            //     test.name || "",
-            //     statusForReport,
-            //     failedStepNo,
-            //     totalSteps,
-            //     String(reason),
-            //     ""
-            // ]);
-
-            // worksheet.insertRow(currentRow++, [
-            //     index + 1,
-            //     test.name || "",
-            //     statusForReport,
-            //     failedStepNo,
-            //     totalSteps,
-            //     String(reason),
-            //     ""
-            // ]);
-            let row = currentRow;
-
-            worksheet.getCell(`A${row}`).value = index + 1;
-            worksheet.getCell(`B${row}`).value = test.name || "";
-            worksheet.getCell(`C${row}`).value = statusForReport;
-            // worksheet.getCell(`D${row}`).value = failedStepNo;
-            worksheet.getCell(`D${row}`).value = totalSteps;
-            worksheet.getCell(`E${row}`).value = String(reason);
-            worksheet.getCell(`F${row}`).value = "";
-
-            currentRow++;
-
-        });
-    }
-
-
-    // WRITE COMPLETE FILE ONCE 
-    // await fs.promises.writeFile(filePath, content);
-    await workbook.xlsx.writeFile(filePath);
-    console.log(`✅ Report Generated: ${fileName}`);
-
-    if (destination === "fan") {
-        await generateFanMainReport({
-            runResult,
-            reportNo,
-            unitSerialNo,
-            safeMac,
-            baseDir
-        });
-    }
-
-
-    // await workbook.xlsx.writeFile(filePath);
-    // console.log(`✅ Report Generated: ${fileName}`);
-
-    // All-Passed report is NOT generated here any more.
-    // It is created only on user request via generateAllPassedReport(runId).
-    // Register this run (runId = reportNo) so the request can be tied to
-    // exactly this run's hardware data / file name.
-    if (destination === "iMoni") {
-        registerRun(reportNo, {
-            runResult,
-            destination,
-            testLevel,
-            fileName,
-            mac,
-            unitSerialNo,
-            cpu,
-            base,
-            camera,
-            psu,
-            generatedAt: getFormattedDateTime(),
-            eligible: Boolean(runCompleted),
-        });
-    }
-
-    return {
-        filePath,
-        fileName,
-        reportNo,
-        allPassedEligible: destination === "iMoni" && Boolean(runCompleted),
-    };
+    registerRun(reportNo, {
+      runResult,
+      destination,
+      testLevel,
+      fileName,
+      mac,
+      unitSerialNo,
+      cpu,
+      base,
+      camera,
+      psu,
+      generatedAt,
+      eligible: Boolean(runCompleted),
+    });
+  }
+
+  return {
+    filePath,
+    fileName,
+    reportNo,
+    allPassedEligible: destination === "iMoni" && Boolean(runCompleted),
+  };
 }
 
 // ================= ALL PASSED REPORT (MANUAL, ONE PER TEST RUN) =================
@@ -447,87 +424,81 @@ const MAX_TRACKED_RUNS = 100;
 const runRegistry = new Map(); // runId -> { ...runContext, allPassedPromise }
 
 function registerRun(runId, context) {
-    runRegistry.set(runId, { ...context, allPassedPromise: null });
+  runRegistry.set(runId, { ...context, allPassedPromise: null });
 
-    // Keep memory bounded (Map keeps insertion order -> drop oldest)
-    while (runRegistry.size > MAX_TRACKED_RUNS) {
-        runRegistry.delete(runRegistry.keys().next().value);
-    }
+  // Keep memory bounded (Map keeps insertion order -> drop oldest)
+  while (runRegistry.size > MAX_TRACKED_RUNS) {
+    runRegistry.delete(runRegistry.keys().next().value);
+  }
 }
 
 async function writeAllPassedReport(runId, run) {
-    const {
-        fileName,
-        generatedAt,
-        mac,
-        unitSerialNo,
-        cpu = "",
-        base = "",
-        camera = "",
-        psu = "",
-        testLevel,
-    } = run;
+  const {
+    fileName,
+    generatedAt,
+    mac,
+    unitSerialNo,
+    cpu = "",
+    base = "",
+    camera = "",
+    psu = "",
+    testLevel,
+  } = run;
 
-    const allPassedDir = path.join(
-        __dirname,
-        "..",
-        DESTINATION_MAP.iMoni,
-        REPORT_SUBDIR_MAP[testLevel] || "full-controller",
-        "AllPassed"
-    );
+  const allPassedDir = path.join(
+    __dirname,
+    "..",
+    DESTINATION_MAP.iMoni,
+    REPORT_SUBDIR_MAP[testLevel] || "full-controller",
+    "AllPassed",
+  );
 
-    if (!fs.existsSync(allPassedDir)) {
-        fs.mkdirSync(allPassedDir, { recursive: true });
-    }
+  if (!fs.existsSync(allPassedDir)) {
+    fs.mkdirSync(allPassedDir, { recursive: true });
+  }
 
-    const allPassedTemplate =
-        testLevel === "green-pcb"
-            ? path.join(
-                __dirname,
-                "./template/green-pcb_allpassed_template.xlsx"
-            )
-            : path.join(
-                __dirname,
-                "./template/srms_allpassed_template.xlsx"
-            );
+  const allPassedTemplate =
+    testLevel === "green-pcb"
+      ? path.join(__dirname, "./template/green-pcb_allpassed_template.xlsx")
+      : path.join(__dirname, "./template/srms_allpassed_template.xlsx");
 
-    const passedWorkbook = new ExcelJS.Workbook();
-    await passedWorkbook.xlsx.readFile(allPassedTemplate);
+  const passedWorkbook = new ExcelJS.Workbook();
+  await passedWorkbook.xlsx.readFile(allPassedTemplate);
 
-    const passedWorksheet = passedWorkbook.getWorksheet(1);
+  const passedWorksheet = passedWorkbook.getWorksheet(1);
 
-    if (testLevel === "green-pcb") {
-        passedWorksheet.getCell("B2").value = runId;
-        passedWorksheet.getCell("B3").value = base || "NA";
-        passedWorksheet.getCell("B4").value = generatedAt;
-        passedWorksheet.getCell("B5").value = "iMoni Base PCB";
-    } else {
-        passedWorksheet.getCell("B2").value = runId;
-        passedWorksheet.getCell("B3").value = unitSerialNo || "NA";
-        passedWorksheet.getCell("B4").value = generatedAt;
-        passedWorksheet.getCell("B5").value = "iMoni Assembly";
-        passedWorksheet.getCell("B6").value = mac || "NA";
+  if (testLevel === "green-pcb") {
+    passedWorksheet.getCell("B2").value = runId;
+    passedWorksheet.getCell("B3").value = base || "NA";
+    passedWorksheet.getCell("B4").value = generatedAt;
+    passedWorksheet.getCell("B5").value = "iMoni Base PCB";
+  } else {
+    passedWorksheet.getCell("B2").value = runId;
+    passedWorksheet.getCell("B3").value = unitSerialNo || "NA";
+    passedWorksheet.getCell("B4").value = generatedAt;
+    passedWorksheet.getCell("B5").value = "iMoni Assembly";
+    passedWorksheet.getCell("B6").value = mac || "NA";
 
-        passedWorksheet.getCell("C7").value = cpu || "NA";
-        passedWorksheet.getCell("D7").value = base || "NA";
-        passedWorksheet.getCell("E7").value = camera || "NA";
-        passedWorksheet.getCell("F7").value = psu || "NA";
-    }
+    passedWorksheet.getCell("C7").value = cpu || "NA";
+    passedWorksheet.getCell("D7").value = base || "NA";
+    passedWorksheet.getCell("E7").value = camera || "NA";
+    passedWorksheet.getCell("F7").value = psu || "NA";
+  }
 
-    const allPassedFilePath = path.join(allPassedDir, fileName);
-    const tmpPath = `${allPassedFilePath}.tmp`;
+  const allPassedFilePath = path.join(allPassedDir, fileName);
+  const tmpPath = `${allPassedFilePath}.tmp`;
 
-    try {
-        await passedWorkbook.xlsx.writeFile(tmpPath);
-        await fs.promises.rename(tmpPath, allPassedFilePath);
-    } catch (err) {
-        await fs.promises.unlink(tmpPath).catch(() => { });
-        throw err;
-    }
+  try {
+    await passedWorkbook.xlsx.writeFile(tmpPath);
+    await fs.promises.rename(tmpPath, allPassedFilePath);
+  } catch (err) {
+    await fs.promises.unlink(tmpPath).catch(() => {});
+    throw err;
+  }
 
-    console.log(`✅ All Passed Report Generated: ${fileName}`);
+  console.log(`✅ All Passed Report Generated: ${fileName}`);
 
-    return { runId, fileName };
+  return { runId, fileName };
 }
 
 /**
@@ -536,34 +507,117 @@ async function writeAllPassedReport(runId, run) {
  * generation and never write a second file. A failed attempt can be retried.
  */
 async function generateAllPassedReport(runId) {
-    const run = runRegistry.get(runId);
+  let run = runRegistry.get(runId);
+
+  if (!run) {
+    run = await ReportRun.findOne({ reportNo: runId }).lean();
 
     if (!run) {
-        throw Object.assign(new Error(`Unknown or expired test run: ${runId}`), {
-            code: "RUN_NOT_FOUND",
-        });
-    }
+      const controller = await TestedController.findOne({
+        reportNo: runId,
+      })
+        .select(
+          "_id reportNo testedAt testLevel reportPath testResults controllerIp unitSerialNo cpu base camera psu",
+        )
+        .lean();
 
-    if (!run.eligible) {
-        throw Object.assign(
-            new Error("Test run was not completed, All-Passed report not allowed"),
-            { code: "RUN_NOT_ELIGIBLE" }
+      if (controller) {
+        const testResults = controller.testResults || {};
+
+        const unitSerialNo =
+          testResults.unitSerialNo || controller.unitSerialNo || "";
+
+        const mac = testResults.controllerIp || controller.controllerIp || "";
+
+        const cpu = testResults.cpu ?? controller.cpu ?? "";
+
+        const base = testResults.base ?? controller.base ?? "";
+
+        const camera = testResults.camera ?? controller.camera ?? "";
+
+        const psu = testResults.psu ?? controller.psu ?? "";
+
+        const testLevel =
+          controller.testLevel ||
+          (String(runId).startsWith("iMoni-Base-")
+            ? "green-pcb"
+            : "full-controller");
+
+        const safeUnitSerialNo = String(unitSerialNo || "unknown-unit").replace(
+          /[^a-zA-Z0-9-_]/g,
+          "",
         );
+
+        const safeMac = String(mac || "unknown-device").replace(/:/g, "-");
+
+        const fileName = controller.reportPath
+          ? path.basename(String(controller.reportPath))
+          : `${runId}_${safeUnitSerialNo}_${safeMac}.xlsx`;
+
+        run = {
+          reportNo: controller.reportNo,
+          fileName,
+          generatedAt: controller.testedAt
+            ? new Date(controller.testedAt).toISOString()
+            : new Date().toISOString(),
+          mac,
+          unitSerialNo,
+          cpu,
+          base,
+          camera,
+          psu,
+          testLevel,
+          eligible: true,
+        };
+      }
     }
 
-    // Already generated / currently generating -> reuse (check + set has no await in between)
-    if (run.allPassedPromise) {
-        const result = await run.allPassedPromise;
-        return { ...result, alreadyGenerated: true };
+    if (!run) {
+      throw Object.assign(
+        new Error(`No database record found for report number ${runId}`),
+        { code: "RUN_NOT_FOUND" },
+      );
     }
 
-    run.allPassedPromise = writeAllPassedReport(runId, run).catch((err) => {
-        run.allPassedPromise = null; // allow retry after a failure
-        throw err;
-    });
+    const requiredFields = ["reportNo", "fileName", "generatedAt", "testLevel"];
 
+    const missingFields = requiredFields.filter((field) => !run[field]);
+
+    if (missingFields.length > 0) {
+      throw Object.assign(
+        new Error(
+          `Database report data is incomplete for ${runId}. Missing: ${missingFields.join(", ")}`,
+        ),
+        { code: "RUN_CONTEXT_INCOMPLETE" },
+      );
+    }
+
+    run = {
+      ...run,
+      allPassedPromise: null,
+    };
+  }
+
+  if (!run.eligible) {
+    throw Object.assign(
+      new Error("Test run was not completed, All-Passed report not allowed"),
+      { code: "RUN_NOT_ELIGIBLE" },
+    );
+  }
+
+  // Already generated / currently generating -> reuse (check + set has no await in between)
+  if (run.allPassedPromise) {
     const result = await run.allPassedPromise;
-    return { ...result, alreadyGenerated: false };
+    return { ...result, alreadyGenerated: true };
+  }
+
+  run.allPassedPromise = writeAllPassedReport(runId, run).catch((err) => {
+    run.allPassedPromise = null; // allow retry after a failure
+    throw err;
+  });
+
+  const result = await run.allPassedPromise;
+  return { ...result, alreadyGenerated: false };
 }
 
 module.exports = { reportWriter, generateAllPassedReport };

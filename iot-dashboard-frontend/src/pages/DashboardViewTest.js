@@ -1462,6 +1462,7 @@ function DashboardViewTest() {
     setSavingTestedController(true);
 
     try {
+      console.log("✅ Saving controller ✅")
       const result = await registerTestedController(pendingTestedRun);
 
       console.log("✅ Controller saved:", result.controller);
@@ -1501,7 +1502,7 @@ function DashboardViewTest() {
   // Register a completed ATS run in the Tested Controllers collection
   async function registerTestedController(data) {
     const payload = {
-      controllerIp: String(data.controllerIp ?? "").trim(),
+      controllerIp: String(selectedMac ?? "").trim(),
       unitSerialNo: String(data.unitSerialNo ?? "").trim(),
       cpu: String(data.cpu ?? "").trim(),
       base: String(data.base ?? "").trim(),
@@ -1561,7 +1562,6 @@ function DashboardViewTest() {
   }
 
   // IMONI TEST FUNCTION
-
   async function iMoni_test() {
     setAwaitingCommand(true);
     setShowATSPanel(false);
@@ -1754,7 +1754,7 @@ function DashboardViewTest() {
           // does not include the serial numbers.
           setPendingTestedRun({
             ...data,
-            assemblyNo: unitSerialNo.trim(),
+            unitSerialNo: unitSerialNo.trim(),
             cpu: cpu.trim(),
             base: base.trim(),
             camera: camera.trim(),
@@ -1814,7 +1814,7 @@ function DashboardViewTest() {
           // does not include the serial numbers.
           setPendingTestedRun({
             ...data,
-            assemblyNo: unitSerialNo.trim(),
+            unitSerialNo: unitSerialNo.trim(),
             cpu: cpu.trim(),
             base: base.trim(),
             camera: camera.trim(),

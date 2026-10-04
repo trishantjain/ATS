@@ -100,6 +100,7 @@ testedControllerSchema.index({ cpu: 1 });
 testedControllerSchema.index({ base: 1 });
 testedControllerSchema.index({ psu: 1 });
 testedControllerSchema.index({ camera: 1 });
+testedControllerSchema.index({ reportNo: 1 });
 testedControllerSchema.index({ testedAt: -1 });
 
 module.exports = mongoose.model(

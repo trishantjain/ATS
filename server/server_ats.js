@@ -502,8 +502,9 @@ app.post("/api/log-command", (req, res) => {
   console.log(date, mac, command, status, message);
 
   const now = new Date();
-  const fileName = `${now.getDate()}_${now.getMonth() + 1
-    }_${now.getHours()}.out`;
+  const fileName = `${now.getDate()}_${
+    now.getMonth() + 1
+  }_${now.getHours()}.out`;
   const logDir = "C:/CommandLogs/out";
 
   if (!fs.existsSync(logDir)) {
@@ -602,6 +603,32 @@ function isRunCompleted(results = []) {
     !atsRuntime.testStopRequested &&
     !results.some((r) => r.status === "stopped")
   );
+}
+
+async function persistGeneratedReport(controllerId, report) {
+  if (!controllerId) return;
+
+  if (!mongoose.Types.ObjectId.isValid(String(controllerId))) {
+    throw new Error("Invalid controller record ID");
+  }
+
+  const updatedController = await TestedController.findByIdAndUpdate(
+    controllerId,
+    {
+      $set: {
+        reportNo: report.reportNo,
+        reportPath: report.filePath,
+      },
+    },
+    {
+      new: true,
+      runValidators: true,
+    },
+  );
+
+  if (!updatedController) {
+    throw new Error("Controller record not found while saving report number");
+  }
 }
 
 function getIMoniTestDir(testLevel) {
@@ -739,10 +766,13 @@ app.post("/api/tests/run", async (req, res) => {
       testLevel,
     });
 
+    await persistGeneratedReport(controllerId, report);
+
     res.json({
       timestamp: getFormattedDateTime(),
       ...testResult,
       runId: report.reportNo,
+      reportNo: report.reportNo,
       allPassedEligible: report.allPassedEligible,
     });
   } catch (err) {
@@ -918,8 +948,11 @@ app.post("/api/tests/run-all", async (req, res) => {
       testLevel,
     });
 
+    await persistGeneratedReport(null, report);
+
     // Identifies this run for the manual All-Passed report request
     response.runId = report.reportNo;
+    response.reportNo = report.reportNo;
     response.allPassedEligible = report.allPassedEligible;
 
     // ================= FINAL WS EVENT =================
@@ -1254,8 +1287,6 @@ app.post("/run-python", (req, res) => {
   });
 });
 
-
-
 // =====================================================
 // TESTED CONTROLLER - SHARED DUPLICATE DETECTION
 // One implementation used by /check, POST, PUT and /api/tests/run-all.
@@ -1384,7 +1415,8 @@ async function findControllerDuplicates(values = {}, excludeId = null) {
   for (const doc of docs) {
     for (const [field, value] of Object.entries(submitted)) {
       const matchedDbField = DUPLICATE_DB_FIELDS[field].find(
-        (dbField) => normalizeIdentifier(doc[dbField]) === normalizeIdentifier(value),
+        (dbField) =>
+          normalizeIdentifier(doc[dbField]) === normalizeIdentifier(value),
       );
 
       if (!matchedDbField) continue;
@@ -1452,7 +1484,10 @@ app.post("/api/tested-controllers/check", async (req, res) => {
   try {
     const body = req.body || {};
 
-    if (body.excludeId && !mongoose.Types.ObjectId.isValid(String(body.excludeId))) {
+    if (
+      body.excludeId &&
+      !mongoose.Types.ObjectId.isValid(String(body.excludeId))
+    ) {
       return res.status(400).json({
         success: false,
         message: "Invalid excludeId",
@@ -1481,9 +1516,11 @@ app.post("/api/tested-controllers/check", async (req, res) => {
 // TESTED CONTROLLER - ADDING NEW CONTROLLER RECORD
 // =====================================================
 app.post("/api/tested-controllers", async (req, res) => {
+  console.log("POST /api/tested-controllers called");
   try {
     const body = req.body || {};
     const duplicateConfirmed = isDuplicateConfirmed(body.duplicateConfirmed);
+    console.log("Duplicate confirmed:", duplicateConfirmed);
 
     // Whitelist: request-only flags (duplicateConfirmed) are never saved.
     const normalized = {};
@@ -1502,8 +1539,10 @@ app.post("/api/tested-controllers", async (req, res) => {
       "base",
       "psu",
       "camera",
-      "testedBy",
+      // "testedBy",
     ];
+
+    console.log("Normalized controller data:", normalized);
 
     const missingFields = requiredFields.filter(
       (field) => !normalizeValue(normalized[field]),
@@ -1516,6 +1555,8 @@ app.post("/api/tested-controllers", async (req, res) => {
         missingFields,
       });
     }
+
+    console.log("Checking for duplicates with normalized data:", normalized);
 
     const duplicateResult = await findControllerDuplicates(normalized);
 
@@ -1540,6 +1581,8 @@ app.post("/api/tested-controllers", async (req, res) => {
       testedAt: new Date(),
       previousRecordId: previousRecord?._id || null,
     });
+
+    console.log("New controller record created:", record);
 
     return res.status(201).json({
       success: true,
@@ -1568,7 +1611,6 @@ app.post("/api/tested-controllers", async (req, res) => {
 // =====================================================
 // TESTED CONTROLLER - LIST
 // =====================================================
-
 app.get("/api/tested-controllers", async (req, res) => {
   try {
     const {
@@ -1582,14 +1624,11 @@ app.get("/api/tested-controllers", async (req, res) => {
       sortOrder: requestedSortOrder = "desc",
     } = req.query;
 
-    const currentPage = Math.max(
-      1,
-      parseInt(requestedPage, 10) || 1
-    );
+    const currentPage = Math.max(1, parseInt(requestedPage, 10) || 1);
 
     const pageLimit = Math.min(
       100,
-      Math.max(1, parseInt(requestedLimit, 10) || 20)
+      Math.max(1, parseInt(requestedLimit, 10) || 20),
     );
 
     // Map frontend sort keys to canonical schema fields.
@@ -1603,11 +1642,9 @@ app.get("/api/tested-controllers", async (req, res) => {
       testedAt: "testedAt",
     };
 
-    const sortField =
-      sortFieldMap[requestedSortBy] || "testedAt";
+    const sortField = sortFieldMap[requestedSortBy] || "testedAt";
 
-    const sortDirection =
-      requestedSortOrder === "asc" ? 1 : -1;
+    const sortDirection = requestedSortOrder === "asc" ? 1 : -1;
 
     const numericFields = ["cpu", "base", "camera"];
     const isNumericSort = numericFields.includes(sortField);
@@ -1626,10 +1663,7 @@ app.get("/api/tested-controllers", async (req, res) => {
     const searchText = String(search ?? "").trim();
 
     if (searchText) {
-      const escapedSearch = searchText.replace(
-        /[.*+?^${}()|[\]\\]/g,
-        "\\$&"
-      );
+      const escapedSearch = searchText.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
       const searchRegex = new RegExp(escapedSearch, "i");
 
@@ -1660,8 +1694,7 @@ app.get("/api/tested-controllers", async (req, res) => {
         controllerIp: ["controllerIp", "deviceIP"],
       };
 
-      const selectedFields =
-        searchFieldMap[searchField] || searchFieldMap.all;
+      const selectedFields = searchFieldMap[searchField] || searchFieldMap.all;
 
       const searchConditions = selectedFields.map((field) => ({
         [field]: searchRegex,
@@ -1679,8 +1712,7 @@ app.get("/api/tested-controllers", async (req, res) => {
             camera: ["cameraSr"],
           };
 
-          const numericFieldsToSearch =
-            numericFieldMap[searchField] || [];
+          const numericFieldsToSearch = numericFieldMap[searchField] || [];
 
           numericFieldsToSearch.forEach((field) => {
             searchConditions.push({
@@ -1722,11 +1754,7 @@ app.get("/api/tested-controllers", async (req, res) => {
             {
               $addFields: {
                 _sortMissing: {
-                  $cond: [
-                    { $eq: ["$_sortValue", null] },
-                    1,
-                    0,
-                  ],
+                  $cond: [{ $eq: ["$_sortValue", null] }, 1, 0],
                 },
               },
             },
@@ -1774,16 +1802,13 @@ app.get("/api/tested-controllers", async (req, res) => {
     // Normalize both document formats for the frontend.
     const normalizedRecords = records.map((item) => ({
       ...item,
-      controllerIp:
-        item.controllerIp ?? item.deviceIP ?? "",
-      unitSerialNo:
-        item.unitSerialNo ?? item.assemblySrNo ?? "",
+      controllerIp: item.controllerIp ?? item.deviceIP ?? "",
+      unitSerialNo: item.unitSerialNo ?? item.assemblySrNo ?? "",
       cpu: item.cpu ?? item.cpuSr ?? "",
       base: item.base ?? item.basePcbSr ?? "",
       camera: item.camera ?? item.cameraSr ?? "",
       psu: item.psu ?? item.psuSrNo ?? "",
-      testedAt:
-        item.testedAt ?? item.dateTested ?? null,
+      testedAt: item.testedAt ?? item.dateTested ?? null,
       testedBy: item.testedBy ?? "Imported",
     }));
 
@@ -1809,10 +1834,7 @@ app.get("/api/tested-controllers", async (req, res) => {
       },
     });
   } catch (error) {
-    console.error(
-      "❌ Failed to load tested controllers:",
-      error
-    );
+    console.error("❌ Failed to load tested controllers:", error);
 
     return res.status(500).json({
       success: false,
@@ -1820,7 +1842,6 @@ app.get("/api/tested-controllers", async (req, res) => {
     });
   }
 });
-
 
 // =====================================================
 // TESTED CONTROLLER - UPDATE (EDIT) EXISTING RECORD
@@ -1980,7 +2001,7 @@ app.put("/api/tested-controllers/:id", async (req, res) => {
 });
 
 // =====================================================
-// TESTED CONTROLLER - HISTORY OF THE TESTED CONTROLLER 
+// TESTED CONTROLLER - HISTORY OF THE TESTED CONTROLLER
 // =====================================================
 app.get("/api/tested-controllers/:id/history", async (req, res) => {
   try {
@@ -2647,8 +2668,9 @@ const tcpServer = net.createServer((socket) => {
         // ===================== Logging Incoming Data from Simulator =====================
         if (INC_LOGS_CMD) {
           const now = new Date();
-          const fileName = `${now.getDate()}_${now.getMonth() + 1
-            }_${now.getHours()}.inc`;
+          const fileName = `${now.getDate()}_${
+            now.getMonth() + 1
+          }_${now.getHours()}.inc`;
 
           // const sensorData = {
           //   humidity: humidity,
@@ -2779,8 +2801,9 @@ const tcpServer = net.createServer((socket) => {
           const now = new Date();
           const timestamp = now.toLocaleString();
 
-          const alarmFileName = `${now.getDate()}_${now.getMonth() + 1
-            }_${now.getHours()}_Alarm.inc`;
+          const alarmFileName = `${now.getDate()}_${
+            now.getMonth() + 1
+          }_${now.getHours()}_Alarm.inc`;
 
           if (fanStatus.includes(2)) {
             var logAlarm = `[${timestamp}] | MAC: ${mac}| ${activeAlarms} | Fan Status: ${fanStatus}\n`;
