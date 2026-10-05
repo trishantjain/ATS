@@ -64,11 +64,14 @@ if len(sys.argv) < 3:
     sys.exit(1)
 
 
-updated_IP = sys.argv[1]  # CPU NUMBER WILL BE ENTERED
+updated_IP = int(sys.argv[1])  # CPU NUMBER WILL BE ENTERED
 current_IP = sys.argv[2]
 
 # Updated new_IP in the range of 0-250 so that IP address is valid
-new_IP = new_ip = updated_IP - 250 * (math.floor(updated_IP/250))
+new_IP = updated_IP - 250 * (math.floor(updated_IP/250))
+
+new_IP = str(new_IP)
+# updated_IP = str(updated_IP)
 
 if new_IP.lower() == "q" or current_IP.lower() == "q":
     print("Exiting...")
