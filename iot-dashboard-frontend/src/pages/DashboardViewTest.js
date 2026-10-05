@@ -789,9 +789,9 @@ function DashboardViewTest() {
             prev.map((t) =>
               t.id === message.testFile
                 ? {
-                  ...t,
-                  status: "running",
-                }
+                    ...t,
+                    status: "running",
+                  }
                 : t,
             ),
           );
@@ -839,10 +839,10 @@ function DashboardViewTest() {
             prev.map((t) =>
               t.id === message.testFile
                 ? {
-                  ...t,
-                  status: message.status === "passed" ? "passed" : "failed",
-                  duration: message.duration || "-",
-                }
+                    ...t,
+                    status: message.status === "passed" ? "passed" : "failed",
+                    duration: message.duration || "-",
+                  }
                 : t,
             ),
           );
@@ -906,8 +906,9 @@ function DashboardViewTest() {
             ...prev,
             [testId]: {
               title: `${message.name} - Step ${message.stepNumber}/${message.totalSteps}`,
-              message: `${stepResult} ${message.message || (isPassed ? "Step passed" : "Step failed")
-                }`,
+              message: `${stepResult} ${
+                message.message || (isPassed ? "Step passed" : "Step failed")
+              }`,
               type: isPassed ? "success" : "error",
               testColor: getTestColor(message),
             },
@@ -1181,8 +1182,7 @@ function DashboardViewTest() {
   }
 
   async function showDuplicateWarning(duplicateResult) {
-    const { matches = [], matchingFields = [], entered = {} } =
-      duplicateResult;
+    const { matches = [], matchingFields = [], entered = {} } = duplicateResult;
 
     const fieldMap = {
       cpu: ["cpu", "cpuSr"],
@@ -1235,7 +1235,7 @@ function DashboardViewTest() {
         if (
           recordValue !== null &&
           String(recordValue).trim().toLowerCase() ===
-          enteredValue.toLowerCase()
+            enteredValue.toLowerCase()
         ) {
           duplicates.push({
             field,
@@ -1263,22 +1263,17 @@ function DashboardViewTest() {
     ];
 
     const getColumnValue = (record, column) => {
-      return getValue(
-        record,
-        [column.key, ...(column.aliases || [])]
-      );
+      return getValue(record, [column.key, ...(column.aliases || [])]);
     };
 
     const recordRows = matches.map((record, index) => {
       const duplicates = getDuplicates(record);
-      const duplicateFields = new Set(
-        duplicates.map((item) => item.field)
-      );
+      const duplicateFields = new Set(duplicates.map((item) => item.field));
 
       const duplicateBadge = duplicates.length
         ? duplicates
-          .map(
-            (item) => `
+            .map(
+              (item) => `
               <span style="
                 display:inline-block;
                 margin:2px 4px 2px 0;
@@ -1292,9 +1287,9 @@ function DashboardViewTest() {
               ">
                 ${escapeHtml(item.label)}: ${escapeHtml(item.value)}
               </span>
-            `
-          )
-          .join("")
+            `,
+            )
+            .join("")
         : `<span style="color:#fbbf24;font-size:11px;">
            Matching field details unavailable
          </span>`;
@@ -1309,11 +1304,12 @@ function DashboardViewTest() {
                 ? JSON.stringify(value)
                 : String(value);
 
-          const isDuplicate = duplicates.some((item) =>
-            (fieldMap[item.field] || []).includes(column.key) ||
-            (column.aliases || []).some((alias) =>
-              (fieldMap[item.field] || []).includes(alias)
-            )
+          const isDuplicate = duplicates.some(
+            (item) =>
+              (fieldMap[item.field] || []).includes(column.key) ||
+              (column.aliases || []).some((alias) =>
+                (fieldMap[item.field] || []).includes(alias),
+              ),
           );
 
           return `
@@ -1326,14 +1322,15 @@ function DashboardViewTest() {
             white-space:nowrap;
           ">
             ${escapeHtml(displayValue)}
-            ${isDuplicate
-              ? `<div style="
+            ${
+              isDuplicate
+                ? `<div style="
                     margin-top:3px;
                     color:#fecaca;
                     font-size:10px;
                     font-weight:600;
                   ">DUPLICATE</div>`
-              : ""
+                : ""
             }
           </td>
         `;
@@ -1396,8 +1393,8 @@ function DashboardViewTest() {
             <thead>
               <tr>
                 ${columns
-          .map(
-            (column) => `
+                  .map(
+                    (column) => `
                       <th style="
                         padding:9px 10px;
                         background:#0f172a;
@@ -1409,9 +1406,9 @@ function DashboardViewTest() {
                       ">
                         ${escapeHtml(column.label)}
                       </th>
-                    `
-          )
-          .join("")}
+                    `,
+                  )
+                  .join("")}
               </tr>
             </thead>
             <tbody>
@@ -1442,9 +1439,10 @@ function DashboardViewTest() {
         overflow-y:auto;
         padding:0 4px;
       ">
-        ${recordRows.length
-          ? recordRows.join("")
-          : `<p>No matching record details were returned.</p>`
+        ${
+          recordRows.length
+            ? recordRows.join("")
+            : `<p>No matching record details were returned.</p>`
         }
       </div>
     `,
@@ -1462,6 +1460,7 @@ function DashboardViewTest() {
     setSavingTestedController(true);
 
     try {
+      console.log("✅ Saving controller ✅");
       const result = await registerTestedController(pendingTestedRun);
 
       console.log("✅ Controller saved:", result.controller);
@@ -1469,9 +1468,7 @@ function DashboardViewTest() {
       // Only clear pending record AFTER successful DB insertion
       setPendingTestedRun(null);
 
-      setTestStatus(
-        "Controller successfully saved to Tested Controllers."
-      );
+      setTestStatus("Controller successfully saved to Tested Controllers.");
 
       await swal.fire({
         icon: "success",
@@ -1479,20 +1476,16 @@ function DashboardViewTest() {
         text: "The controller record has been saved to the database.",
         confirmButtonText: "OK",
       });
-
     } catch (err) {
       console.error("❌ Failed to save tested controller:", err);
 
-      setTestStatus(
-        `Tests completed, but saving failed: ${err.message}`
-      );
+      setTestStatus(`Tests completed, but saving failed: ${err.message}`);
 
       await swal.fire({
         icon: "error",
         title: "Could not save controller",
         text: err.message || "Failed to save the controller.",
       });
-
     } finally {
       setSavingTestedController(false);
     }
@@ -1501,7 +1494,7 @@ function DashboardViewTest() {
   // Register a completed ATS run in the Tested Controllers collection
   async function registerTestedController(data) {
     const payload = {
-      controllerIp: String(data.controllerIp ?? "").trim(),
+      controllerIp: String(selectedMac ?? "").trim(),
       unitSerialNo: String(data.unitSerialNo ?? "").trim(),
       cpu: String(data.cpu ?? "").trim(),
       base: String(data.base ?? "").trim(),
@@ -1529,7 +1522,7 @@ function DashboardViewTest() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify(payload),
-      }
+      },
     );
 
     const result = await response.json().catch(() => ({}));
@@ -1540,7 +1533,7 @@ function DashboardViewTest() {
       // Give the caller useful information if backend rejects it.
       if (response.status === 409) {
         const duplicateError = new Error(
-          result.message || "Duplicate controller/component found."
+          result.message || "Duplicate controller/component found.",
         );
 
         duplicateError.code = result.code;
@@ -1551,9 +1544,7 @@ function DashboardViewTest() {
       }
 
       throw new Error(
-        result.error ||
-        result.message ||
-        "Failed to save tested controller."
+        result.error || result.message || "Failed to save tested controller.",
       );
     }
 
@@ -1561,7 +1552,6 @@ function DashboardViewTest() {
   }
 
   // IMONI TEST FUNCTION
-
   async function iMoni_test() {
     setAwaitingCommand(true);
     setShowATSPanel(false);
@@ -1617,8 +1607,7 @@ function DashboardViewTest() {
 
       // 2. Check for duplicate component serial numbers
       try {
-        const duplicateResult =
-          await checkTestedControllerDuplicate();
+        const duplicateResult = await checkTestedControllerDuplicate();
 
         if (duplicateResult.exists) {
           await showDuplicateWarning(duplicateResult);
@@ -1657,14 +1646,8 @@ function DashboardViewTest() {
 
       const frontendResults = [];
 
-      console.log(
-        "Fetched Test List Length: ",
-        fetchedTestList.length
-      );
-      console.log(
-        "Selected Tests Length: ",
-        selectedTests.length
-      );
+      console.log("Fetched Test List Length: ", fetchedTestList.length);
+      console.log("Selected Tests Length: ", selectedTests.length);
 
       // 4. Run all tests if the complete test list is selected
       if (fetchedTestList.length === selectedTests.length) {
@@ -1683,11 +1666,11 @@ function DashboardViewTest() {
           prev.map((t) =>
             t.name === "Visual Test"
               ? {
-                ...t,
-                status: visualPassed ? "passed" : "failed",
-              }
-              : t
-          )
+                  ...t,
+                  status: visualPassed ? "passed" : "failed",
+                }
+              : t,
+          ),
         );
 
         frontendResults.push({
@@ -1739,22 +1722,20 @@ function DashboardViewTest() {
                 unitSerialNo: unitSerialNo.trim(),
                 testLevel,
               }),
-            }
+            },
           );
 
           const data = await resp.json().catch(() => ({}));
 
           if (!resp.ok) {
-            throw new Error(
-              data.error || `ATS failed (${resp.status})`
-            );
+            throw new Error(data.error || `ATS failed (${resp.status})`);
           }
 
           // Preserve entered values even if the API response
           // does not include the serial numbers.
           setPendingTestedRun({
             ...data,
-            assemblyNo: unitSerialNo.trim(),
+            unitSerialNo: unitSerialNo.trim(),
             cpu: cpu.trim(),
             base: base.trim(),
             camera: camera.trim(),
@@ -1766,8 +1747,8 @@ function DashboardViewTest() {
 
           setTestStatus(
             `Done: ${data.summary?.passed ?? 0} passed, ` +
-            `${data.summary?.failed ?? 0} failed — ` +
-            "Ready to mark as tested"
+              `${data.summary?.failed ?? 0} failed — ` +
+              "Ready to mark as tested",
           );
         } catch (err) {
           console.error("Run-all ATS failed:", err);
@@ -1775,10 +1756,7 @@ function DashboardViewTest() {
         }
       } else {
         // 6. Run selected backend tests
-        console.log(
-          "Selected Test code runs ...",
-          selectedTests
-        );
+        console.log("Selected Test code runs ...", selectedTests);
 
         try {
           const resp = await fetch(
@@ -1799,22 +1777,20 @@ function DashboardViewTest() {
                 psu: psu.trim(),
                 testLevel,
               }),
-            }
+            },
           );
 
           const data = await resp.json().catch(() => ({}));
 
           if (!resp.ok) {
-            throw new Error(
-              data.error || `ATS failed (${resp.status})`
-            );
+            throw new Error(data.error || `ATS failed (${resp.status})`);
           }
 
           // Preserve entered values even if the API response
           // does not include the serial numbers.
           setPendingTestedRun({
             ...data,
-            assemblyNo: unitSerialNo.trim(),
+            unitSerialNo: unitSerialNo.trim(),
             cpu: cpu.trim(),
             base: base.trim(),
             camera: camera.trim(),
@@ -1826,8 +1802,8 @@ function DashboardViewTest() {
 
           setTestStatus(
             `Done: ${data.summary?.passed ?? 0} passed, ` +
-            `${data.summary?.failed ?? 0} failed — ` +
-            "Ready to mark as tested"
+              `${data.summary?.failed ?? 0} failed — ` +
+              "Ready to mark as tested",
           );
         } catch (err) {
           console.error("Selected ATS tests failed:", err);
@@ -1838,9 +1814,7 @@ function DashboardViewTest() {
       // Catch unexpected errors outside the individual API calls.
       console.error("Unexpected iMoni test error:", err);
 
-      setTestStatus(
-        `Error: ${err.message || "Unexpected ATS error"}`
-      );
+      setTestStatus(`Error: ${err.message || "Unexpected ATS error"}`);
 
       await swal.fire({
         icon: "error",
@@ -1853,7 +1827,6 @@ function DashboardViewTest() {
       setShowATSPanel(true);
     }
   }
-
 
   // FAN TEST FUNCTION
   async function fan_test() {
@@ -2430,8 +2403,9 @@ function DashboardViewTest() {
                       <div
                         key={index}
                         title={`${test.name} - ${test.status}`}
-                        className={`rounded-md border px-2.5 py-1 text-[10px] font-medium ${statusClass[test.status] || statusClass.waiting
-                          }`}
+                        className={`rounded-md border px-2.5 py-1 text-[10px] font-medium ${
+                          statusClass[test.status] || statusClass.waiting
+                        }`}
                       >
                         <span className="mr-1">{icon[test.status] || "○"}</span>
 
@@ -2554,12 +2528,13 @@ function DashboardViewTest() {
                 alignItems: "flex-start",
                 color: "#fff",
 
-                boxShadow: `0 4px 12px ${notification.type === "success"
-                  ? "rgba(0, 204, 102, 0.3)"
-                  : notification.type === "error"
-                    ? "rgba(204, 51, 51, 0.3)"
-                    : "rgba(0, 204, 204, 0.3)"
-                  }`,
+                boxShadow: `0 4px 12px ${
+                  notification.type === "success"
+                    ? "rgba(0, 204, 102, 0.3)"
+                    : notification.type === "error"
+                      ? "rgba(204, 51, 51, 0.3)"
+                      : "rgba(0, 204, 204, 0.3)"
+                }`,
 
                 animation: "slideIn 0.3s ease-out",
               }}
@@ -2865,13 +2840,14 @@ function DashboardViewTest() {
                         {[1, 2, 3, 4, 5].map((level) => (
                           <div key={level} className="fan-light">
                             <button
-                              className={`power-btn ${activeFanBtns.includes(level) ||
+                              className={`power-btn ${
+                                activeFanBtns.includes(level) ||
                                 (latestReading &&
                                   latestReading[`fanLevel${level}Running`] ===
-                                  true)
-                                ? "active"
-                                : ""
-                                }`}
+                                    true)
+                                  ? "active"
+                                  : ""
+                              }`}
                               onClick={() => handleFanClick(level)}
                             />
                             <div className="fan-label">
@@ -2917,12 +2893,13 @@ function DashboardViewTest() {
                         {alarmKeys.map((alarm, i) => (
                           <div key={i} className="status-box">
                             <div
-                              className={`alarm-led ${latestReading[alarm.key] === 87
-                                ? "wait"
-                                : latestReading[alarm.key]
-                                  ? "active"
-                                  : ""
-                                }`}
+                              className={`alarm-led ${
+                                latestReading[alarm.key] === 87
+                                  ? "wait"
+                                  : latestReading[alarm.key]
+                                    ? "active"
+                                    : ""
+                              }`}
                             />
                             <div className="status-title">{alarm.Name}</div>
                           </div>
@@ -2932,10 +2909,11 @@ function DashboardViewTest() {
                             return (
                               <div key={i} className="alarm-indicator">
                                 <div
-                                  className={`alarm-led ${latestReading[status.key] === "OPEN"
-                                    ? "active"
-                                    : ""
-                                    }`}
+                                  className={`alarm-led ${
+                                    latestReading[status.key] === "OPEN"
+                                      ? "active"
+                                      : ""
+                                  }`}
                                 />
                                 <div className="alarm-label">{status.Name}</div>
                               </div>
@@ -2947,14 +2925,15 @@ function DashboardViewTest() {
                                   {/* <div className={`alarm-led ${latestReading[status.key] === 1 ? 'active' : ''}`} /> */}
                                   <div
                                     className={`alarm-led
-                              ${latestReading[status.key] === 1
-                                        ? "pass-danger"
-                                        : latestReading[status.key] === 2
-                                          ? "pass-warn"
-                                          : latestReading[status.key] === 3
-                                            ? "pass-active"
-                                            : ""
-                                      }`}
+                              ${
+                                latestReading[status.key] === 1
+                                  ? "pass-danger"
+                                  : latestReading[status.key] === 2
+                                    ? "pass-warn"
+                                    : latestReading[status.key] === 3
+                                      ? "pass-active"
+                                      : ""
+                              }`}
                                   />
                                   <div className="alarm-label">
                                     {status.Name}
@@ -2978,8 +2957,9 @@ function DashboardViewTest() {
                         {hupsKeys.map((hups, i) => (
                           <div key={i} className="status-box">
                             <div
-                              className={`alarm-led ${latestReading[hups.key] ? "" : "active"
-                                }`}
+                              className={`alarm-led ${
+                                latestReading[hups.key] ? "" : "active"
+                              }`}
                             />
                             <div className="status-title">{hups.Name}</div>
                           </div>
