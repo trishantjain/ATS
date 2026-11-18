@@ -743,7 +743,7 @@ const ControllersTable = memo(function ControllersTable({
                               onClick={() => openEditForm(controller)}
                               className={`cursor-pointer ${t.dropdownItemHover}`}
                             >
-                              <FileCheck2 className="mr-2 h-4 w-4 text-amber-500" />
+                              <FileCheck2 className="w-4 h-4 mr-2 text-amber-500" />
                               Edit Record
                             </DropdownMenuItem>
                             <DropdownMenuItem
@@ -837,12 +837,12 @@ export default function TestedControllers() {
   });
 
   const emptyForm = {
-    controllerIp: "",
-    unitSerialNo: "",
-    cpu: "",
-    base: "",
-    psu: "",
-    camera: "",
+    controllerIp: "NA",
+    unitSerialNo: "NA",
+    cpu: "NA",
+    base: "NA",
+    psu: "NA",
+    camera: "NA",
     testedBy: "",
     status: "Tested",
     remark: "",
@@ -1524,7 +1524,7 @@ export default function TestedControllers() {
 
             <Button
               onClick={openAddForm}
-              className="h-9 gap-2 bg-emerald-600 text-white hover:bg-emerald-500"
+              className="gap-2 text-white h-9 bg-emerald-600 hover:bg-emerald-500"
             >
               <span className="text-lg leading-none">+</span>
               Add Record
@@ -2033,7 +2033,7 @@ export default function TestedControllers() {
                 </div>
 
                 {formError && (
-                  <div className="rounded-md border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-500">
+                  <div className="p-3 text-sm text-red-500 border rounded-md border-red-500/30 bg-red-500/10">
                     {formError}
                   </div>
                 )}
@@ -2051,7 +2051,7 @@ export default function TestedControllers() {
 
                   <Button
                     type="submit"
-                    className="flex-1 bg-indigo-500 text-white hover:bg-indigo-400"
+                    className="flex-1 text-white bg-indigo-500 hover:bg-indigo-400"
                     disabled={savingRecord}
                   >
                     {savingRecord
