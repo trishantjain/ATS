@@ -1919,10 +1919,13 @@ app.put("/api/tested-controllers/:id", async (req, res) => {
     }
 
     for (const field of NUMERIC_SERIAL_FIELDS) {
-      if (!/^\d+$/.test(finalValues[field])) {
+      if (
+        !/^\d+$/.test(finalValues[field]) &&
+        !/^na$/i.test(finalValues[field])
+      ) {
         return res.status(400).json({
           success: false,
-          error: `${field} serial number must contain digits only`,
+          error: `${field} serial number must contain digits only or be NA`,
           field,
         });
       }
