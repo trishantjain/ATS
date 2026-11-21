@@ -3,3 +3,4 @@ scripts
 release
 
 .env
+server\Testing\reportCounter.json

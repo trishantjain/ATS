@@ -1,2 +1,4 @@
 .env
 node_modules
+
+server\Testing\reportCounter.json

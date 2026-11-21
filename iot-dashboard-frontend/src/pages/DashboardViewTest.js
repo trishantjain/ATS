@@ -316,19 +316,19 @@ function DashboardViewTest() {
 
   //! New code for Open Lock (using Sweetalert2)
   const handleOpenLock = async () => {
-    const { value: password } = await swal.fire({
-      title: "Enter Admin password",
-      input: "password",
-      inputLabel: "Password",
-      inputPlaceholder: "Enter admin password",
-      showCancelButton: true,
-      confirmButtonText: "Open Lock",
-      cancelButtonText: "Cancel",
-      background: "#292929",
-      color: "#fff",
-      confirmButtonColor: "#2f2f2fff",
-      width: "20em",
-    });
+    // const { value: password } = await swal.fire({
+    //   title: "Enter Admin password",
+    //   input: "password",
+    //   inputLabel: "Password",
+    //   inputPlaceholder: "Enter admin password",
+    //   showCancelButton: true,
+    //   confirmButtonText: "Open Lock",
+    //   cancelButtonText: "Cancel",
+    //   background: "#292929",
+    //   color: "#fff",
+    //   confirmButtonColor: "#2f2f2fff",
+    //   width: "20em",
+    // });
 
     // if (password) {
     // if (password === "admin123") {

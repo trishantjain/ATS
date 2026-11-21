@@ -1,3 +1,6 @@
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
+const mongoose = require('mongoose');
 const { SerialPort } = require('serialport');
 const { ReadlineParser } = require('@serialport/parser-readline');
 const { reportWriter } = require('../ATS/reportWriter'); // adjust path
@@ -65,7 +68,7 @@ function handleFanTestResult(data) {
 // 🔥 CHANGE THIS to your COM port
 const port = new SerialPort(
     {
-        path: 'COM19',
+        path: 'COM3',
         baudRate: 115200,
         autoOpen: false
     }
@@ -76,20 +79,41 @@ const parser = port.pipe(new ReadlineParser({ delimiter: '\n' }));
 let buffer = [];
 let capturing = false;
 
-// ✅ OPEN PORT + AUTO TRIGGER
-port.open((err) => {
-    if (err) {
-        return console.error("❌ Error opening port:", err.message);
+async function startListener() {
+    try {
+        if (!process.env.MONGO_URI) {
+            throw new Error("MONGO_URI is not configured in server/.env");
+        }
+
+        await mongoose.connect(process.env.MONGO_URI);
+        console.log("🗄️ MongoDB connected");
+    } catch (err) {
+        console.error("❌ MongoDB connection error:", err.message);
+        process.exitCode = 1;
+        return;
     }
 
-    console.log("🔌 Serial connected");
+    // ✅ OPEN PORT + AUTO TRIGGER
+    port.open((err) => {
+        if (err) {
+            console.error("❌ Error opening port:", err.message);
+            mongoose.disconnect().catch((disconnectError) => {
+                console.error("❌ MongoDB disconnect error:", disconnectError.message);
+            });
+            return;
+        }
 
-    // 🔥 AUTO TRIGGER
-    setTimeout(() => {
-        console.log("🚀 Sending START ");
-        port.write("START\n");
-    }, 2000);
-});
+        console.log("🔌 Serial connected");
+
+        // 🔥 AUTO TRIGGER
+        setTimeout(() => {
+            console.log("🚀 Sending START ");
+            port.write("START\n");
+        }, 2000);
+    });
+}
+
+startListener();
 
 // 🔥 Listen to ESP output
 parser.on('data', (line) => {
