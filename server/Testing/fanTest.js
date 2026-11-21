@@ -42,17 +42,9 @@ function startFanTest(fanTrayControllerId, portName, logCallback) {
             // const MIN_PULSE = 100;
 
             const stepResults = data.results.map((fan, idx) => ({
-                // const rpm = Number(fan.rpm);
-                // const rpmPassed = Number.isFinite(rpm) && rpm >= MIN_FAN_RPM && rpm <= MAX_FAN_RPM;
-
-                // const pulses = Number(fan.pulses);  // or fan.pulses if you renamed it
-                // const pulsePassed = Number.isFinite(pulses) && pulses > MIN_PULSE;
-
-                // return {
                 step: idx + 1,
                 status: fan.status === "PASS" ? "passed" : "failed",
-                message: `Fan ${fan.fan} Pulses=${fan.pulses}`
-                // };
+                message: `Fan ${fan.fan}: ${fan.status} (${fan.pulses} LOW samples)`
             }));
 
             const testPassed = stepResults.every(s => s.status === "passed");
@@ -87,6 +79,7 @@ function startFanTest(fanTrayControllerId, portName, logCallback) {
                     cleanup();
                     resolve({
                         success: true,
+                        passed: testPassed,
                         message: `Report saved: ${res.filePath}`,
                         result: runResult
                     });

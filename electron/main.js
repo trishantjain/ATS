@@ -18,12 +18,20 @@ const tcpServer = net.createServer((socket) => {
   console.log("ESP32 Connected");
 
   espSocket = socket;
+  let tcpPartialLine = "";
 
   socket.on('data', (data) => {
-    const line = data.toString();
+    tcpPartialLine += data.toString();
+    const lines = tcpPartialLine.split(/\r?\n/);
+    tcpPartialLine = lines.pop() || "";
 
-    BrowserWindow.getAllWindows().forEach(win => {
-      win.webContents.send('esp-log', line);
+    lines.forEach((line) => {
+      const cleanLine = line.trim();
+      if (!cleanLine) return;
+
+      BrowserWindow.getAllWindows().forEach(win => {
+        win.webContents.send('esp-log', cleanLine);
+      });
     });
   });
 
@@ -198,9 +206,10 @@ ipcMain.on('start-fan-test', async (event, { fanId, comPort, connectionType }) =
     //     event.reply('esp-log', line);
     //   });
     event.reply('test-result', {
-      success: true,
+      success: result.success !== false,
       message: result.message,
-      data: result.result
+      data: result.result,
+      passed: result.passed
     });
   } catch (err) {
     event.reply('test-result', {

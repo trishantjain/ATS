@@ -36,20 +36,13 @@ function startFanTestWifi(fanTrayControllerId, espSocket, logCallback) {
                 return;
             }
 
-            const MIN_PULSE = 150;
-
             const stepResults = data.results.map((fan, idx) => {
-
                 const pulses = Number(fan.pulses);
-
-                const pulsePassed =
-                    Number.isFinite(pulses) &&
-                    pulses > MIN_PULSE;
 
                 return {
                     step: idx + 1,
-                    status: pulsePassed ? "passed" : "failed",
-                    message: `Fan ${fan.fan} Pulses=${fan.pulses}`
+                    status: fan.status === "PASS" ? "passed" : "failed",
+                    message: `Fan ${fan.fan}: ${fan.status} (${Number.isFinite(pulses) ? pulses : fan.pulses} LOW samples)`
                 };
             });
 
@@ -85,6 +78,7 @@ function startFanTestWifi(fanTrayControllerId, espSocket, logCallback) {
 
                     resolve({
                         success: true,
+                        passed: testPassed,
                         message: `Report saved: ${res.filePath}`,
                         result: runResult
                     });

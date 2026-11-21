@@ -25,5 +25,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     // REMOVE LISTENER
     removeTestResultListener: () => {
         ipcRenderer.removeAllListeners('test-result');
+    },
+
+    removeEspLogListener: () => {
+        ipcRenderer.removeAllListeners('esp-log');
     }
 });

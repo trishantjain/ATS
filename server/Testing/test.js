@@ -85,16 +85,13 @@ function handleFanTestResult(data) {
         return;
     }
 
-    const MIN_PULSE = 100;
-
     // Create one test result per fan
     const fanResults = data.results.map((fan) => {
         const pulses = Number(fan.pulses);
 
         const passed =
             fan.status === "PASS" &&
-            Number.isFinite(pulses) &&
-            pulses >= MIN_PULSE;
+            Number.isFinite(pulses);
 
         return {
             name: `Fanx ${fan.fan}`,

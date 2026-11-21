@@ -140,6 +140,24 @@
             font-size: 12px;
             color: #721c24;
         }
+
+        #resultTable {
+            width: 100%;
+            margin-top: 15px;
+            border-collapse: collapse;
+            display: none;
+        }
+
+        #resultTable th,
+        #resultTable td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+
+        #resultTable th {
+            background: #eee;
+        }
     </style>
 </head>
 
@@ -186,6 +204,16 @@
 
         <!-- STATUS DISPLAY -->
         <div id="status" class="status"></div>
+        <table id="resultTable">
+            <thead>
+                <tr>
+                    <th>Fan</th>
+                    <th>Result</th>
+                    <th>Details</th>
+                </tr>
+            </thead>
+            <tbody id="resultTableBody"></tbody>
+        </table>
     </div>
 
     <script>
@@ -234,6 +262,9 @@
             statusDiv.className = 'status loading';
             statusDiv.innerHTML = '<span class="spinner"></span>Testing in progress...';
             startBtn.disabled = true;
+            document.getElementById('logContainer').textContent = '';
+            document.getElementById('resultTable').style.display = 'none';
+            document.getElementById('resultTableBody').innerHTML = '';
 
             // Send test request
             window.electronAPI.startFanTest(fanId, comPort, connectionType);
@@ -245,28 +276,59 @@
         window.electronAPI.onTestResult((result) => {
             const statusDiv = document.getElementById('status');
             const startBtn = document.getElementById('startBtn');
+            const table = document.getElementById('resultTable');
+            const tableBody = document.getElementById('resultTableBody');
 
             startBtn.disabled = false;
 
-            if (result.success) {
+            if (result.success && result.passed) {
                 statusDiv.className = 'status success';
-                statusDiv.innerHTML = `✅ Test Passed<br><small>${result.message || ''}</small>`;
+                statusDiv.innerHTML = `✅ Test Passed / Report Created<br><small>${result.message || ''}</small>`;
+            } else if (result.success) {
+                statusDiv.className = 'status error';
+                statusDiv.innerHTML = `❌ Test Failed / Report Created<br><small>${result.message || ''}</small>`;
             } else {
                 statusDiv.className = 'status error';
                 statusDiv.innerHTML = `❌ Test Failed<br><small class="error-message">${result.error || 'Unknown error'}</small>`;
+            }
+
+            if (result.data && Array.isArray(result.data.results)) {
+                tableBody.innerHTML = '';
+                table.style.display = 'table';
+
+                result.data.results.forEach(test => {
+                    (test.stepResults || []).forEach(step => {
+                        const row = document.createElement('tr');
+                        const fanCell = document.createElement('td');
+                        const resultCell = document.createElement('td');
+                        const detailCell = document.createElement('td');
+
+                        fanCell.textContent = `Fan ${step.step}`;
+                        resultCell.textContent = step.status === 'passed' ? 'PASS' : 'FAIL';
+                        resultCell.style.color = step.status === 'passed' ? '#155724' : '#721c24';
+                        detailCell.textContent = step.message || '';
+
+                        row.appendChild(fanCell);
+                        row.appendChild(resultCell);
+                        row.appendChild(detailCell);
+                        tableBody.appendChild(row);
+                    });
+                });
             }
         });
 
         window.electronAPI.onEspLog((line) => {
             const logContainer = document.getElementById('logContainer');
 
-            logContainer.innerHTML += line + "<br>";
+            logContainer.appendChild(document.createTextNode(String(line)));
+            logContainer.appendChild(document.createElement('br'));
             logContainer.scrollTop = logContainer.scrollHeight;
         });
 
         // Clean up on close
         window.addEventListener('beforeunload', () => {
             window.electronAPI.removeTestResultListener();
+            window.electronAPI.removeEspLogListener();
         });
 
         async function loadComPorts() {
