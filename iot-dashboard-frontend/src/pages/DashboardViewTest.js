@@ -69,11 +69,14 @@ function DashboardViewTest() {
   const [psu, setPsu] = useState("");
   const [pythonCpu, setPythonCpu] = useState("");
   const [pythonIp, setPythonIp] = useState("");
+  const [fanControllerId, setFanControllerId] = useState("");
 
   // Python Programming Status
   const [pythonStatus, setPythonStatus] = useState(null);
   const [pythonLogs, setPythonLogs] = useState([]);
   const [pythonRunning, setPythonRunning] = useState(false);
+  const [fanLogs, setFanLogs] = useState([]);
+  const [webSocketStatus, setWebSocketStatus] = useState("connecting");
 
   // States for Test Lists
   const [selectedTests, setSelectedTests] = useState([]); // Stores selected tests
@@ -188,6 +191,10 @@ function DashboardViewTest() {
   const wsRef = useRef(null);
 
   const pythonLogsRef = useRef(null);
+  const fanLogsRef = useRef(null);
+  const fanLogsValueRef = useRef([]);
+  const wsReconnectAttemptRef = useRef(0);
+  const wsReconnectTimerRef = useRef(null);
 
   const manualCloseRef = useRef(false);
   const navigate = useNavigate();
@@ -225,6 +232,15 @@ function DashboardViewTest() {
       });
     }
   }, [pythonLogs]);
+
+  useEffect(() => {
+    if (fanLogsRef.current) {
+      fanLogsRef.current.scrollTo({
+        top: fanLogsRef.current.scrollHeight,
+        behavior: "smooth",
+      });
+    }
+  }, [fanLogs]);
 
   // added by vats
   // A synchronous function to format the date and time.
@@ -531,22 +547,29 @@ function DashboardViewTest() {
   };
 
   const connectWebSocket = () => {
-    console.log("🔄 Attempting WebSocket connection...");
-
+    clearTimeout(wsReconnectTimerRef.current);
+    const apiUrl = process.env.REACT_APP_API_URL || window.location.origin;
+    const apiAddress = new URL(apiUrl, window.location.origin);
+    const wsProtocol = apiAddress.protocol === "https:" ? "wss:" : "ws:";
     const wsUrl =
-      process.env.NODE_ENV === "production"
-        ? `wss://${window.location.host}`
-        : process.env.REACT_APP_WS_URL || "ws://localhost:8080";
+      process.env.REACT_APP_WS_URL ||
+      `${wsProtocol}//${apiAddress.hostname}:${process.env.REACT_APP_WS_PORT || "8080"}`;
 
     const ws = new WebSocket(wsUrl);
 
     wsRef.current = ws;
+    setWebSocketStatus("connecting");
 
     ws.onopen = () => {
+      if (wsRef.current !== ws) return;
+      wsReconnectAttemptRef.current = 0;
+      clearTimeout(wsReconnectTimerRef.current);
+      setWebSocketStatus("connected");
       console.log("✅ WebSocket connected successfully");
     };
 
     ws.onmessage = (event) => {
+      if (wsRef.current !== ws) return;
       try {
         // console.log("RAW:", event.data);
         const message = JSON.parse(event.data);
@@ -683,6 +706,11 @@ function DashboardViewTest() {
             return prev;
           });
 
+          return;
+        }
+
+        if (message.type === "PYTHON_STATUS" && message.stage === "esp-fan") {
+          if (message.message) appendFanLog(message.message);
           return;
         }
 
@@ -926,6 +954,25 @@ function DashboardViewTest() {
           }, 3000);
         }
 
+        if (message.type === "FAN_TEST_LOG") {
+          appendFanLog(message.line);
+        }
+
+        if (message.type === "FAN_TEST_COMPLETED") {
+          setFanTestStatus(false);
+          if (message.success) {
+            setTestStatus(
+              message.passed
+                ? `✅ Fan test passed${message.reportPath ? ` | Report: ${message.reportPath}` : ""}`
+                : `❌ Fan test failed${message.reportPath ? ` | Report: ${message.reportPath}` : ""}`,
+            );
+          } else {
+            setTestStatus(
+              `❌ Fan test error: ${message.error || "Unknown error"}`,
+            );
+          }
+        }
+
         if (message.type === "CAMERA_IMAGE_CAPTURED") {
           console.log("📷 Camera image captured:", message);
 
@@ -978,26 +1025,27 @@ function DashboardViewTest() {
       }
     };
 
-    ws.onerror = (error) => {
-      console.error("❌ WebSocket connection error:", error);
+    ws.onerror = () => {
+      if (wsRef.current === ws) {
+        setWebSocketStatus("disconnected");
+      }
     };
 
-    ws.onclose = (event) => {
-      console.log(
-        `🔌 WebSocket disconnected (code: ${event.code}, reason: ${event.reason})`,
-      );
+    ws.onclose = () => {
+      if (wsRef.current !== ws) return;
+      setWebSocketStatus("disconnected");
 
       // Don't reconnect if this was a manual refresh/unmount
       if (manualCloseRef.current) {
-        console.log("⏹️ Manual WebSocket close - skipping auto reconnect");
         manualCloseRef.current = false;
         return;
       }
 
-      setTimeout(() => {
-        console.log("🔄 Attempting to reconnect WebSocket...");
+      const delay = Math.min(1000 * 2 ** wsReconnectAttemptRef.current, 30000);
+      wsReconnectAttemptRef.current += 1;
+      wsReconnectTimerRef.current = setTimeout(() => {
         connectWebSocket();
-      }, 3000);
+      }, delay);
     };
   };
 
@@ -1005,13 +1053,12 @@ function DashboardViewTest() {
     connectWebSocket();
 
     return () => {
+      clearTimeout(wsReconnectTimerRef.current);
       if (wsRef.current) {
-        console.log("🛑 Closing WebSocket connection");
-
         manualCloseRef.current = true;
-
-        wsRef.current.close(1000, "Component unmounting");
+        const ws = wsRef.current;
         wsRef.current = null;
+        ws.close(1000, "Component unmounting");
       }
     };
   }, []);
@@ -1052,7 +1099,7 @@ function DashboardViewTest() {
   useEffect(() => {
     const fetchTests = async () => {
       try {
-        if (selectedProduct !== "pdu") {
+        if (selectedProduct !== "pdu" && selectedProduct !== "fan") {
           const res = await fetch(
             `${process.env.REACT_APP_API_URL}/api/tests/${selectedProduct}?testLevel=${testLevel}`,
           );
@@ -1829,8 +1876,28 @@ function DashboardViewTest() {
   }
 
   // FAN TEST FUNCTION
+  function appendFanLog(line) {
+    const updatedLogs = [...fanLogsValueRef.current, String(line)].slice(-1000);
+    fanLogsValueRef.current = updatedLogs;
+    setFanLogs(updatedLogs);
+  }
+
   async function fan_test() {
+    const controllerId = fanControllerId.trim();
+
+    console.log("Fan ID ", controllerId);
+    if (!controllerId) {
+      await swal.fire({
+        icon: "warning",
+        title: "Controller number required",
+        text: "Enter the fan tray controller number before starting the test.",
+      });
+      return;
+    }
+
     setFanTestStatus(true);
+    fanLogsValueRef.current = [];
+    setFanLogs([]);
 
     try {
       console.log("Calling /fan-test API...");
@@ -1839,16 +1906,35 @@ function DashboardViewTest() {
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ mac: selectedMac }),
+          body: JSON.stringify({
+            // mac: selectedMac,
+            controllerId,
+          }),
         },
       );
 
       console.log("...API Called");
       const data = await resp.json();
       console.log("Data: ", data);
-      setTestStatus(
-        `Done: ${data.summary.passed} passed, ${data.summary.failed} failed`,
-      );
+      if (Array.isArray(data.logs)) {
+        const completeLogs = data.logs.slice(-1000);
+        fanLogsValueRef.current = completeLogs;
+        setFanLogs(completeLogs);
+      }
+
+      if (!resp.ok || !data.success) {
+        throw new Error(data.error || "Fan test failed");
+      }
+
+      if (data.summary) {
+        setTestStatus(
+          `Done: ${data.summary.passed} passed, ${data.summary.failed} failed${data.reportPath ? ` | Report: ${data.reportPath}` : ""}`,
+        );
+      } else {
+        setTestStatus(
+          data.passed ? "✅ Fan test passed" : "❌ Fan test failed",
+        );
+      }
     } catch (err) {
       setTestStatus(`Error: ${err.message}`);
     }
@@ -2205,6 +2291,62 @@ function DashboardViewTest() {
               </div>
             )}
 
+            {(fanTestStatus || fanLogs.length > 0) && (
+              <div className="mt-3 overflow-hidden border rounded-lg border-slate-800 bg-slate-950">
+                <div className="flex items-center justify-between px-3 py-2 border-b border-slate-800 bg-slate-900">
+                  <div className="flex items-center gap-2">
+                    <Terminal className="w-4 h-4 text-emerald-400" />
+                    <span className="text-xs font-semibold tracking-wide uppercase text-slate-300">
+                      ESP Fan Test Console
+                    </span>
+                  </div>
+                  <span
+                    className={`text-[10px] font-medium uppercase ${
+                      webSocketStatus === "connected"
+                        ? "text-emerald-400"
+                        : "text-amber-400"
+                    }`}
+                  >
+                    {webSocketStatus === "connected"
+                      ? "Live logs connected"
+                      : "Live logs reconnecting"}
+                  </span>
+                </div>
+
+                <div
+                  ref={fanLogsRef}
+                  className="h-[220px] overflow-y-auto overscroll-contain px-3 py-2 font-mono text-[11px] leading-5"
+                >
+                  {fanLogs.length > 0 ? (
+                    fanLogs.map((line, index) => (
+                      <div
+                        key={`${index}-${line}`}
+                        className="break-words whitespace-pre-wrap text-slate-300"
+                      >
+                        <span className="mr-2 select-none text-slate-600">
+                          {">"}
+                        </span>
+                        {line}
+                      </div>
+                    ))
+                  ) : (
+                    <div className="py-2 text-slate-600">
+                      Waiting for ESP fan listener output...
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-between border-t border-slate-800 bg-slate-900/60 px-3 py-1.5">
+                  <span className="text-[10px] text-slate-500">
+                    {fanLogs.length} lines
+                  </span>
+                  <span className="text-[10px] text-slate-500">
+                    Auto-scroll enabled
+                  </span>
+                </div>
+              </div>
+            )}
+
             {/* CONFIG + SERIALS + RUN BUTTON */}
             <div className="flex flex-wrap items-end gap-3">
               {/* PRODUCT */}
@@ -2348,14 +2490,50 @@ function DashboardViewTest() {
                   </>
                 )}
 
+              {selectedProduct === "fan" && (
+                <div className="w-[220px]">
+                  <label className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-slate-500">
+                    Controller Number
+                  </label>
+                  <Input
+                    placeholder="Enter controller number"
+                    value={fanControllerId}
+                    onChange={(e) => setFanControllerId(e.target.value)}
+                    disabled={fanTestStatus}
+                    className="text-xs h-9 border-slate-700 bg-slate-900"
+                  />
+                </div>
+              )}
+
               {/* RUN ATS — RIGHT SIDE */}
               <div className="ml-auto">
                 <Button
-                  onClick={iMoni_test}
-                  disabled={awaitingCommand}
+                  onClick={
+                    selectedProduct === "fan"
+                      ? fan_test
+                      : selectedProduct === "pdu"
+                        ? pdu_test
+                        : iMoni_test
+                  }
+                  disabled={
+                    awaitingCommand ||
+                    fanTestStatus ||
+                    pduTestStatus ||
+                    (selectedProduct === "fan" && !fanControllerId.trim())
+                  }
                   className="h-9 min-w-[145px] bg-emerald-600 px-4 text-xs font-semibold hover:bg-emerald-500"
                 >
-                  {awaitingCommand ? "⏳ Running..." : "▶ Run ATS Tests"}
+                  {fanTestStatus
+                    ? "⏳ Running Fan Test..."
+                    : pduTestStatus
+                      ? "⏳ Running PDU Test..."
+                      : awaitingCommand
+                        ? "⏳ Running..."
+                        : selectedProduct === "fan"
+                          ? "▶ Run Fan Test"
+                          : selectedProduct === "pdu"
+                            ? "▶ Run PDU Test"
+                            : "▶ Run ATS Tests"}
                 </Button>
               </div>
             </div>

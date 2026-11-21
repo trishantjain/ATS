@@ -24,6 +24,7 @@ const { startImageSimulator } = require("./imageSimulator.js");
 startImageSimulator();
 
 const atsRuntime = require("./ATS/atsRuntime");
+let activeFanProcess = null;
 
 const logFile = path.join(
   require("os").homedir(),
@@ -71,6 +72,8 @@ process.on("unhandledRejection", (err) => {
 
 // WebSocket Server
 const WS_PORT = process.env.WS_PORT || 8080;
+let webSocketListening = false;
+let webSocketStartupError = null;
 const wss = new WebSocket.Server({ port: WS_PORT });
 const wsClients = new Set();
 // let pendingDialogResolver = null;  // Resolves when frontend responds to dialog
@@ -133,8 +136,16 @@ wss.on("connection", (ws, req) => {
 });
 
 wss.on("listening", () => {
+  webSocketListening = true;
+  webSocketStartupError = null;
   console.log(`✅ WebSocket server running on port ${WS_PORT}`);
   fs.appendFileSync(logFile, "Websocket server running\n");
+});
+
+wss.on("error", (err) => {
+  webSocketListening = false;
+  webSocketStartupError = err.message;
+  console.error(`WebSocket server failed on port ${WS_PORT}:`, err);
 });
 
 // WEBSOCKET BROADCAST FUNCTION
@@ -326,8 +337,8 @@ app.get("/api/websocket-test", (req, res) => {
     websocketServer: {
       port: WS_PORT,
       clients: wsClients.size,
-      status: "RUNNING",
-      // clientSize: wsClients.size
+      status: webSocketListening ? "RUNNING" : "UNAVAILABLE",
+      error: webSocketStartupError,
     },
     httpServer: {
       port: 5000,
@@ -794,6 +805,11 @@ app.post("/api/tests/stop", (req, res) => {
   console.log("🛑 /api/tests/stop endpoint called");
   atsRuntime.requestStop();
 
+  if (activeFanProcess && !activeFanProcess.killed) {
+    activeFanProcess.kill();
+    activeFanProcess = null;
+  }
+
   // Broadcast stop message to all WebSocket clients
   broadcastTestStatus({
     type: "TESTS_STOPPED",
@@ -1010,33 +1026,149 @@ app.post("/api/tests/fan-test", async (req, res) => {
   atsRuntime.resetStop();
 
   try {
-    const { mac, controllerId } = req.body;
+    const { controllerId } = req.body;
 
-    const listenerPath = path.join(
-      __dirname,
-      "ESP_Testing",
-      "espFanListener.js",
-    );
+    if (!controllerId || !String(controllerId).trim()) {
+      return res.status(400).json({
+        success: false,
+        error: "Controller number is required",
+      });
+    }
 
-    const fanProcess = spawn(
-      "node",
-      [listenerPath, controllerId || "unknown-controller"],
-      {
-        cwd: __dirname,
-        stdio: ["ignore", "pipe", "pipe"],
-      },
-    );
+    const listenerPath = path.join(__dirname, "Testing", "espFanListener.js");
+
+    if (!fs.existsSync(listenerPath)) {
+      return res.status(500).json({
+        success: false,
+        error: `ESP fan listener not found: ${listenerPath}`,
+      });
+    }
+
+    const serialPortPath =
+      process.env.ESP_FAN_COM_PORT || req.body.comPort || undefined;
+    const args = [listenerPath, String(controllerId).trim()];
+    if (serialPortPath) args.push(String(serialPortPath));
+
+    const fanProcess = spawn("node", args, {
+      cwd: __dirname,
+      stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true,
+    });
+    activeFanProcess = fanProcess;
+
+    let result = null;
+    let stdout = "";
+    let stderr = "";
+    let stdoutRemainder = "";
+    let stderrRemainder = "";
+    const listenerLogs = [];
+
+    const processListenerLine = (line, stream) => {
+      const clean = line.trim();
+      if (!clean) return;
+
+      const displayLine = stream === "stderr" ? `[stderr] ${clean}` : clean;
+      listenerLogs.push(displayLine);
+      if (listenerLogs.length > 1000) listenerLogs.shift();
+
+      // broadcastTestStatus({
+      //   type: "FAN_TEST_LOG",
+      //   line: displayLine,
+      //   // mac,
+      //   timestamp: getFormattedDateTime(),
+      // });
+
+      const prefix = "FAN_RESULT_JSON:";
+      if (stream === "stdout" && clean.startsWith(prefix)) {
+        try {
+          result = JSON.parse(clean.slice(prefix.length));
+        } catch (error) {
+          console.error("Invalid FAN_RESULT_JSON:", error.message);
+        }
+      }
+    };
 
     fanProcess.stdout.on("data", (data) => {
-      console.log(`[fan-listener] ${data}`);
+      const text = data.toString();
+      stdout += text;
+      console.log(`[fan-listener] ${text}`);
+
+      broadcastPythonStatus({
+        status: "running",
+        stage: "esp-fan",
+        message: text,
+      });
+
+      const lines = (stdoutRemainder + text).split(/\r?\n/);
+      stdoutRemainder = lines.pop() || "";
+      lines.forEach((line) => processListenerLine(line, "stdout"));
     });
 
     fanProcess.stderr.on("data", (data) => {
-      console.error(`[fan-listener-error] ${data}`);
+      const text = data.toString();
+      stderr += text;
+      console.error(`[fan-listener-error] ${text}`);
+
+      broadcastPythonStatus({
+        status: "warning",
+        stage: "esp-fan",
+        message: text,
+      });
+
+      const lines = (stderrRemainder + text).split(/\r?\n/);
+      stderrRemainder = lines.pop() || "";
+      lines.forEach((line) => processListenerLine(line, "stderr"));
+    });
+
+    fanProcess.on("error", (error) => {
+      if (!res.headersSent) {
+        res.status(500).json({
+          success: false,
+          error: `Failed to start ESP fan listener: ${error.message}`,
+        });
+      }
     });
 
     fanProcess.on("close", (code) => {
       console.log(`espFanListener exited with code ${code}`);
+      if (activeFanProcess === fanProcess) activeFanProcess = null;
+      processListenerLine(stdoutRemainder, "stdout");
+      processListenerLine(stderrRemainder, "stderr");
+
+      if (res.headersSent) return;
+
+      if (result) {
+        res.status(result.success ? 200 : 500).json({
+          success: result.success,
+          passed: result.passed,
+          summary: result.summary,
+          reportPath: result.reportPath,
+          error: result.error,
+          logs: listenerLogs,
+        });
+      } else {
+        res.status(code === 0 ? 200 : 500).json({
+          success: code === 0,
+          error:
+            code === 0
+              ? "Fan listener exited without a result"
+              : `Fan listener exited with code ${code}`,
+          stdout,
+          stderr,
+          logs: listenerLogs,
+        });
+      }
+
+      broadcastTestStatus({
+        type: "FAN_TEST_COMPLETED",
+        success: result?.success === true,
+        passed: result?.passed === true,
+        summary: result?.summary,
+        reportPath: result?.reportPath,
+        error: result?.error,
+        // mac,
+        timestamp: getFormattedDateTime(),
+      });
     });
   } catch (err) {
     console.error("❌ Error running all tests:", err.message);
