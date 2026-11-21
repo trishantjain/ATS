@@ -71,6 +71,7 @@ function DashboardViewTest() {
   const [pythonIp, setPythonIp] = useState("");
   const [fanControllerId, setFanControllerId] = useState("");
   const [fanComPort, setFanComPort] = useState("");
+  const [fanCommand, setFanCommand] = useState("START");
   const [fanComPorts, setFanComPorts] = useState([]);
   const [fanPortsLoading, setFanPortsLoading] = useState(false);
   const [fanPortsError, setFanPortsError] = useState("");
@@ -1972,6 +1973,7 @@ function DashboardViewTest() {
             // mac: selectedMac,
             controllerId,
             comPort: fanComPort,
+            command: fanCommand,
           }),
         },
       );
@@ -2571,6 +2573,30 @@ function DashboardViewTest() {
                         {fanPortsError}
                       </p>
                     )}
+                  </div>
+
+                  <div className="w-[220px]">
+                    <label className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-slate-500">
+                      Fan Test Command
+                    </label>
+                    <Select
+                      value={fanCommand}
+                      onValueChange={setFanCommand}
+                      disabled={fanTestStatus}
+                    >
+                      <SelectTrigger className="w-full text-xs h-9 border-slate-700 bg-slate-900">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="z-[9999] border-slate-700 bg-slate-950">
+                        <SelectItem value="START">START - All Fans</SelectItem>
+                        <SelectItem value="TEST_1">TEST_1 - Fan 1</SelectItem>
+                        <SelectItem value="TEST_2">TEST_2 - Fan 2</SelectItem>
+                        <SelectItem value="TEST_3">TEST_3 - Fan 3</SelectItem>
+                        <SelectItem value="TEST_4">TEST_4 - Fan 4</SelectItem>
+                        <SelectItem value="TEST_5">TEST_5 - Fan 5</SelectItem>
+                        <SelectItem value="TEST_6">TEST_6 - Fan 6</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                 </>
               )}

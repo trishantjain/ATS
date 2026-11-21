@@ -1046,6 +1046,15 @@ app.post("/api/tests/fan-test", async (req, res) => {
 
   try {
     const { controllerId, testedBy } = req.body;
+    const fanCommand = String(req.body.command || "").trim().toUpperCase();
+    const allowedFanCommands = ["START", "TEST_1", "TEST_2", "TEST_3", "TEST_4", "TEST_5", "TEST_6"];
+
+    if (!allowedFanCommands.includes(fanCommand)) {
+      return res.status(400).json({
+        success: false,
+        error: "Invalid fan command",
+      });
+    }
 
     if (!controllerId || !String(controllerId).trim()) {
       return res.status(400).json({
@@ -1073,6 +1082,7 @@ app.post("/api/tests/fan-test", async (req, res) => {
     }
     const args = [listenerPath, String(controllerId).trim()];
     args.push(String(serialPortPath));
+    args.push(fanCommand);
 
     const fanProcess = spawn("node", args, {
       cwd: __dirname,

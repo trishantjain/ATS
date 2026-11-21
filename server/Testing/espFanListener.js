@@ -9,7 +9,20 @@ const { reportWriter } = require("../ATS/reportWriter"); // adjust path
 const fanTrayControllerId = process.argv[2] || "unknown-controller";
 const serialPortPath =
   process.argv[3] || process.env.ESP_FAN_COM_PORT || "COM5";
+const allowedFanCommands = ["START", "TEST_1", "TEST_2", "TEST_3", "TEST_4", "TEST_5", "TEST_6"];
+const fanCommand = String(process.argv[4] || "").trim().toUpperCase();
 let finished = false;
+
+if (!allowedFanCommands.includes(fanCommand)) {
+  console.error(`❌ Invalid fan command: ${fanCommand}`);
+  console.log(
+    `FAN_RESULT_JSON:${JSON.stringify({
+      success: false,
+      error: `Invalid fan command: ${fanCommand}`,
+    })}`,
+  );
+  process.exit(1);
+}
 
 function handleFanTestResult(data) {
   console.log("✅ Parsed ESP Result:", data);
@@ -167,10 +180,10 @@ async function startListener() {
 
     console.log("🔌 Serial connected");
 
-    // 🔥 AUTO TRIGGER
+    // Send the command selected in the browser
     setTimeout(() => {
-      console.log("🚀 Sending START ");
-      port.write("START\n");
+      console.log(`🚀 Sending ${fanCommand}`);
+      port.write(`${fanCommand}\n`);
     }, 2000);
   });
 }
