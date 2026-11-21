@@ -10,7 +10,9 @@ const net = require("net");
 const mongoose = require("mongoose");
 const express = require("express");
 const bodyParser = require("body-parser");
+const { SerialPort } = require("serialport");
 const SensorReading = require("./models/SensorReading");
+const TestedFan = require("./models/TestedFan");
 const thresholds = require("./thresholds");
 const fs = require("fs");
 const axios = require("axios");
@@ -1019,6 +1021,23 @@ app.post("/api/tests/generate-all-passed", async (req, res) => {
   }
 });
 
+app.get("/api/serial-ports", async (req, res) => {
+  try {
+    const ports = await SerialPort.list();
+    return res.json({
+      ports: ports.map(({ path: portPath, manufacturer }) => ({
+        path: portPath,
+        manufacturer: manufacturer || "",
+      })),
+    });
+  } catch (err) {
+    console.error("❌ Failed to enumerate serial ports:", err.message);
+    return res.status(500).json({
+      error: `Failed to enumerate serial ports: ${err.message}`,
+    });
+  }
+});
+
 app.post("/api/tests/fan-test", async (req, res) => {
   console.log("/api/tests/fan-test API called");
 
@@ -1026,7 +1045,7 @@ app.post("/api/tests/fan-test", async (req, res) => {
   atsRuntime.resetStop();
 
   try {
-    const { controllerId } = req.body;
+    const { controllerId, testedBy } = req.body;
 
     if (!controllerId || !String(controllerId).trim()) {
       return res.status(400).json({
@@ -1045,9 +1064,15 @@ app.post("/api/tests/fan-test", async (req, res) => {
     }
 
     const serialPortPath =
-      process.env.ESP_FAN_COM_PORT || req.body.comPort || undefined;
+      req.body.comPort || process.env.ESP_FAN_COM_PORT || undefined;
+    if (!serialPortPath) {
+      return res.status(400).json({
+        success: false,
+        error: "Select a COM port before starting the fan test",
+      });
+    }
     const args = [listenerPath, String(controllerId).trim()];
-    if (serialPortPath) args.push(String(serialPortPath));
+    args.push(String(serialPortPath));
 
     const fanProcess = spawn("node", args, {
       cwd: __dirname,
@@ -1071,12 +1096,11 @@ app.post("/api/tests/fan-test", async (req, res) => {
       listenerLogs.push(displayLine);
       if (listenerLogs.length > 1000) listenerLogs.shift();
 
-      // broadcastTestStatus({
-      //   type: "FAN_TEST_LOG",
-      //   line: displayLine,
-      //   // mac,
-      //   timestamp: getFormattedDateTime(),
-      // });
+      broadcastTestStatus({
+        type: "FAN_TEST_LOG",
+        line: displayLine,
+        timestamp: getFormattedDateTime(),
+      });
 
       const prefix = "FAN_RESULT_JSON:";
       if (stream === "stdout" && clean.startsWith(prefix)) {
@@ -1093,12 +1117,6 @@ app.post("/api/tests/fan-test", async (req, res) => {
       stdout += text;
       console.log(`[fan-listener] ${text}`);
 
-      broadcastPythonStatus({
-        status: "running",
-        stage: "esp-fan",
-        message: text,
-      });
-
       const lines = (stdoutRemainder + text).split(/\r?\n/);
       stdoutRemainder = lines.pop() || "";
       lines.forEach((line) => processListenerLine(line, "stdout"));
@@ -1108,12 +1126,6 @@ app.post("/api/tests/fan-test", async (req, res) => {
       const text = data.toString();
       stderr += text;
       console.error(`[fan-listener-error] ${text}`);
-
-      broadcastPythonStatus({
-        status: "warning",
-        stage: "esp-fan",
-        message: text,
-      });
 
       const lines = (stderrRemainder + text).split(/\r?\n/);
       stderrRemainder = lines.pop() || "";
@@ -1129,7 +1141,7 @@ app.post("/api/tests/fan-test", async (req, res) => {
       }
     });
 
-    fanProcess.on("close", (code) => {
+    fanProcess.on("close", async (code) => {
       console.log(`espFanListener exited with code ${code}`);
       if (activeFanProcess === fanProcess) activeFanProcess = null;
       processListenerLine(stdoutRemainder, "stdout");
@@ -1137,13 +1149,46 @@ app.post("/api/tests/fan-test", async (req, res) => {
 
       if (res.headersSent) return;
 
+      let testedFan = null;
+      let registryError = null;
+
+      if (result?.success) {
+        try {
+          if (!result.reportNo || !result.reportPath) {
+            throw new Error("Fan listener did not return report details");
+          }
+
+          testedFan = await TestedFan.create({
+            fanTrayNo: String(controllerId).trim(),
+            testedBy: String(testedBy || "ATS Operator").trim(),
+            status: result.passed ? "Passed" : "Failed",
+            summary: result.summary,
+            steps: result.steps || [],
+            comPort: String(serialPortPath),
+            reportNo: result.reportNo,
+            reportPath: result.reportPath,
+          });
+        } catch (error) {
+          registryError = error;
+          console.error("❌ Failed to save tested fan record:", error);
+        }
+      }
+
       if (result) {
-        res.status(result.success ? 200 : 500).json({
-          success: result.success,
+        const registered = Boolean(testedFan);
+        res.status(result.success && !registryError ? 200 : 500).json({
+          success: result.success && !registryError,
+          testCompleted: result.success,
+          registered,
+          testedFanId: testedFan?._id,
           passed: result.passed,
           summary: result.summary,
           reportPath: result.reportPath,
-          error: result.error,
+          reportNo: result.reportNo,
+          error:
+            registryError
+              ? `Report created, but saving the tested fan record failed: ${registryError.message}`
+              : result.error,
           logs: listenerLogs,
         });
       } else {
@@ -1161,11 +1206,12 @@ app.post("/api/tests/fan-test", async (req, res) => {
 
       broadcastTestStatus({
         type: "FAN_TEST_COMPLETED",
-        success: result?.success === true,
+        success: result?.success === true && !registryError,
         passed: result?.passed === true,
         summary: result?.summary,
         reportPath: result?.reportPath,
-        error: result?.error,
+        error: registryError?.message || result?.error,
+        testedFanId: testedFan?._id,
         // mac,
         timestamp: getFormattedDateTime(),
       });
@@ -1175,6 +1221,45 @@ app.post("/api/tests/fan-test", async (req, res) => {
     res.status(500).json({
       error: `Failed to run tests: ${err.message}`,
       timestamp: getFormattedDateTime(),
+    });
+  }
+});
+
+app.get("/api/tested-fans", async (req, res) => {
+  try {
+    const requestedPage = Number.parseInt(req.query.page, 10);
+    const requestedLimit = Number.parseInt(req.query.limit, 10);
+    const page = Number.isInteger(requestedPage) && requestedPage > 0
+      ? requestedPage
+      : 1;
+    const limit = Number.isInteger(requestedLimit)
+      ? Math.min(Math.max(requestedLimit, 1), 100)
+      : 20;
+
+    const [records, total] = await Promise.all([
+      TestedFan.find()
+        .sort({ testedAt: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .lean(),
+      TestedFan.countDocuments(),
+    ]);
+
+    return res.json({
+      success: true,
+      records,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    });
+  } catch (error) {
+    console.error("❌ Failed to list tested fans:", error);
+    return res.status(500).json({
+      success: false,
+      error: `Failed to list tested fans: ${error.message}`,
     });
   }
 });

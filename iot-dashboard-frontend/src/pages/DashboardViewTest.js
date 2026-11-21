@@ -70,6 +70,11 @@ function DashboardViewTest() {
   const [pythonCpu, setPythonCpu] = useState("");
   const [pythonIp, setPythonIp] = useState("");
   const [fanControllerId, setFanControllerId] = useState("");
+  const [fanComPort, setFanComPort] = useState("");
+  const [fanComPorts, setFanComPorts] = useState([]);
+  const [fanPortsLoading, setFanPortsLoading] = useState(false);
+  const [fanPortsError, setFanPortsError] = useState("");
+  const [fanPortRefreshKey, setFanPortRefreshKey] = useState(0);
 
   // Python Programming Status
   const [pythonStatus, setPythonStatus] = useState(null);
@@ -1118,6 +1123,54 @@ function DashboardViewTest() {
     }
   }, [selectedProduct, testLevel]);
 
+  useEffect(() => {
+    if (selectedProduct !== "fan") return undefined;
+
+    let active = true;
+
+    const fetchFanComPorts = async () => {
+      setFanPortsLoading(true);
+      setFanPortsError("");
+
+      try {
+        const response = await fetch(
+          `${process.env.REACT_APP_API_URL}/api/serial-ports`,
+        );
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || "Failed to load COM ports");
+        }
+        if (!Array.isArray(data.ports)) {
+          throw new Error("Invalid COM port list from server");
+        }
+
+        if (active) {
+          setFanComPorts(data.ports);
+          setFanComPort((currentPort) =>
+            data.ports.some((port) => port.path === currentPort)
+              ? currentPort
+              : "",
+          );
+        }
+      } catch (error) {
+        if (active) {
+          setFanComPorts([]);
+          setFanComPort("");
+          setFanPortsError(error.message);
+        }
+      } finally {
+        if (active) setFanPortsLoading(false);
+      }
+    };
+
+    fetchFanComPorts();
+
+    return () => {
+      active = false;
+    };
+  }, [selectedProduct, fanPortRefreshKey]);
+
   // Button is usable (and highlighted) only for a completed run, not while generating/done/testing
   const allPassedReady =
     Boolean(allPassed.runId) &&
@@ -1895,6 +1948,15 @@ function DashboardViewTest() {
       return;
     }
 
+    if (!fanComPort) {
+      await swal.fire({
+        icon: "warning",
+        title: "COM port required",
+        text: "Select the ESP32 COM port before starting the fan test.",
+      });
+      return;
+    }
+
     setFanTestStatus(true);
     fanLogsValueRef.current = [];
     setFanLogs([]);
@@ -1909,6 +1971,7 @@ function DashboardViewTest() {
           body: JSON.stringify({
             // mac: selectedMac,
             controllerId,
+            comPort: fanComPort,
           }),
         },
       );
@@ -1928,7 +1991,7 @@ function DashboardViewTest() {
 
       if (data.summary) {
         setTestStatus(
-          `Done: ${data.summary.passed} passed, ${data.summary.failed} failed${data.reportPath ? ` | Report: ${data.reportPath}` : ""}`,
+          `Done: ${data.summary.passed} passed, ${data.summary.failed} failed${data.registered ? " | Saved to Tested Fans" : ""}${data.reportPath ? ` | Report: ${data.reportPath}` : ""}`,
         );
       } else {
         setTestStatus(
@@ -2131,6 +2194,16 @@ function DashboardViewTest() {
               Tested Controllers
             </Button>
 
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navigate("/tested-fans")}
+              className="h-8 text-xs border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800 hover:text-white"
+            >
+              <FileCheck2 className="mr-1.5 h-3.5 w-3.5" />
+              Tested Fans
+            </Button>
+
             {selectedMac ? (
               <Badge
                 variant="outline"
@@ -2291,62 +2364,6 @@ function DashboardViewTest() {
               </div>
             )}
 
-            {(fanTestStatus || fanLogs.length > 0) && (
-              <div className="mt-3 overflow-hidden border rounded-lg border-slate-800 bg-slate-950">
-                <div className="flex items-center justify-between px-3 py-2 border-b border-slate-800 bg-slate-900">
-                  <div className="flex items-center gap-2">
-                    <Terminal className="w-4 h-4 text-emerald-400" />
-                    <span className="text-xs font-semibold tracking-wide uppercase text-slate-300">
-                      ESP Fan Test Console
-                    </span>
-                  </div>
-                  <span
-                    className={`text-[10px] font-medium uppercase ${
-                      webSocketStatus === "connected"
-                        ? "text-emerald-400"
-                        : "text-amber-400"
-                    }`}
-                  >
-                    {webSocketStatus === "connected"
-                      ? "Live logs connected"
-                      : "Live logs reconnecting"}
-                  </span>
-                </div>
-
-                <div
-                  ref={fanLogsRef}
-                  className="h-[220px] overflow-y-auto overscroll-contain px-3 py-2 font-mono text-[11px] leading-5"
-                >
-                  {fanLogs.length > 0 ? (
-                    fanLogs.map((line, index) => (
-                      <div
-                        key={`${index}-${line}`}
-                        className="break-words whitespace-pre-wrap text-slate-300"
-                      >
-                        <span className="mr-2 select-none text-slate-600">
-                          {">"}
-                        </span>
-                        {line}
-                      </div>
-                    ))
-                  ) : (
-                    <div className="py-2 text-slate-600">
-                      Waiting for ESP fan listener output...
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex items-center justify-between border-t border-slate-800 bg-slate-900/60 px-3 py-1.5">
-                  <span className="text-[10px] text-slate-500">
-                    {fanLogs.length} lines
-                  </span>
-                  <span className="text-[10px] text-slate-500">
-                    Auto-scroll enabled
-                  </span>
-                </div>
-              </div>
-            )}
-
             {/* CONFIG + SERIALS + RUN BUTTON */}
             <div className="flex flex-wrap items-end gap-3">
               {/* PRODUCT */}
@@ -2491,18 +2508,71 @@ function DashboardViewTest() {
                 )}
 
               {selectedProduct === "fan" && (
-                <div className="w-[220px]">
-                  <label className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-slate-500">
-                    Controller Number
-                  </label>
-                  <Input
-                    placeholder="Enter controller number"
-                    value={fanControllerId}
-                    onChange={(e) => setFanControllerId(e.target.value)}
-                    disabled={fanTestStatus}
-                    className="text-xs h-9 border-slate-700 bg-slate-900"
-                  />
-                </div>
+                <>
+                  <div className="w-[220px]">
+                    <label className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-slate-500">
+                      Controller Number
+                    </label>
+                    <Input
+                      placeholder="Enter controller number"
+                      value={fanControllerId}
+                      onChange={(e) => setFanControllerId(e.target.value)}
+                      disabled={fanTestStatus}
+                      className="text-xs h-9 border-slate-700 bg-slate-900"
+                    />
+                  </div>
+
+                  <div className="w-[220px]">
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-[10px] font-medium uppercase tracking-wide text-slate-500">
+                        ESP32 COM Port
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setFanPortRefreshKey((key) => key + 1)}
+                        disabled={fanPortsLoading || fanTestStatus}
+                        className="text-[10px] text-blue-400 hover:text-blue-300 disabled:opacity-50"
+                      >
+                        {fanPortsLoading ? "Loading..." : "Refresh"}
+                      </button>
+                    </div>
+                    <Select
+                      value={fanComPort}
+                      onValueChange={setFanComPort}
+                      disabled={fanPortsLoading || fanTestStatus}
+                    >
+                      <SelectTrigger className="w-full text-xs h-9 border-slate-700 bg-slate-900">
+                        <SelectValue
+                          placeholder={
+                            fanPortsLoading
+                              ? "Loading COM ports..."
+                              : "Select COM Port"
+                          }
+                        />
+                      </SelectTrigger>
+                      <SelectContent className="z-[9999] border-slate-700 bg-slate-950">
+                        {fanComPorts.length > 0 ? (
+                          fanComPorts.map((port) => (
+                            <SelectItem key={port.path} value={port.path}>
+                              {port.manufacturer
+                                ? `${port.path} (${port.manufacturer})`
+                                : port.path}
+                            </SelectItem>
+                          ))
+                        ) : (
+                          <SelectItem value="no-ports" disabled>
+                            No COM ports found
+                          </SelectItem>
+                        )}
+                      </SelectContent>
+                    </Select>
+                    {fanPortsError && (
+                      <p className="mt-1 text-[10px] text-red-400">
+                        {fanPortsError}
+                      </p>
+                    )}
+                  </div>
+                </>
               )}
 
               {/* RUN ATS — RIGHT SIDE */}
@@ -2519,7 +2589,10 @@ function DashboardViewTest() {
                     awaitingCommand ||
                     fanTestStatus ||
                     pduTestStatus ||
-                    (selectedProduct === "fan" && !fanControllerId.trim())
+                    (selectedProduct === "fan" &&
+                      (!fanControllerId.trim() ||
+                        !fanComPort ||
+                        fanPortsLoading))
                   }
                   className="h-9 min-w-[145px] bg-emerald-600 px-4 text-xs font-semibold hover:bg-emerald-500"
                 >
@@ -2644,7 +2717,7 @@ function DashboardViewTest() {
       )}
 
       {/* CANCEL FAN TEST BUTTON */}
-      {fanTestStatus && (
+      {/* {fanTestStatus && (
         <button
           className="btn-test-stop"
           onClick={async () => {
@@ -2655,7 +2728,7 @@ function DashboardViewTest() {
               });
               setFanTestStatus(false);
               setTestStatus("🛑 Tests stopped by user");
-              setNotifications((prev) => ({
+              setNotifications((prev) => ({ 
                 ...prev,
                 system: {
                   title: "Tests Stopped",
@@ -2680,7 +2753,7 @@ function DashboardViewTest() {
         >
           🛑 Stop Test
         </button>
-      )}
+      )} */}
 
       {Object.entries(notifications).length > 0 && (
         <div
@@ -2881,6 +2954,63 @@ function DashboardViewTest() {
               {refreshing ? "Refreshing..." : "🔄 Refresh Dashboard"}
             </button>
           </div>
+
+          {(fanTestStatus || fanLogs.length > 0) && (
+            <div className="mt-3 overflow-hidden border rounded-lg border-slate-800 bg-slate-950">
+              <div className="flex items-center justify-between px-3 py-2 border-b border-slate-800 bg-slate-900">
+                <div className="flex items-center gap-2">
+                  <Terminal className="w-4 h-4 text-emerald-400" />
+                  <span className="text-xs font-semibold tracking-wide uppercase text-slate-300">
+                    ESP Fan Test Console
+                  </span>
+                </div>
+                <span
+                  className={`text-[10px] font-medium uppercase ${
+                    webSocketStatus === "connected"
+                      ? "text-emerald-400"
+                      : "text-amber-400"
+                  }`}
+                >
+                  {webSocketStatus === "connected"
+                    ? "Live logs connected"
+                    : "Live logs reconnecting"}
+                </span>
+              </div>
+
+              <div
+                ref={fanLogsRef}
+                className="h-[220px] overflow-y-auto overscroll-contain px-3 py-2 font-mono text-[11px] leading-5"
+              >
+                {fanLogs.length > 0 ? (
+                  fanLogs.map((line, index) => (
+                    <div
+                      key={`${index}-${line}`}
+                      className="break-words whitespace-pre-wrap text-slate-300"
+                    >
+                      <span className="mr-2 select-none text-slate-600">
+                        {">"}
+                      </span>
+                      {line}
+                    </div>
+                  ))
+                ) : (
+                  <div className="py-2 text-slate-600">
+                    Waiting for ESP fan listener output...
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-center justify-between border-t border-slate-800 bg-slate-900/60 px-3 py-1.5">
+                <span className="text-[10px] text-slate-500">
+                  {fanLogs.length} lines
+                </span>
+                <span className="text-[10px] text-slate-500">
+                  Auto-scroll enabled
+                </span>
+              </div>
+            </div>
+          )}
+
           {/* </h2> */}
           {latestReading && (
             <div>

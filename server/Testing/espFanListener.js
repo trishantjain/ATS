@@ -8,7 +8,7 @@ const { reportWriter } = require("../ATS/reportWriter"); // adjust path
 // GETTING FAN CONTROLLER ID FROM THE COMMAND LINE
 const fanTrayControllerId = process.argv[2] || "unknown-controller";
 const serialPortPath =
-  process.env.ESP_FAN_COM_PORT || process.argv[3] || "COM5";
+  process.argv[3] || process.env.ESP_FAN_COM_PORT || "COM5";
 let finished = false;
 
 function handleFanTestResult(data) {
@@ -72,6 +72,8 @@ function handleFanTestResult(data) {
           success: true,
           passed,
           summary: runResult.summary,
+          steps: runResult.results[0].stepResults,
+          reportNo: res.reportNo,
           reportPath: res.filePath,
         })}`,
       );

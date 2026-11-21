@@ -12,6 +12,7 @@ import DashboardView from "./pages/DashboardView";
 import OfflinePrompt from "./components/OfflinePrompt";
 import DashboardViewTest from "./pages/DashboardViewTest";
 import TestedControllers from "./pages/TestedControllers";
+import TestedFans from "./pages/TestedFans";
 // import DashboardTest from './pages/DashboardTest';
 
 function App() {
@@ -67,6 +68,7 @@ function App() {
         /> */}
 
         <Route path="/tested-controllers" element={<TestedControllers />} />
+        <Route path="/tested-fans" element={<TestedFans />} />
 
         {/* Fallback route */}
         <Route path="*" element={<Navigate to="/" />} />

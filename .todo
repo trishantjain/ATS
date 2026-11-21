@@ -1,4 +1,5 @@
-2. Alert when data stops coming
-- select com port from dashboard
-- fix logs view positioning 
-- open reports from the dashboard
+✔ fan test to be done from the dashboard @done(26-11-21 15:35)
+✔ select com port from dashboard @done(26-11-21 15:35)
+✔ fix logs view positioning @done(26-11-21 15:35)
+✔ see reports from the dashboard @done(26-11-21 15:35)
+☐ Alert when data stops coming
