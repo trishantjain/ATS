@@ -68,7 +68,7 @@ function handleFanTestResult(data) {
 // 🔥 CHANGE THIS to your COM port
 const port = new SerialPort(
     {
-        path: 'COM3',
+        path: 'COM5',
         baudRate: 115200,
         autoOpen: false
     }
