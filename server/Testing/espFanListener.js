@@ -18,17 +18,13 @@ function handleFanTestResult(data) {
         return;
     }
 
-    const MIN_FAN_RPM = 2300;
-    const MAX_FAN_RPM = 2900;
-
     const stepResults = data.results.map((fan, idx) => {
-        const rpm = Number(fan.rpm);
-        const rpmPassed = Number.isFinite(rpm) && rpm >= MIN_FAN_RPM && rpm <= MAX_FAN_RPM;
+        const passed = String(fan.status ?? "").trim().toUpperCase() === "PASS";
 
         return {
             step: idx + 1,
-            status: rpmPassed ? "passed" : "failed",
-            message: `Fan ${fan.fan} RPM=${fan.rpm}`
+            status: passed ? "passed" : "failed",
+            message: `Fan ${fan.fan} Pulses=${fan.pulses ?? "N/A"} ESP_Status=${fan.status ?? "N/A"}`
         };
     });
 
