@@ -55,7 +55,7 @@ function handleFanTestResult(data) {
         runResult,
         destination: "fan",
         mac: "ESP32-JIG",
-        deviceId: fanTrayControllerId
+        unitSerialNo: fanTrayControllerId
     })
         .then(res => {
             console.log("📄 Report saved:", res.filePath);
@@ -68,7 +68,7 @@ function handleFanTestResult(data) {
 // 🔥 CHANGE THIS to your COM port
 const port = new SerialPort(
     {
-        path: 'COM5',
+        path: 'COM3',
         baudRate: 115200,
         autoOpen: false
     }
