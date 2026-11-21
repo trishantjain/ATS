@@ -26,16 +26,17 @@ const testedFanSchema = new mongoose.Schema(
       passed: { type: Number, default: 0 },
       failed: { type: Number, default: 0 },
     },
-    // steps: [
-    //   {
-    //     step: Number,
-    //     status: {
-    //       type: String,
-    //       enum: ["passed", "failed"],
-    //     },
-    //     message: String,
-    //   },
-    // ],
+    steps: [
+      {
+        step: Number,
+        fan: String,
+        status: {
+          type: String,
+          enum: ["passed", "failed"],
+        },
+        message: String,
+      },
+    ],
     // comPort: {
     //   type: String,
     //   default: "",

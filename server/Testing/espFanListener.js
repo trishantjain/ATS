@@ -45,11 +45,13 @@ function handleFanTestResult(data) {
       String(fan.status ?? "")
         .trim()
         .toUpperCase() === "PASS";
+    const fanNumber = String(fan.fan ?? idx + 1);
 
     return {
       step: idx + 1,
+      fan: fanNumber,
       status: passed ? "passed" : "failed",
-      message: `Fan ${fan.fan} Pulses=${fan.pulses ?? "N/A"} ESP_Status=${fan.status ?? "N/A"}`,
+      message: `Fan ${fanNumber} Pulses=${fan.pulses ?? "N/A"} ESP_Status=${fan.status ?? "N/A"}`,
     };
   });
 

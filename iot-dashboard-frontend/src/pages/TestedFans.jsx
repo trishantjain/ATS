@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, RefreshCw } from "lucide-react";
 import { Button } from "../components/ui/button";
@@ -15,6 +15,7 @@ export default function TestedFans() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [expandedRecordId, setExpandedRecordId] = useState(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -52,6 +53,10 @@ export default function TestedFans() {
 
   const getReportName = (reportPath) =>
     String(reportPath || "").split(/[\\/]/).pop() || "—";
+
+  const toggleRecord = (recordId) => {
+    setExpandedRecordId((currentId) => (currentId === recordId ? null : recordId));
+  };
 
   return (
     <main className="min-h-screen px-4 py-6 bg-slate-950 text-slate-100 sm:px-8">
@@ -115,37 +120,103 @@ export default function TestedFans() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800">
-                  {records.map((record) => (
-                    <tr key={record._id} className="text-slate-300">
-                      <td className="px-4 py-3 font-medium text-white">
-                        {record.fanTrayNo}
-                      </td>
-                      <td className="px-4 py-3">
-                        <span
-                          className={
-                            record.status === "Passed"
-                              ? "rounded-full bg-emerald-500/10 px-2 py-1 text-emerald-400"
-                              : "rounded-full bg-red-500/10 px-2 py-1 text-red-400"
-                          }
+                  {records.map((record) => {
+                    const isExpanded = expandedRecordId === record._id;
+                    const steps = Array.isArray(record.steps) ? record.steps : [];
+
+                    return (
+                      <Fragment key={record._id}>
+                        <tr
+                          className="cursor-pointer text-slate-300 hover:bg-slate-800/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-500"
+                          tabIndex={0}
+                          aria-expanded={isExpanded}
+                          aria-label={`Fan tray ${record.fanTrayNo}: ${record.status}. Toggle individual fan results.`}
+                          onClick={() => toggleRecord(record._id)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              toggleRecord(record._id);
+                            }
+                          }}
                         >
-                          {record.status}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        {record.summary?.passed ?? 0}/{record.summary?.total ?? 0}
-                      </td>
-                      <td className="px-4 py-3">{record.reportNo || "—"}</td>
-                      <td className="max-w-[220px] truncate px-4 py-3" title={record.reportPath}>
-                        {getReportName(record.reportPath)}
-                      </td>
-                      <td className="px-4 py-3">{record.testedBy || "ATS Operator"}</td>
-                      <td className="px-4 py-3">
-                        {record.testedAt
-                          ? new Date(record.testedAt).toLocaleString()
-                          : "—"}
-                      </td>
-                    </tr>
-                  ))}
+                          <td className="px-4 py-3 font-medium text-white">
+                            {record.fanTrayNo}
+                          </td>
+                          <td className="px-4 py-3">
+                            <span
+                              className={
+                                record.status === "Passed"
+                                  ? "rounded-full bg-emerald-500/10 px-2 py-1 text-emerald-400"
+                                  : "rounded-full bg-red-500/10 px-2 py-1 text-red-400"
+                              }
+                            >
+                              {record.status}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3">
+                            {record.summary?.passed ?? 0}/{record.summary?.total ?? 0}
+                          </td>
+                          <td className="px-4 py-3">{record.reportNo || "—"}</td>
+                          <td className="max-w-[220px] truncate px-4 py-3" title={record.reportPath}>
+                            {getReportName(record.reportPath)}
+                          </td>
+                          <td className="px-4 py-3">{record.testedBy || "ATS Operator"}</td>
+                          <td className="px-4 py-3">
+                            {record.testedAt
+                              ? new Date(record.testedAt).toLocaleString()
+                              : "—"}
+                          </td>
+                        </tr>
+                        {isExpanded && (
+                          <tr key={`${record._id}-details`} className="bg-slate-950/50">
+                            <td colSpan={7} className="px-6 py-4">
+                              <h3 className="mb-3 text-xs font-semibold text-slate-200">
+                                Individual fan results
+                              </h3>
+                              {steps.length === 0 ? (
+                                <p className="text-xs text-slate-400">
+                                  No individual fan results were saved for this test.
+                                </p>
+                              ) : (
+                                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                                  {steps.map((step, index) => {
+                                    const passed = step.status === "passed";
+
+                                    return (
+                                      <div
+                                        key={`${record._id}-fan-${step.fan || step.step || index}`}
+                                        className="rounded-lg border border-slate-800 bg-slate-900 px-3 py-2"
+                                      >
+                                        <div className="flex items-center justify-between gap-2">
+                                          <span className="text-xs font-medium text-white">
+                                            Fan {step.fan || step.step || index + 1}
+                                          </span>
+                                          <span
+                                            className={
+                                              passed
+                                                ? "rounded-full bg-emerald-500/10 px-2 py-1 text-[10px] text-emerald-400"
+                                                : "rounded-full bg-red-500/10 px-2 py-1 text-[10px] text-red-400"
+                                            }
+                                          >
+                                            {passed ? "Passed" : "Failed"}
+                                          </span>
+                                        </div>
+                                        {step.message && (
+                                          <p className="mt-1 break-words text-[11px] text-slate-400">
+                                            {step.message}
+                                          </p>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
