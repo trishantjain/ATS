@@ -2,4 +2,6 @@
 ✔ select com port from dashboard @done(26-11-21 15:35)
 ✔ fix logs view positioning @done(26-11-21 15:35)
 ✔ see reports from the dashboard @done(26-11-21 15:35)
+✔ added commands to send from dashboard @done(26-11-21 16:42)
+✔ Individual fan status will be shown in tested fan list @done(26-11-21 16:56)
 ☐ Alert when data stops coming
